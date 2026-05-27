@@ -10,6 +10,7 @@ import ProviderDetail from "@/pages/ProviderDetail";
 import Deals from "@/pages/Deals";
 import DealDetail from "@/pages/DealDetail";
 import NewDeal from "@/pages/NewDeal";
+import PinFiles from "@/pages/PinFiles";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/deals" component={Deals} />
         <Route path="/deals/new" component={NewDeal} />
         <Route path="/deals/:id" component={DealDetail} />
+        <Route path="/pin" component={PinFiles} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
