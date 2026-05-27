@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useListProviders, getListProvidersQueryKey } from "@workspace/api-client-react";
 import { THT } from "@/lib/token";
+import { useWallet } from "@/contexts/WalletContext";
 
 const STORAGE_LAYERS = [
   { id: "ipfs", label: "IPFS + Filecoin", icon: "◈", desc: "Content-addressed, distributed" },
@@ -52,9 +53,7 @@ const g = {
 };
 
 export default function PinFiles() {
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [walletAddress] = useState("addr1qx9s3...f7a2");
-  const [walletBalance] = useState("1,247.83 ₳");
+  const { connected: walletConnected, connecting, connect, disconnect, displayAddress, thtBalance, adaBalance } = useWallet();
   const [files, setFiles] = useState<QueuedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [layer, setLayer] = useState("ipfs");
@@ -151,22 +150,30 @@ export default function PinFiles() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           {walletConnected && (
-            <span style={{ fontSize: "11px", color: g.mid, letterSpacing: "0.08em" }}>
-              <span style={{ color: g.accent }}>◉</span> {walletAddress}{" "}
-              <span style={{ color: "#a0aec0", marginLeft: "8px" }}>{walletBalance}</span>
-            </span>
+            <div style={{ textAlign: "right" }}>
+              <span style={{ fontSize: "11px", color: g.mid, letterSpacing: "0.08em" }}>
+                <span style={{ color: g.accent }}>◉</span>{" "}
+                <span style={{ color: "#a0aec0" }}>{displayAddress}</span>
+              </span>
+              <div style={{ fontSize: "10px", color: g.dim, marginTop: "2px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <span><span style={{ color: g.accent }}>{thtBalance != null ? thtBalance.toLocaleString() : "—"}</span> THT</span>
+                <span>₳ {adaBalance != null ? adaBalance.toFixed(2) : "—"}</span>
+              </div>
+            </div>
           )}
           <button
-            onClick={() => setWalletConnected((v) => !v)}
+            onClick={walletConnected ? disconnect : connect}
+            disabled={connecting}
             style={{
               background: walletConnected ? "rgba(0,255,163,0.08)" : "transparent",
               border: `1px solid ${walletConnected ? g.accent : "rgba(255,255,255,0.15)"}`,
               color: walletConnected ? g.accent : "#a0aec0",
               padding: "6px 16px", fontSize: "11px", letterSpacing: "0.15em",
-              cursor: "pointer", borderRadius: "2px", transition: "all 0.2s", fontFamily: g.mono
+              cursor: connecting ? "wait" : "pointer", borderRadius: "2px",
+              transition: "all 0.2s", fontFamily: g.mono, opacity: connecting ? 0.7 : 1
             }}
           >
-            {walletConnected ? "● CONNECTED" : "CONNECT WALLET"}
+            {connecting ? "CONNECTING..." : walletConnected ? "● CONNECTED" : "CONNECT ETERNL"}
           </button>
         </div>
       </div>
