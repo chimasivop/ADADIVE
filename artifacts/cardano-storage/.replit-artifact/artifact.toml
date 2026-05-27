@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Cardano Storage Explorer"
+version = "1.0.0"
+id = "artifacts/cardano-storage"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21382
+
+[services.development]
+run = "pnpm --filter @workspace/cardano-storage run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cardano-storage", "run", "build" ]
+publicDir = "artifacts/cardano-storage/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21382"
+BASE_PATH = "/"

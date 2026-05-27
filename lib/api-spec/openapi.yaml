@@ -1,15 +1,20 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Cardano Decentralized Storage Economy API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: providers
+    description: Storage provider operations
+  - name: deals
+    description: Storage deal operations
+  - name: stats
+    description: Network and economy statistics
 paths:
   /healthz:
     get:
@@ -24,6 +29,222 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /providers:
+    get:
+      operationId: listProviders
+      tags: [providers]
+      summary: List storage providers
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, inactive, all]
+          required: false
+        - in: query
+          name: minReputation
+          schema:
+            type: number
+          required: false
+      responses:
+        "200":
+          description: List of storage providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Provider"
+    post:
+      operationId: createProvider
+      tags: [providers]
+      summary: Register a new storage provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+
+  /providers/{id}:
+    get:
+      operationId: getProvider
+      tags: [providers]
+      summary: Get a storage provider by ID
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        "200":
+          description: Provider details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "404":
+          description: Not found
+
+  /providers/{id}/deals:
+    get:
+      operationId: getProviderDeals
+      tags: [providers]
+      summary: Get all deals for a provider
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        "200":
+          description: List of deals for provider
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deal"
+
+  /deals:
+    get:
+      operationId: listDeals
+      tags: [deals]
+      summary: List storage deals
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, active, completed, failed, all]
+          required: false
+        - in: query
+          name: providerId
+          schema:
+            type: integer
+          required: false
+      responses:
+        "200":
+          description: List of storage deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deal"
+    post:
+      operationId: createDeal
+      tags: [deals]
+      summary: Propose a new storage deal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+
+  /deals/{id}:
+    get:
+      operationId: getDeal
+      tags: [deals]
+      summary: Get a storage deal by ID
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        "200":
+          description: Deal details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateDeal
+      tags: [deals]
+      summary: Update a deal status
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealUpdate"
+      responses:
+        "200":
+          description: Updated deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+
+  /stats/network:
+    get:
+      operationId: getNetworkStats
+      tags: [stats]
+      summary: Get network-wide aggregate statistics
+      responses:
+        "200":
+          description: Network stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkStats"
+
+  /stats/economy:
+    get:
+      operationId: getEconomyStats
+      tags: [stats]
+      summary: Get token economy overview and market data
+      responses:
+        "200":
+          description: Economy stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EconomyStats"
+
+  /stats/activity:
+    get:
+      operationId: getRecentActivity
+      tags: [stats]
+      summary: Get recent deal and provider activity feed
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +255,209 @@ components:
       required:
         - status
 
+    Provider:
+      type: object
+      required: [id, name, nodeId, totalStorageGb, usedStorageGb, pricePerGbPerEpoch, reputationScore, status, region, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        nodeId:
+          type: string
+          description: Cardano node identifier
+        totalStorageGb:
+          type: number
+        usedStorageGb:
+          type: number
+        pricePerGbPerEpoch:
+          type: number
+          description: Price in ADA lovelace per GB per epoch
+        reputationScore:
+          type: number
+          description: 0-100 reputation score
+        status:
+          type: string
+          enum: [active, inactive]
+        region:
+          type: string
+        uptimePercent:
+          type: ["number", "null"]
+        activeDeals:
+          type: ["integer", "null"]
+        totalAdaEarned:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    ProviderInput:
+      type: object
+      required: [name, nodeId, totalStorageGb, pricePerGbPerEpoch, region]
+      properties:
+        name:
+          type: string
+        nodeId:
+          type: string
+        totalStorageGb:
+          type: number
+        pricePerGbPerEpoch:
+          type: number
+        region:
+          type: string
+
+    Deal:
+      type: object
+      required: [id, providerId, providerName, clientAddress, storageGb, durationEpochs, totalCostAda, status, dataHash, startEpoch, createdAt]
+      properties:
+        id:
+          type: integer
+        providerId:
+          type: integer
+        providerName:
+          type: string
+        clientAddress:
+          type: string
+          description: Cardano wallet address of the client
+        storageGb:
+          type: number
+        durationEpochs:
+          type: integer
+        totalCostAda:
+          type: number
+        status:
+          type: string
+          enum: [pending, active, completed, failed]
+        dataHash:
+          type: string
+          description: Hash of the stored data
+        startEpoch:
+          type: ["integer", "null"]
+        endEpoch:
+          type: ["integer", "null"]
+        txHash:
+          type: ["string", "null"]
+          description: Cardano transaction hash
+        createdAt:
+          type: string
+          format: date-time
+
+    DealInput:
+      type: object
+      required: [providerId, clientAddress, storageGb, durationEpochs, dataHash]
+      properties:
+        providerId:
+          type: integer
+        clientAddress:
+          type: string
+        storageGb:
+          type: number
+        durationEpochs:
+          type: integer
+        dataHash:
+          type: string
+
+    DealUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, active, completed, failed]
+        startEpoch:
+          type: integer
+        endEpoch:
+          type: integer
+        txHash:
+          type: string
+
+    NetworkStats:
+      type: object
+      required: [totalProviders, activeProviders, totalStorageTb, usedStorageTb, activeDeals, totalDealsAllTime, totalAdaLocked, avgReputationScore, currentEpoch, networkUtilizationPercent]
+      properties:
+        totalProviders:
+          type: integer
+        activeProviders:
+          type: integer
+        totalStorageTb:
+          type: number
+        usedStorageTb:
+          type: number
+        activeDeals:
+          type: integer
+        totalDealsAllTime:
+          type: integer
+        totalAdaLocked:
+          type: number
+        avgReputationScore:
+          type: number
+        currentEpoch:
+          type: integer
+        networkUtilizationPercent:
+          type: number
+
+    EconomyStats:
+      type: object
+      required: [adaPerGbPerEpoch, avgDealSizeGb, avgDealDurationEpochs, totalAdaEarnedAllTime, dailyAdaVolume, priceHistory, storageByRegion]
+      properties:
+        adaPerGbPerEpoch:
+          type: number
+          description: Average market price
+        avgDealSizeGb:
+          type: number
+        avgDealDurationEpochs:
+          type: number
+        totalAdaEarnedAllTime:
+          type: number
+        dailyAdaVolume:
+          type: number
+        priceHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricePoint"
+        storageByRegion:
+          type: array
+          items:
+            $ref: "#/components/schemas/RegionStat"
+
+    PricePoint:
+      type: object
+      required: [epoch, priceAda, dealsCount]
+      properties:
+        epoch:
+          type: integer
+        priceAda:
+          type: number
+        dealsCount:
+          type: integer
+
+    RegionStat:
+      type: object
+      required: [region, totalStorageTb, providerCount, avgPrice]
+      properties:
+        region:
+          type: string
+        totalStorageTb:
+          type: number
+        providerCount:
+          type: integer
+        avgPrice:
+          type: number
+
+    ActivityEvent:
+      type: object
+      required: [id, type, description, timestamp, relatedId]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [deal_created, deal_activated, deal_completed, provider_joined, provider_updated]
+        description:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        relatedId:
+          type: integer
+        metadata:
+          type: ["object", "null"]
