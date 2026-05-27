@@ -3,6 +3,7 @@ import {
   useGetEconomyStats, getGetEconomyStatsQueryKey,
   useGetRecentActivity, getGetRecentActivityQueryKey
 } from "@workspace/api-client-react";
+import { THT } from "@/lib/token";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -53,15 +54,15 @@ export default function Dashboard() {
           loading={networkLoading}
         />
         <StatCard 
-          title="ADA Locked"
-          value={network?.totalAdaLocked ? `₳ ${network.totalAdaLocked.toLocaleString()}` : undefined}
+          title="THT Locked"
+          value={network?.totalAdaLocked ? THT.label(network.totalAdaLocked.toLocaleString()) : undefined}
           subtitle="In Active Escrow"
           icon={Coins}
           loading={networkLoading}
         />
         <StatCard 
           title="Avg Market Price"
-          value={economy?.adaPerGbPerEpoch ? `₳ ${economy.adaPerGbPerEpoch.toFixed(4)}` : undefined}
+          value={economy?.adaPerGbPerEpoch ? THT.label(economy.adaPerGbPerEpoch.toFixed(4)) : undefined}
           subtitle="per GB / Epoch"
           icon={Activity}
           loading={economyLoading}
@@ -74,7 +75,7 @@ export default function Dashboard() {
           <Card className="bg-card/50 backdrop-blur-sm border-primary/20">
             <CardHeader>
               <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
-                Market Price History (ADA/GB/Epoch)
+                Market Price History (THT/GB/Epoch)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -96,7 +97,7 @@ export default function Dashboard() {
                       <YAxis 
                         stroke="hsl(var(--muted-foreground))" 
                         fontSize={12}
-                        tickFormatter={(val) => `₳ ${val}`}
+                        tickFormatter={(val) => `${val} THT`}
                       />
                       <RechartsTooltip 
                         contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}

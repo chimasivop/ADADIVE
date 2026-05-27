@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { THT } from "@/lib/token";
 import { Activity, Database, LayoutDashboard, Server, Pin } from "lucide-react";
 import {
   Sidebar,
@@ -43,6 +44,13 @@ export function AppSidebar() {
                 by THETA
               </span>
             </div>
+          </div>
+          <div className="px-4 mb-4 flex items-center gap-2">
+            <div className="h-px flex-1 bg-border/50" />
+            <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground/60">
+              powered by {THT.symbol}
+            </span>
+            <div className="h-px flex-1 bg-border/50" />
           </div>
           <SidebarGroupLabel className="font-mono text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             Explorer

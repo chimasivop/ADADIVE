@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useListProviders, getListProvidersQueryKey } from "@workspace/api-client-react";
+import { THT } from "@/lib/token";
 
 const STORAGE_LAYERS = [
   { id: "ipfs", label: "IPFS + Filecoin", icon: "◈", desc: "Content-addressed, distributed" },
@@ -130,6 +131,7 @@ export default function PinFiles() {
   const totalSize = files.reduce((a, f) => a + f.size, 0);
   const pricePerGb = selectedProvider?.pricePerGbPerEpoch ?? 0.00012;
   const estimatedCost = ((totalSize / 1e9) * pricePerGb * 120).toFixed(6);
+  const totalCost = (parseFloat(estimatedCost) + 0.175).toFixed(6);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ fontFamily: g.mono }}>
@@ -352,7 +354,7 @@ export default function PinFiles() {
                           {sel && <span style={{ fontSize: "10px", color: g.accent }}>▶</span>}
                         </div>
                         <div style={{ display: "flex", gap: "10px" }}>
-                          <span style={{ fontSize: "10px", color: g.dim }}>₳ {p.pricePerGbPerEpoch.toFixed(5)}/GB</span>
+                          <span style={{ fontSize: "10px", color: g.dim }}>{p.pricePerGbPerEpoch.toFixed(5)} THT/GB</span>
                           <span style={{ fontSize: "10px", color: g.dim }}>{p.region}</span>
                           <span style={{ fontSize: "10px", color: g.dim }}>{p.uptimePercent?.toFixed(1)}%</span>
                         </div>
@@ -373,8 +375,8 @@ export default function PinFiles() {
                     ["Total size", formatBytes(totalSize)],
                     ["Provider", selectedProvider?.name ?? "—"],
                     ["Layer", STORAGE_LAYERS.find((l) => l.id === layer)?.label ?? "—"],
-                    ["Est. cost", `${estimatedCost} ₳`],
-                    ["Network fee", "0.175000 ₳"],
+                    ["Est. cost", `${estimatedCost} THT`],
+                    ["Network fee", "0.175000 THT"],
                   ] as [string, string][]).map(([k, v]) => (
                     <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ fontSize: "11px", color: g.dim, letterSpacing: "0.05em" }}>{k}</span>
@@ -384,7 +386,7 @@ export default function PinFiles() {
                   <div style={{ borderTop: `1px solid ${g.border}`, paddingTop: "8px", display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontSize: "11px", color: g.mid, letterSpacing: "0.05em" }}>TOTAL</span>
                     <span style={{ fontSize: "13px", color: g.accent, fontWeight: "700" }}>
-                      {(parseFloat(estimatedCost) + 0.175).toFixed(6)} ₳
+                      {totalCost} THT
                     </span>
                   </div>
                 </div>
