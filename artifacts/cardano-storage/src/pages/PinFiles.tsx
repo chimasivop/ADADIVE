@@ -144,7 +144,7 @@ export default function PinFiles() {
             PIN FILES
           </p>
           <p style={{ fontSize: "11px", color: g.dim, letterSpacing: "0.12em", margin: "4px 0 0" }}>
-            ANCHOR DATA TO CARDANO — EXPERIMENTAL BUILD
+            ANCHOR DATA TO CARDANO
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -426,7 +426,7 @@ export default function PinFiles() {
       )}
 
       <div style={{ marginTop: "48px", paddingTop: "16px", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between" }}>
-        <span style={{ fontSize: "10px", color: "#2d3748", letterSpacing: "0.1em" }}>ADADIVE by THETA — EXPERIMENTAL BUILD</span>
+        <span style={{ fontSize: "10px", color: "#2d3748", letterSpacing: "0.1em" }}>ADADIVE by THETA</span>
         <span style={{ fontSize: "10px", color: "#2d3748", letterSpacing: "0.1em" }}>PREPROD TESTNET</span>
       </div>
     </div>
