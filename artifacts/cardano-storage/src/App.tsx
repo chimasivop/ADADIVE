@@ -12,7 +12,6 @@ import Deals from "@/pages/Deals";
 import DealDetail from "@/pages/DealDetail";
 import NewDeal from "@/pages/NewDeal";
 import PinFiles from "@/pages/PinFiles";
-import { useEffect } from "react";
 
 const queryClient = new QueryClient();
 
@@ -34,10 +33,6 @@ function Router() {
 }
 
 function App() {
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <WalletProvider>

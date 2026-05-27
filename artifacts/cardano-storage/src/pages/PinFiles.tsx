@@ -42,13 +42,15 @@ interface PinnedFile extends QueuedFile {
 
 const g = {
   accent: "#00ffa3",
-  accentBlue: "#00b4ff",
-  bg: "rgba(255,255,255,0.015)",
-  border: "rgba(255,255,255,0.07)",
-  borderAccent: "rgba(0,255,163,0.3)",
-  dim: "#4a5568",
-  mid: "#718096",
-  text: "#e2e8f0",
+  accentBlue: "#00d4ff",
+  bg: "rgba(255,255,255,0.05)",
+  border: "rgba(255,255,255,0.09)",
+  borderAccent: "rgba(0,255,163,0.35)",
+  dim: "rgba(255,255,255,0.38)",
+  mid: "rgba(255,255,255,0.6)",
+  text: "rgba(255,255,255,0.92)",
+  glass: "rgba(255,255,255,0.045)",
+  glassBorder: "rgba(255,255,255,0.09)",
   mono: "'Space Mono', 'Courier New', monospace",
 };
 
