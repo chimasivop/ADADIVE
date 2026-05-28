@@ -25,13 +25,32 @@ export default function Providers() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold font-mono tracking-tight text-primary-foreground">Storage Providers</h1>
-        <p className="text-muted-foreground font-mono">
-          {isLoading ? "Loading..." : `${filtered?.length ?? 0} providers`}
+      {/* ── Heading ── */}
+      <div className="flex flex-col gap-1.5 pb-2" style={{ borderBottom: "1px solid hsl(var(--primary)/0.15)" }}>
+        <h1
+          style={{
+            fontFamily: "'Cinzel', serif",
+            fontSize: "clamp(18px, 3vw, 26px)",
+            letterSpacing: "0.25em",
+            fontWeight: 700,
+            color: "hsl(var(--primary))",
+          }}
+        >
+          STORAGE PROVIDERS
+        </h1>
+        <p
+          style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic",
+            fontSize: "15px",
+            color: "hsl(var(--muted-foreground))",
+          }}
+        >
+          {isLoading ? "Loading..." : `${filtered?.length ?? 0} providers on the network`}
         </p>
       </div>
 
+      {/* ── Filters ── */}
       <div className="flex gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -54,10 +73,11 @@ export default function Providers() {
         </Select>
       </div>
 
+      {/* ── Provider list ── */}
       <div className="space-y-2">
         {isLoading
           ? Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full bg-primary/10 rounded-md" />
+              <Skeleton key={i} className="h-24 w-full bg-primary/10 rounded-sm" />
             ))
           : filtered?.map((provider) => {
               const utilization = provider.totalStorageGb > 0
@@ -65,16 +85,26 @@ export default function Providers() {
                 : 0;
               return (
                 <Link key={provider.id} href={`/providers/${provider.id}`}>
-                  <Card className="bg-card/50 border-primary/20 hover:border-primary/50 hover:bg-card/80 transition-all cursor-pointer group">
+                  <Card className="bg-card/60 border-primary/15 hover:border-primary/40 hover:bg-card/80 transition-all cursor-pointer group">
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-4 min-w-0">
-                          <div className="p-2 rounded-sm bg-background border border-border/50">
+                          <div className="p-2 rounded-sm bg-background border border-primary/15">
                             <HardDrive className="size-5 text-primary" />
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-mono font-bold text-primary-foreground">{provider.name}</span>
+                              <span
+                                style={{
+                                  fontFamily: "'Cinzel', serif",
+                                  fontSize: "13px",
+                                  letterSpacing: "0.1em",
+                                  color: "hsl(var(--foreground))",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {provider.name}
+                              </span>
                               <Badge
                                 variant={provider.status === "active" ? "default" : "secondary"}
                                 className="font-mono text-xs"
@@ -82,44 +112,56 @@ export default function Providers() {
                                 {provider.status}
                               </Badge>
                             </div>
-                            <p className="text-xs font-mono text-muted-foreground truncate">{provider.nodeId}</p>
+                            <p
+                              style={{
+                                fontFamily: "'DM Mono', monospace",
+                                fontSize: "10px",
+                                color: "hsl(var(--muted-foreground))",
+                                letterSpacing: "0.05em",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {provider.nodeId}
+                            </p>
                           </div>
                         </div>
 
                         <div className="hidden md:flex items-center gap-8 shrink-0 text-right">
                           <div>
-                            <p className="text-xs font-mono text-muted-foreground uppercase">Storage</p>
-                            <p className="font-mono font-semibold text-primary-foreground text-sm">
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))" }}>STORAGE</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--foreground))", fontWeight: 500 }}>
                               {(provider.usedStorageGb / 1024).toFixed(1)} / {(provider.totalStorageGb / 1024).toFixed(1)} TB
                             </p>
-                            <p className="text-xs font-mono text-muted-foreground">{utilization.toFixed(1)}% used</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", color: "hsl(var(--muted-foreground))" }}>{utilization.toFixed(1)}% used</p>
                           </div>
                           <div>
-                            <p className="text-xs font-mono text-muted-foreground uppercase">Price</p>
-                            <p className="font-mono font-semibold text-primary text-sm">
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))" }}>PRICE</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--primary))", fontWeight: 500 }}>
                               ₳ {provider.pricePerGbPerEpoch.toFixed(5)}
                             </p>
-                            <p className="text-xs font-mono text-muted-foreground">per GB/epoch</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", color: "hsl(var(--muted-foreground))" }}>per GB/epoch</p>
                           </div>
                           <div>
-                            <p className="text-xs font-mono text-muted-foreground uppercase flex items-center gap-1 justify-end">
-                              <Globe className="size-3" /> Region
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))", display: "flex", alignItems: "center", gap: "3px", justifyContent: "flex-end" }}>
+                              <Globe className="size-3" /> REGION
                             </p>
-                            <p className="font-mono font-semibold text-primary-foreground text-sm">{provider.region}</p>
-                            <p className="text-xs font-mono text-muted-foreground">{provider.uptimePercent?.toFixed(1)}% uptime</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--foreground))", fontWeight: 500 }}>{provider.region}</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", color: "hsl(var(--muted-foreground))" }}>{provider.uptimePercent?.toFixed(1)}% uptime</p>
                           </div>
                           <div>
-                            <p className="text-xs font-mono text-muted-foreground uppercase flex items-center gap-1 justify-end">
-                              <Shield className="size-3" /> Rep
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))", display: "flex", alignItems: "center", gap: "3px", justifyContent: "flex-end" }}>
+                              <Shield className="size-3" /> REP
                             </p>
-                            <p className="font-mono font-semibold text-primary-foreground text-sm">{provider.reputationScore.toFixed(1)}</p>
-                            <p className="text-xs font-mono text-muted-foreground">/ 100</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--foreground))", fontWeight: 500 }}>{provider.reputationScore.toFixed(1)}</p>
+                            <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", color: "hsl(var(--muted-foreground))" }}>/ 100</p>
                           </div>
                           <ArrowRight className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
                         </div>
                       </div>
 
-                      <div className="mt-3 h-1.5 bg-background rounded-full overflow-hidden">
+                      <div className="mt-3 h-px bg-primary/8 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-primary rounded-full transition-all"
                           style={{ width: `${Math.min(utilization, 100)}%` }}
