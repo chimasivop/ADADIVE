@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -57,74 +57,132 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  /* Vault typography */
   --font-sans: 'Inter', sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: 'Space Mono', monospace;
+  --font-serif: 'Cormorant Garamond', serif;
+  --font-mono: 'DM Mono', 'Space Mono', monospace;
+  --font-display: 'Cinzel', serif;
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
 }
 
+/* ── Dark (default) ── */
 :root {
-  --button-outline: rgba(255,255,255, .12);
-  --badge-outline: rgba(255,255,255, .08);
+  --button-outline: rgba(201,169,110, .12);
+  --badge-outline: rgba(201,169,110, .06);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .05);
-  --elevate-2: rgba(255,255,255, .10);
+  --elevate-1: rgba(201,169,110, .03);
+  --elevate-2: rgba(201,169,110, .07);
 
-  /* Deep space base */
-  --background: 232 55% 5%;
-  --foreground: 210 30% 95%;
-  --border: 220 50% 75%;
+  /* Ink/gold dark palette */
+  --background: 228 58% 4%;
+  --foreground: 220 50% 94%;
+  --border: 38 48% 61%;
 
-  /* Glass panels — medium dark navy, shown at low opacity for frosted effect */
-  --card: 222 45% 16%;
-  --card-foreground: 210 30% 95%;
-  --card-border: 220 50% 75%;
+  --card: 228 50% 7%;
+  --card-foreground: 220 50% 94%;
+  --card-border: 38 48% 61%;
 
-  /* Sidebar glass */
-  --sidebar: 228 50% 10%;
-  --sidebar-foreground: 210 30% 95%;
-  --sidebar-border: 220 50% 75%;
-  --sidebar-primary: 191 100% 50%;
-  --sidebar-primary-foreground: 232 55% 5%;
-  --sidebar-accent: 222 45% 20%;
-  --sidebar-accent-foreground: 210 30% 95%;
-  --sidebar-ring: 191 100% 50%;
+  --sidebar: 228 60% 3%;
+  --sidebar-foreground: 220 50% 94%;
+  --sidebar-border: 38 48% 61%;
+  --sidebar-primary: 38 48% 61%;
+  --sidebar-primary-foreground: 228 58% 4%;
+  --sidebar-accent: 228 40% 12%;
+  --sidebar-accent-foreground: 220 50% 94%;
+  --sidebar-ring: 38 48% 61%;
 
-  --popover: 228 50% 12%;
-  --popover-foreground: 210 30% 95%;
-  --popover-border: 220 50% 75%;
+  --popover: 228 50% 7%;
+  --popover-foreground: 220 50% 94%;
+  --popover-border: 38 48% 61%;
 
-  /* Bright cyan primary */
-  --primary: 191 100% 50%;
-  --primary-foreground: 232 55% 5%;
+  --primary: 38 48% 61%;
+  --primary-foreground: 228 58% 4%;
 
-  --secondary: 222 45% 20%;
-  --secondary-foreground: 210 30% 95%;
+  --secondary: 228 40% 12%;
+  --secondary-foreground: 220 50% 94%;
 
-  --muted: 222 40% 18%;
-  --muted-foreground: 217 25% 60%;
+  --muted: 228 35% 11%;
+  --muted-foreground: 222 24% 62%;
 
-  --accent: 222 45% 20%;
-  --accent-foreground: 210 30% 95%;
+  --accent: 228 40% 12%;
+  --accent-foreground: 220 50% 94%;
 
-  --destructive: 0 72% 51%;
+  --destructive: 0 62% 50%;
   --destructive-foreground: 0 0% 98%;
 
-  --input: 222 45% 18%;
-  --ring: 191 100% 50%;
+  --input: 228 35% 11%;
+  --ring: 38 48% 61%;
 
-  --chart-1: 191 100% 50%;
-  --chart-2: 217 91% 65%;
-  --chart-3: 280 80% 68%;
-  --chart-4: 155 80% 55%;
-  --chart-5: 340 75% 60%;
+  --chart-1: 38 48% 61%;
+  --chart-2: 200 80% 60%;
+  --chart-3: 270 70% 65%;
+  --chart-4: 155 70% 55%;
+  --chart-5: 340 65% 58%;
 
-  --radius: 0.75rem;
+  --radius: 0.2rem;
 }
+
+/* ── Light mode ── */
+[data-theme="light"] {
+  --background: 44 40% 96%;
+  --foreground: 228 50% 8%;
+  --border: 35 43% 42%;
+
+  --card: 42 28% 91%;
+  --card-foreground: 228 50% 8%;
+  --card-border: 35 43% 42%;
+
+  --sidebar: 44 35% 93%;
+  --sidebar-foreground: 228 50% 8%;
+  --sidebar-border: 35 43% 42%;
+  --sidebar-primary: 35 43% 42%;
+  --sidebar-primary-foreground: 44 40% 96%;
+  --sidebar-accent: 42 22% 86%;
+  --sidebar-accent-foreground: 228 50% 8%;
+  --sidebar-ring: 35 43% 42%;
+
+  --popover: 42 28% 91%;
+  --popover-foreground: 228 50% 8%;
+  --popover-border: 35 43% 42%;
+
+  --primary: 35 43% 42%;
+  --primary-foreground: 44 40% 96%;
+
+  --secondary: 42 22% 86%;
+  --secondary-foreground: 228 50% 8%;
+
+  --muted: 42 22% 86%;
+  --muted-foreground: 228 25% 42%;
+
+  --accent: 42 22% 86%;
+  --accent-foreground: 228 50% 8%;
+
+  --destructive: 0 62% 42%;
+  --destructive-foreground: 0 0% 98%;
+
+  --input: 42 22% 86%;
+  --ring: 35 43% 42%;
+
+  --chart-1: 35 43% 42%;
+  --chart-2: 200 65% 42%;
+  --chart-3: 270 55% 48%;
+  --chart-4: 155 55% 38%;
+  --chart-5: 340 52% 42%;
+}
+
+/* ── Animations ── */
+@keyframes orbFloat  { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-18px) } }
+@keyframes scanline  { 0% { top: -100% } 100% { top: 200% } }
+@keyframes vaultPulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.06) } }
+@keyframes fadeUp    { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes shimmer   { 0%,100% { opacity: .6 } 50% { opacity: 1 } }
+
+.orb-float  { animation: orbFloat 8s ease-in-out infinite; }
+.vault-pulse { animation: vaultPulse 3s ease infinite; }
 
 @layer base {
   * {
@@ -138,16 +196,16 @@
   body {
     @apply font-sans antialiased text-foreground;
     min-height: 100%;
-    background-color: hsl(232 55% 5%);
+    background-color: hsl(228 58% 4%);
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
-}
 
-/* Global glass card treatment */
-@layer components {
-  .glass-panel {
-    background: rgba(255, 255, 255, 0.045);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+  [data-theme="light"] body {
+    background-color: hsl(44 40% 96%);
   }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: hsl(var(--background)); }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--muted)); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.5); }
 }

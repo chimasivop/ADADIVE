@@ -32,17 +32,38 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold font-mono tracking-tight text-primary-foreground">Network Overview</h1>
-        <p className="text-muted-foreground font-mono">Live telemetry from the Cardano decentralized storage economy.</p>
+      {/* ── Page heading ── */}
+      <div className="flex flex-col gap-1.5 pb-2" style={{ borderBottom: "1px solid hsl(var(--primary)/0.15)" }}>
+        <h1
+          style={{
+            fontFamily: "'Cinzel', serif",
+            fontSize: "clamp(18px, 3vw, 26px)",
+            letterSpacing: "0.25em",
+            fontWeight: 700,
+            color: "hsl(var(--primary))",
+          }}
+        >
+          NETWORK OVERVIEW
+        </h1>
+        <p
+          style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic",
+            fontSize: "15px",
+            color: "hsl(var(--muted-foreground))",
+            opacity: 0.9,
+          }}
+        >
+          Live telemetry from the Cardano decentralised storage economy.
+        </p>
       </div>
 
-      {/* Primary Stats */}
+      {/* ── Primary stat cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Total Storage"
           value={network?.totalStorageTb ? `${network.totalStorageTb.toFixed(2)} TB` : undefined}
-          subtitle={`${network?.networkUtilizationPercent.toFixed(1)}% Utilized`}
+          subtitle={`${network?.networkUtilizationPercent.toFixed(1)}% Utilised`}
           icon={HardDrive}
           loading={networkLoading}
         />
@@ -70,12 +91,19 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Charts */}
+        {/* ── Charts ── */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="bg-card/50 backdrop-blur-sm border-primary/20">
+          <Card className="bg-card/60 backdrop-blur-sm border-primary/15">
             <CardHeader>
-              <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
-                Market Price History (THT/GB/Epoch)
+              <CardTitle
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: "10px",
+                  letterSpacing: "0.22em",
+                  color: "hsl(var(--muted-foreground))",
+                }}
+              >
+                MARKET PRICE HISTORY (THT/GB/EPOCH)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -87,29 +115,38 @@ export default function Dashboard() {
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={economy?.priceHistory || []} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--primary)/0.1)" vertical={false} />
                       <XAxis 
                         dataKey="epoch" 
                         stroke="hsl(var(--muted-foreground))" 
-                        fontSize={12}
+                        fontSize={10}
+                        fontFamily="'DM Mono', monospace"
                         tickFormatter={(val) => `Ep ${val}`}
                       />
                       <YAxis 
                         stroke="hsl(var(--muted-foreground))" 
-                        fontSize={12}
+                        fontSize={10}
+                        fontFamily="'DM Mono', monospace"
                         tickFormatter={(val) => `${val} THT`}
                       />
                       <RechartsTooltip 
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
-                        labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          borderColor: "hsl(var(--primary)/0.3)",
+                          color: "hsl(var(--foreground))",
+                          fontFamily: "'DM Mono', monospace",
+                          fontSize: "11px",
+                          borderRadius: "2px",
+                        }}
+                        labelStyle={{ color: "hsl(var(--muted-foreground))" }}
                       />
                       <Line 
                         type="monotone" 
                         dataKey="priceAda" 
                         stroke="hsl(var(--primary))" 
-                        strokeWidth={2}
+                        strokeWidth={1.5}
                         dot={false}
-                        activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
+                        activeDot={{ r: 5, fill: "hsl(var(--primary))" }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -119,10 +156,17 @@ export default function Dashboard() {
           </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-card/50 backdrop-blur-sm border-primary/20">
+            <Card className="bg-card/60 backdrop-blur-sm border-primary/15">
               <CardHeader>
-                <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
-                  Storage by Region
+                <CardTitle
+                  style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: "10px",
+                    letterSpacing: "0.22em",
+                    color: "hsl(var(--muted-foreground))",
+                  }}
+                >
+                  STORAGE BY REGION
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -134,20 +178,28 @@ export default function Dashboard() {
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={economy?.storageByRegion || []} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--primary)/0.1)" vertical={false} />
                         <XAxis 
                           dataKey="region" 
                           stroke="hsl(var(--muted-foreground))" 
-                          fontSize={12}
+                          fontSize={10}
+                          fontFamily="'DM Mono', monospace"
                         />
                         <RechartsTooltip 
-                          contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
-                          cursor={{ fill: 'hsl(var(--primary)/0.1)' }}
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--primary)/0.3)",
+                            color: "hsl(var(--foreground))",
+                            fontFamily: "'DM Mono', monospace",
+                            fontSize: "11px",
+                            borderRadius: "2px",
+                          }}
+                          cursor={{ fill: "hsl(var(--primary)/0.06)" }}
                         />
                         <Bar 
                           dataKey="totalStorageTb" 
                           fill="hsl(var(--primary))" 
-                          radius={[2, 2, 0, 0]}
+                          radius={[1, 1, 0, 0]}
                         />
                       </BarChart>
                     </ResponsiveContainer>
@@ -175,12 +227,22 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Activity Feed */}
-        <Card className="bg-card/50 backdrop-blur-sm border-primary/20 h-[calc(100vh-12rem)] min-h-[600px] flex flex-col">
-          <CardHeader className="border-b border-border/50 pb-4">
-            <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Activity className="size-4" />
-              Network Events
+        {/* ── Activity feed ── */}
+        <Card className="bg-card/60 backdrop-blur-sm border-primary/15 h-[calc(100vh-12rem)] min-h-[600px] flex flex-col">
+          <CardHeader className="border-b border-primary/10 pb-4">
+            <CardTitle
+              style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: "10px",
+                letterSpacing: "0.22em",
+                color: "hsl(var(--muted-foreground))",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <Activity className="size-3.5" />
+              NETWORK EVENTS
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-0">
@@ -188,7 +250,7 @@ export default function Dashboard() {
               <div className="p-6 space-y-4">
                 {[1, 2, 3, 4, 5].map(i => (
                   <div key={i} className="flex gap-4">
-                    <Skeleton className="size-8 rounded-full bg-primary/10" />
+                    <Skeleton className="size-8 rounded-sm bg-primary/10" />
                     <div className="space-y-2 flex-1">
                       <Skeleton className="h-4 w-full bg-primary/10" />
                       <Skeleton className="h-3 w-24 bg-primary/10" />
@@ -197,27 +259,44 @@ export default function Dashboard() {
                 ))}
               </div>
             ) : (
-              <div className="divide-y divide-border/50">
+              <div className="divide-y divide-primary/10">
                 {activity?.map((event) => {
                   let Icon = Clock;
-                  let iconColor = "text-muted-foreground";
+                  let iconColor = "hsl(var(--muted-foreground))";
                   
-                  if (event.type === "deal_created") { Icon = ArrowRightLeft; iconColor = "text-chart-2"; }
-                  else if (event.type === "deal_activated") { Icon = Database; iconColor = "text-primary"; }
-                  else if (event.type === "deal_completed") { Icon = CheckCircle2; iconColor = "text-chart-4"; }
-                  else if (event.type === "provider_joined") { Icon = UserPlus; iconColor = "text-chart-3"; }
-                  else if (event.type === "provider_updated") { Icon = ServerCog; iconColor = "text-muted-foreground"; }
+                  if (event.type === "deal_created")   { Icon = ArrowRightLeft; iconColor = "hsl(var(--chart-2))"; }
+                  else if (event.type === "deal_activated") { Icon = Database;  iconColor = "hsl(var(--primary))"; }
+                  else if (event.type === "deal_completed") { Icon = CheckCircle2; iconColor = "hsl(var(--chart-4))"; }
+                  else if (event.type === "provider_joined") { Icon = UserPlus; iconColor = "hsl(var(--chart-3))"; }
+                  else if (event.type === "provider_updated") { Icon = ServerCog; iconColor = "hsl(var(--muted-foreground))"; }
 
                   return (
-                    <div key={event.id} className="p-4 hover:bg-muted/30 transition-colors flex gap-4">
-                      <div className={`mt-0.5 p-1.5 rounded-sm bg-background border border-border/50 ${iconColor}`}>
+                    <div key={event.id} className="p-4 hover:bg-primary/5 transition-colors flex gap-4">
+                      <div
+                        className="mt-0.5 p-1.5 rounded-sm bg-background border border-primary/15"
+                        style={{ color: iconColor }}
+                      >
                         <Icon className="size-4" />
                       </div>
                       <div className="flex-1 min-w-0 space-y-1">
-                        <p className="text-sm font-mono text-foreground leading-snug">
+                        <p
+                          style={{
+                            fontFamily: "'DM Mono', monospace",
+                            fontSize: "11px",
+                            color: "hsl(var(--foreground))",
+                            lineHeight: 1.5,
+                          }}
+                        >
                           {event.description}
                         </p>
-                        <p className="text-xs font-mono text-muted-foreground">
+                        <p
+                          style={{
+                            fontFamily: "'DM Mono', monospace",
+                            fontSize: "9px",
+                            color: "hsl(var(--muted-foreground))",
+                            letterSpacing: "0.05em",
+                          }}
+                        >
                           {format(new Date(event.timestamp), "MMM d, HH:mm:ss")}
                         </p>
                       </div>
