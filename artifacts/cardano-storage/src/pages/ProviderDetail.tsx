@@ -40,22 +40,26 @@ export default function ProviderDetail() {
         </div>
       ) : provider ? (
         <>
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-sm bg-card border border-border/50">
-                  <HardDrive className="size-6 text-primary" />
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <div className="p-2 rounded-sm bg-card border border-primary/15 shrink-0">
+                  <HardDrive className="size-5 text-primary" />
                 </div>
-                <h1 className="text-3xl font-bold font-mono tracking-tight text-primary-foreground">{provider.name}</h1>
+                <h1 style={{ fontFamily: "'Cinzel', serif", fontSize: "clamp(16px,4vw,24px)", letterSpacing: "0.15em", color: "hsl(var(--primary))", fontWeight: 700 }}>
+                  {provider.name}
+                </h1>
                 <Badge variant={provider.status === "active" ? "default" : "secondary"} className="font-mono">
                   {provider.status}
                 </Badge>
               </div>
-              <p className="font-mono text-xs text-muted-foreground">{provider.nodeId}</p>
+              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "hsl(var(--muted-foreground))", letterSpacing: "0.05em", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {provider.nodeId}
+              </p>
             </div>
-            <div className="text-right">
-              <p className="text-xs font-mono text-muted-foreground">Joined</p>
-              <p className="font-mono text-sm text-primary-foreground">
+            <div className="text-right shrink-0">
+              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))" }}>JOINED</p>
+              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--foreground))" }}>
                 {format(new Date(provider.createdAt), "MMM d, yyyy")}
               </p>
             </div>
@@ -100,13 +104,13 @@ export default function ProviderDetail() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm text-muted-foreground">Region</span>
-                  <span className="font-mono text-primary-foreground flex items-center gap-1">
+                  <span className="font-mono text-foreground flex items-center gap-1">
                     <Globe className="size-3 text-primary" /> {provider.region}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm text-muted-foreground">Reputation Score</span>
-                  <span className="font-mono font-bold text-primary-foreground">{provider.reputationScore.toFixed(1)} / 100</span>
+                  <span className="font-mono font-bold text-foreground">{provider.reputationScore.toFixed(1)} / 100</span>
                 </div>
               </CardContent>
             </Card>
@@ -118,11 +122,11 @@ export default function ProviderDetail() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm text-muted-foreground">Total Capacity</span>
-                  <span className="font-mono text-primary-foreground">{(provider.totalStorageGb / 1024).toFixed(2)} TB</span>
+                  <span className="font-mono text-foreground">{(provider.totalStorageGb / 1024).toFixed(2)} TB</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm text-muted-foreground">Used</span>
-                  <span className="font-mono text-primary-foreground">{(provider.usedStorageGb / 1024).toFixed(2)} TB</span>
+                  <span className="font-mono text-foreground">{(provider.usedStorageGb / 1024).toFixed(2)} TB</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm text-muted-foreground">Available</span>
@@ -157,11 +161,11 @@ export default function ProviderDetail() {
                       <div className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors cursor-pointer">
                         <div className="flex items-center gap-4">
                           <span className="font-mono text-xs text-muted-foreground">#{deal.id}</span>
-                          <span className="font-mono text-sm text-primary-foreground truncate max-w-[200px]">{deal.clientAddress}</span>
+                          <span className="font-mono text-sm text-foreground truncate max-w-[120px] md:max-w-[200px]">{deal.clientAddress}</span>
                         </div>
-                        <div className="flex items-center gap-6 text-right">
+                        <div className="flex items-center gap-3 md:gap-6 text-right">
                           <div>
-                            <p className="font-mono text-sm text-primary-foreground">{deal.storageGb} GB</p>
+                            <p className="font-mono text-sm text-foreground">{deal.storageGb} GB</p>
                             <p className="font-mono text-xs text-muted-foreground">{deal.durationEpochs} epochs</p>
                           </div>
                           <div>
