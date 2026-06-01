@@ -31,16 +31,15 @@ interface QueuedFile { file: File; id: string; name: string; size: number; hash:
 interface PinnedFile extends QueuedFile { txId: string; ts: string; }
 
 const g = {
-  accent:      "#00ffa3",
-  accentBlue:  "#00d4ff",
-  gold:        "hsl(var(--primary))",
-  bg:          "rgba(255,255,255,0.05)",
-  border:      "rgba(255,255,255,0.09)",
-  borderAccent:"rgba(0,255,163,0.35)",
-  dim:         "rgba(255,255,255,0.38)",
-  mid:         "rgba(255,255,255,0.6)",
-  text:        "rgba(255,255,255,0.92)",
-  mono:        "'DM Mono', 'Space Mono', monospace",
+  accent:       "#00ffa3",
+  accentBlue:   "#00d4ff",
+  bg:           "hsl(var(--card))",
+  border:       "hsl(var(--primary)/0.14)",
+  borderAccent: "hsl(var(--primary)/0.4)",
+  dim:          "hsl(var(--muted-foreground))",
+  mid:          "hsl(var(--foreground)/0.75)",
+  text:         "hsl(var(--foreground))",
+  mono:         "'DM Mono', 'Space Mono', monospace",
 };
 
 export default function PinFiles() {
@@ -142,7 +141,7 @@ export default function PinFiles() {
             disabled={connecting}
             style={{
               background: walletConnected ? "rgba(0,255,163,0.08)" : "transparent",
-              border: `1px solid ${walletConnected ? g.accent : "rgba(255,255,255,0.15)"}`,
+              border: `1px solid ${walletConnected ? g.accent : "hsl(var(--primary)/0.25)"}`,
               color: walletConnected ? g.accent : "hsl(var(--muted-foreground))",
               padding: "7px 14px", fontSize: "10px", letterSpacing: "0.15em",
               cursor: connecting ? "wait" : "pointer", borderRadius: "2px",
@@ -163,7 +162,7 @@ export default function PinFiles() {
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                 <div style={{
                   width: "26px", height: "26px", borderRadius: "50%",
-                  border: `1px solid ${active ? "hsl(var(--primary))" : "rgba(255,255,255,0.1)"}`,
+                  border: `1px solid ${active ? "hsl(var(--primary))" : "hsl(var(--primary)/0.18)"}`,
                   background: step === s ? "hsl(var(--primary))" : active ? "hsl(var(--primary)/0.12)" : "transparent",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: "10px", color: step === s ? "hsl(var(--primary-foreground))" : active ? "hsl(var(--primary))" : g.dim,
@@ -176,7 +175,7 @@ export default function PinFiles() {
               {i < 3 && (
                 <div style={{
                   flex: 1, height: "1px",
-                  background: active && STEPS.indexOf(step) > i ? "hsl(var(--primary)/0.4)" : "rgba(255,255,255,0.08)",
+                  background: active && STEPS.indexOf(step) > i ? "hsl(var(--primary)/0.4)" : "hsl(var(--primary)/0.1)",
                   margin: "0 6px 20px",
                 }} />
               )}
@@ -260,7 +259,7 @@ export default function PinFiles() {
                 </div>
                 {files.map((f) => (
                   <div key={f.id} style={{
-                    background: "rgba(255,255,255,0.02)", border: "1px solid hsl(var(--primary)/0.12)",
+                    background: "hsl(var(--muted)/0.5)", border: "1px solid hsl(var(--primary)/0.12)",
                     borderRadius: "3px", padding: "12px 14px",
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
@@ -277,7 +276,7 @@ export default function PinFiles() {
                       )}
                     </div>
                     {step === "confirm" && (
-                      <div style={{ height: "2px", background: "rgba(255,255,255,0.06)", borderRadius: "1px", overflow: "hidden" }}>
+                      <div style={{ height: "2px", background: "hsl(var(--primary)/0.12)", borderRadius: "1px", overflow: "hidden" }}>
                         <div style={{
                           height: "100%", width: `${progress[f.id] || 0}%`,
                           background: `linear-gradient(90deg, ${g.accent}, ${g.accentBlue})`,
