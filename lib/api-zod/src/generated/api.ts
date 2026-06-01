@@ -238,6 +238,25 @@ export const GetEconomyStatsResponse = zod.object({
 
 
 /**
+ * @summary Join the waitlist
+ */
+export const JoinWaitlistBody = zod.object({
+  "email": zod.string().email()
+})
+
+
+/**
+ * @summary List all waitlist signups (admin)
+ */
+export const ListWaitlistResponseItem = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListWaitlistResponse = zod.array(ListWaitlistResponseItem)
+
+
+/**
  * @summary Get recent deal and provider activity feed
  */
 export const GetRecentActivityResponseItem = zod.object({

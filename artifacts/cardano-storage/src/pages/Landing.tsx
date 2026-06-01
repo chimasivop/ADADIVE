@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useJoinWaitlist } from "@workspace/api-client-react";
 import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
 
 /* ── Global styles for landing (scoped via class names) ── */
@@ -129,16 +130,28 @@ export default function Landing() {
   const goToken = () => setLocation("/token");
 
   const [email, setEmail]       = useState("");
-  const [subState, setSubState] = useState<"idle" | "loading" | "done">("idle");
+  const [subState, setSubState] = useState<"idle" | "loading" | "done" | "duplicate">("idle");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => { document.title = "ADADIVE — Decentralised Storage on Cardano"; }, []);
+
+  const joinMutation = useJoinWaitlist();
 
   const handleWaitlist = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || subState !== "idle") return;
     setSubState("loading");
-    setTimeout(() => setSubState("done"), 1200);
+    joinMutation.mutate(
+      { data: { email: email.trim() } },
+      {
+        onSuccess: () => setSubState("done"),
+        onError: (err: unknown) => {
+          const status = (err as { status?: number })?.status;
+          if (status === 409) { setSubState("duplicate"); }
+          else { setSubState("idle"); }
+        },
+      },
+    );
   };
 
   return (
@@ -337,6 +350,12 @@ export default function Landing() {
                   <div style={{ fontSize:"28px", color:T.gold, marginBottom:"10px", animation:"adadivePulse 2s infinite" }}>◆</div>
                   <div style={{ fontFamily:"'Cinzel',serif", fontSize:"13px", letterSpacing:".22em", color:T.gold, marginBottom:"6px" }}>YOU'RE ON THE LIST</div>
                   <p style={{ fontFamily:"'DM Mono',monospace", fontSize:"10px", color:T.smoke }}>We'll reach out at {email}</p>
+                </div>
+              ) : subState === "duplicate" ? (
+                <div style={{ textAlign:"center", padding:"20px 0" }}>
+                  <div style={{ fontSize:"22px", color:T.gold, marginBottom:"10px" }}>◇</div>
+                  <div style={{ fontFamily:"'Cinzel',serif", fontSize:"13px", letterSpacing:".22em", color:T.gold, marginBottom:"6px" }}>ALREADY REGISTERED</div>
+                  <p style={{ fontFamily:"'DM Mono',monospace", fontSize:"10px", color:T.smoke }}>{email} is already on the waitlist</p>
                 </div>
               ) : (
                 <form onSubmit={handleWaitlist} style={{ display:"flex", flexDirection:"column", gap:"12px" }}>

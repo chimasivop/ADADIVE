@@ -4,7 +4,7 @@ import { useWallet } from "@/contexts/WalletContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
 import {
-  LayoutDashboard, Server, Database, Pin,
+  LayoutDashboard, Server, Database, Pin, Users,
   Wallet, LogOut, Loader2, Sun, Moon,
 } from "lucide-react";
 import {
@@ -20,10 +20,11 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Network",   url: "/app",       icon: LayoutDashboard },
-  { title: "Providers", url: "/providers", icon: Server          },
-  { title: "Deals",     url: "/deals",     icon: Database        },
-  { title: "Pin Files", url: "/pin",       icon: Pin             },
+  { title: "Network",   url: "/app",             icon: LayoutDashboard },
+  { title: "Providers", url: "/providers",        icon: Server          },
+  { title: "Deals",     url: "/deals",            icon: Database        },
+  { title: "Pin Files", url: "/pin",              icon: Pin             },
+  { title: "Waitlist",  url: "/waitlist-admin",   icon: Users           },
 ];
 
 /* Gold palette refs */

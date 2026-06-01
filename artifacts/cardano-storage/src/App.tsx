@@ -15,6 +15,7 @@ import Deals from "@/pages/Deals";
 import DealDetail from "@/pages/DealDetail";
 import NewDeal from "@/pages/NewDeal";
 import PinFiles from "@/pages/PinFiles";
+import WaitlistAdmin from "@/pages/WaitlistAdmin";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ function AppRouter() {
         <Route path="/deals/new"         component={NewDeal}        />
         <Route path="/deals/:id"         component={DealDetail}     />
         <Route path="/pin"               component={PinFiles}       />
+        <Route path="/waitlist-admin"    component={WaitlistAdmin}  />
         <Route component={NotFound} />
       </Switch>
     </Shell>

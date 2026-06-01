@@ -15,6 +15,8 @@ tags:
     description: Storage deal operations
   - name: stats
     description: Network and economy statistics
+  - name: waitlist
+    description: Waitlist signups
 paths:
   /healthz:
     get:
@@ -230,6 +232,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/EconomyStats"
 
+  /waitlist:
+    post:
+      operationId: joinWaitlist
+      tags: [waitlist]
+      summary: Join the waitlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaitlistInput"
+      responses:
+        "201":
+          description: Added to waitlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaitlistEntry"
+        "409":
+          description: Already on waitlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Invalid email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listWaitlist
+      tags: [waitlist]
+      summary: List all waitlist signups (admin)
+      responses:
+        "200":
+          description: List of waitlist entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WaitlistEntry"
+
   /stats/activity:
     get:
       operationId: getRecentActivity
@@ -442,6 +488,33 @@ components:
           type: integer
         avgPrice:
           type: number
+
+    WaitlistInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    WaitlistEntry:
+      type: object
+      required: [id, email, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
 
     ActivityEvent:
       type: object

@@ -25,12 +25,15 @@ import type {
   DealInput,
   DealUpdate,
   EconomyStats,
+  ErrorResponse,
   HealthStatus,
   ListDealsParams,
   ListProvidersParams,
   NetworkStats,
   Provider,
-  ProviderInput
+  ProviderInput,
+  WaitlistEntry,
+  WaitlistInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -878,6 +881,154 @@ export function useGetEconomyStats<TData = Awaited<ReturnType<typeof getEconomyS
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetEconomyStatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getJoinWaitlistUrl = () => {
+
+
+
+
+  return `/api/waitlist`
+}
+
+/**
+ * @summary Join the waitlist
+ */
+export const joinWaitlist = async (waitlistInput: WaitlistInput, options?: RequestInit): Promise<WaitlistEntry> => {
+
+  return customFetch<WaitlistEntry>(getJoinWaitlistUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      waitlistInput,)
+  }
+);}
+
+
+
+
+export const getJoinWaitlistMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinWaitlist>>, TError,{data: BodyType<WaitlistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof joinWaitlist>>, TError,{data: BodyType<WaitlistInput>}, TContext> => {
+
+const mutationKey = ['joinWaitlist'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof joinWaitlist>>, {data: BodyType<WaitlistInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  joinWaitlist(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type JoinWaitlistMutationResult = NonNullable<Awaited<ReturnType<typeof joinWaitlist>>>
+    export type JoinWaitlistMutationBody = BodyType<WaitlistInput>
+    export type JoinWaitlistMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Join the waitlist
+ */
+export const useJoinWaitlist = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinWaitlist>>, TError,{data: BodyType<WaitlistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof joinWaitlist>>,
+        TError,
+        {data: BodyType<WaitlistInput>},
+        TContext
+      > => {
+      return useMutation(getJoinWaitlistMutationOptions(options));
+    }
+
+export const getListWaitlistUrl = () => {
+
+
+
+
+  return `/api/waitlist`
+}
+
+/**
+ * @summary List all waitlist signups (admin)
+ */
+export const listWaitlist = async ( options?: RequestInit): Promise<WaitlistEntry[]> => {
+
+  return customFetch<WaitlistEntry[]>(getListWaitlistUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWaitlistQueryKey = () => {
+    return [
+    `/api/waitlist`
+    ] as const;
+    }
+
+
+export const getListWaitlistQueryOptions = <TData = Awaited<ReturnType<typeof listWaitlist>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWaitlist>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWaitlistQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWaitlist>>> = ({ signal }) => listWaitlist({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWaitlist>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListWaitlistQueryResult = NonNullable<Awaited<ReturnType<typeof listWaitlist>>>
+export type ListWaitlistQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all waitlist signups (admin)
+ */
+
+export function useListWaitlist<TData = Awaited<ReturnType<typeof listWaitlist>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWaitlist>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListWaitlistQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

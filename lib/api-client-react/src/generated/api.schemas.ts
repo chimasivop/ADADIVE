@@ -143,6 +143,20 @@ export interface EconomyStats {
   storageByRegion: RegionStat[];
 }
 
+export interface WaitlistInput {
+  email: string;
+}
+
+export interface WaitlistEntry {
+  id: number;
+  email: string;
+  createdAt: string;
+}
+
+export interface ErrorResponse {
+  error: string;
+}
+
 export type ActivityEventType = typeof ActivityEventType[keyof typeof ActivityEventType];
 
 
