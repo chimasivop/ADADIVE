@@ -33,3 +33,8 @@ externalPort = 8081
 [[ports]]
 localPort = 21382
 externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+ADMIN_PASSWORD = "Dognimus09#"

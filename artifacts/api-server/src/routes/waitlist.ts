@@ -33,10 +33,15 @@ router.post("/waitlist", async (req, res): Promise<void> => {
 });
 
 router.get("/waitlist", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) {
+  const authHeader = req.headers.authorization ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminPassword || token !== adminPassword) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+
   const entries = await db
     .select()
     .from(waitlistTable)
