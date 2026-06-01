@@ -6,6 +6,8 @@ import { Shell } from "@/components/layout/Shell";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import NotFound from "@/pages/not-found";
+import Landing from "@/pages/Landing";
+import TokenPage from "@/pages/TokenPage";
 import Dashboard from "@/pages/Dashboard";
 import Providers from "@/pages/Providers";
 import ProviderDetail from "@/pages/ProviderDetail";
@@ -16,20 +18,31 @@ import PinFiles from "@/pages/PinFiles";
 
 const queryClient = new QueryClient();
 
-function Router() {
+function AppRouter() {
   return (
     <Shell>
       <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/providers" component={Providers} />
-        <Route path="/providers/:id" component={ProviderDetail} />
-        <Route path="/deals" component={Deals} />
-        <Route path="/deals/new" component={NewDeal} />
-        <Route path="/deals/:id" component={DealDetail} />
-        <Route path="/pin" component={PinFiles} />
+        <Route path="/app"               component={Dashboard}      />
+        <Route path="/providers"         component={Providers}      />
+        <Route path="/providers/:id"     component={ProviderDetail} />
+        <Route path="/deals"             component={Deals}          />
+        <Route path="/deals/new"         component={NewDeal}        />
+        <Route path="/deals/:id"         component={DealDetail}     />
+        <Route path="/pin"               component={PinFiles}       />
         <Route component={NotFound} />
       </Switch>
     </Shell>
+  );
+}
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/"      component={Landing}   />
+      <Route path="/token" component={TokenPage} />
+      {/* All other routes go through the app shell */}
+      <Route component={AppRouter} />
+    </Switch>
   );
 }
 

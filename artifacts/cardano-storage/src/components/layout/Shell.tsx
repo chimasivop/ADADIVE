@@ -1,7 +1,9 @@
 import { ReactNode } from "react";
+import { Link } from "wouter";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { useTheme } from "@/contexts/ThemeContext";
+import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
 
 export function Shell({ children }: { children: ReactNode }) {
   const { isDark } = useTheme();
@@ -91,17 +93,20 @@ export function Shell({ children }: { children: ReactNode }) {
             <SidebarTrigger
               style={{ color: "hsl(var(--primary))", background: "none", border: "none", cursor: "pointer" }}
             />
-            <span
-              style={{
-                fontFamily: "'Cinzel', serif",
-                fontSize: "13px",
-                letterSpacing: "0.35em",
-                color: "hsl(var(--primary))",
-                fontWeight: 700,
-              }}
-            >
-              ADADIVE
-            </span>
+            <Link href="/" style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none" }}>
+              <img src={logoUrl} alt="ADADIVE" style={{ width: "22px", height: "22px", objectFit: "contain", borderRadius: "2px" }} />
+              <span
+                style={{
+                  fontFamily: "'Cinzel', serif",
+                  fontSize: "12px",
+                  letterSpacing: "0.35em",
+                  color: "hsl(var(--primary))",
+                  fontWeight: 700,
+                }}
+              >
+                ADADIVE
+              </span>
+            </Link>
             {/* Right spacer keeps logo centred */}
             <div style={{ width: "36px" }} />
           </header>

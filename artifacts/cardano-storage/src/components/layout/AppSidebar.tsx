@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { THT } from "@/lib/token";
 import { useWallet } from "@/contexts/WalletContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
 import {
   LayoutDashboard, Server, Database, Pin,
   Wallet, LogOut, Loader2, Sun, Moon,
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Network",   url: "/",          icon: LayoutDashboard },
+  { title: "Network",   url: "/app",       icon: LayoutDashboard },
   { title: "Providers", url: "/providers", icon: Server          },
   { title: "Deals",     url: "/deals",     icon: Database        },
   { title: "Pin Files", url: "/pin",       icon: Pin             },
@@ -50,15 +51,10 @@ export function AppSidebar() {
           {/* ── Wordmark ── */}
           <div className="px-5 pt-5 pb-3">
             <div className="flex items-center gap-2.5 mb-1">
-              {/* Hexagon glyph */}
-              <div
-                style={{
-                  width: "22px",
-                  height: "22px",
-                  background: `linear-gradient(135deg, ${accent}, ${isDark ? goldDk : "#a07840"})`,
-                  clipPath: "polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)",
-                  flexShrink: 0,
-                }}
+              <img
+                src={logoUrl}
+                alt="ADADIVE"
+                style={{ width: "26px", height: "26px", objectFit: "contain", flexShrink: 0, borderRadius: "3px" }}
               />
               <div className="flex flex-col leading-none">
                 <span
