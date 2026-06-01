@@ -33,6 +33,10 @@ router.post("/waitlist", async (req, res): Promise<void> => {
 });
 
 router.get("/waitlist", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
   const entries = await db
     .select()
     .from(waitlistTable)
