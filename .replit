@@ -39,3 +39,5 @@ externalPort = 3000
 [userenv.shared]
 ADMIN_PASSWORD = "Dognimus09#"
 KOIOS_URL = "https://preprod.koios.rest/api/v1"
+PINATA_API_KEY = "a1774392b68da0ca0659"
+PINATA_API_SECRET = "beca881a3212c42147d7cc26895df5b075de8cad66b392abacf3a526acd70860"
