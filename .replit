@@ -38,3 +38,4 @@ externalPort = 3000
 
 [userenv.shared]
 ADMIN_PASSWORD = "Dognimus09#"
+KOIOS_URL = "https://preprod.koios.rest/api/v1"
