@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { useListProviders, getListProvidersQueryKey } from "@workspace/api-client-react";
 import { THT } from "@/lib/token";
 import { useWallet } from "@/contexts/WalletContext";
+import { buildAndSubmitTx } from "@/lib/cardanoTx";
 
 const STORAGE_LAYERS = [
   { id: "ipfs",    label: "IPFS + Filecoin",  icon: "◈", desc: "Content-addressed, distributed" },
@@ -29,11 +30,12 @@ function hashPreview(name: string) {
 
 interface QueuedFile { file: File; id: string; name: string; size: number; hash: string; }
 interface PinnedFile extends QueuedFile {
-  txId: string;
   ts: string;
   realCid?: string;
   gatewayUrl?: string;
   metadataCid?: string;
+  txHash?: string;
+  explorerUrl?: string;
   failed?: boolean;
   failReason?: string;
 }
@@ -66,6 +68,7 @@ export default function PinFiles() {
   const [pinning, setPinning]               = useState(false);
   const [pinned, setPinned]                 = useState<PinnedFile[]>([]);
   const [progress, setProgress]             = useState<Record<string, number>>({});
+  const [phase, setPhase]                   = useState<Record<string, string>>({});
   const [step, setStep]                     = useState<Step>("upload");
   const [pinError, setPinError]             = useState<string | null>(null);
   const fileRef                             = useRef<HTMLInputElement>(null);
@@ -103,15 +106,21 @@ export default function PinFiles() {
     setStep("confirm");
 
     const progs: Record<string, number> = {};
-    files.forEach((f) => (progs[f.id] = 0));
+    const phases: Record<string, string> = {};
+    files.forEach((f) => { progs[f.id] = 0; phases[f.id] = "Starting…"; });
     setProgress(progs);
+    setPhase(phases);
 
     let anyFailed = false;
 
     for (const f of files) {
-      setProgress((p) => ({ ...p, [f.id]: 20 }));
+      const setP = (pct: number) => setProgress((p) => ({ ...p, [f.id]: pct }));
+      const setLbl = (lbl: string) => setPhase((p) => ({ ...p, [f.id]: lbl }));
 
       try {
+        // ── Phase 1: IPFS pin ─────────────────────────────
+        setLbl("Pinning to IPFS…"); setP(15);
+
         const formData = new FormData();
         formData.append("file", f.file);
         formData.append("providerAddress", selectedProvider?.nodeId ?? "");
@@ -119,11 +128,9 @@ export default function PinFiles() {
         formData.append("durationEpochs", "10");
         formData.append("pricePerEpochTHT", String(selectedProvider?.pricePerGbPerEpoch ?? 0.0013));
 
-        setProgress((p) => ({ ...p, [f.id]: 50 }));
-
+        setP(35);
         const response = await fetch("/api/storage/pin", { method: "POST", body: formData });
-
-        setProgress((p) => ({ ...p, [f.id]: 85 }));
+        setP(55);
 
         if (!response.ok) {
           const err = await response.json() as { error?: string };
@@ -131,33 +138,47 @@ export default function PinFiles() {
         }
 
         const deal = await response.json() as DealResult;
+        setLbl("IPFS pinned ✓ — building tx…"); setP(60);
 
-        setProgress((p) => ({ ...p, [f.id]: 100 }));
+        // ── Phase 2: Cardano tx ───────────────────────────
+        let cardanoPct = 60;
+        const txResult = await buildAndSubmitTx(
+          deal.cardanoMetadata as Record<string, unknown>,
+          deal.file.cid,
+          (msg) => {
+            setLbl(msg);
+            cardanoPct = Math.min(95, cardanoPct + 9);
+            setP(cardanoPct);
+          }
+        );
+
+        setP(100); setLbl("Anchored ✓");
         setPinned((prev) => [
           ...prev,
           {
             ...f,
-            txId:        deal.metadataCid,
             ts:          new Date().toISOString(),
             realCid:     deal.file.cid,
             gatewayUrl:  deal.file.gatewayUrl,
             metadataCid: deal.metadataCid,
+            txHash:      txResult.txHash,
+            explorerUrl: txResult.explorerUrl,
           },
         ]);
       } catch (err) {
         anyFailed = true;
         const msg = err instanceof Error ? err.message : String(err);
+        setLbl("Failed"); setP(100);
         setPinned((prev) => [
           ...prev,
-          { ...f, txId: "", ts: new Date().toISOString(), failed: true, failReason: msg },
+          { ...f, ts: new Date().toISOString(), failed: true, failReason: msg },
         ]);
-        setProgress((p) => ({ ...p, [f.id]: 100 }));
-        setPinError(`One or more files failed to pin. Last error: ${msg}`);
+        setPinError(`Error: ${msg}`);
       }
     }
 
     setPinning(false);
-    if (!anyFailed || pinned.length > 0) setStep("done");
+    setStep("done");
   };
 
   const reset = () => { setFiles([]); setPinned([]); setProgress({}); setStep("upload"); setPinError(null); };
@@ -250,7 +271,9 @@ export default function PinFiles() {
             {pinned.some(p => !p.failed) ? "ANCHORED" : "FAILED"}
           </div>
           <div style={{ fontSize: "13px", color: g.dim, marginBottom: "40px", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
-            {pinned.filter(p => !p.failed).length} of {pinned.length} file{pinned.length !== 1 ? "s" : ""} pinned to IPFS via Pinata
+            {pinned.filter(p => !p.failed && p.txHash).length > 0
+              ? `${pinned.filter(p => !p.failed).length} of ${pinned.length} file${pinned.length !== 1 ? "s" : ""} anchored to Cardano Preprod`
+              : `${pinned.filter(p => !p.failed).length} of ${pinned.length} file${pinned.length !== 1 ? "s" : ""} pinned to IPFS`}
           </div>
 
           {pinError && (
@@ -276,30 +299,56 @@ export default function PinFiles() {
                 background: "rgba(0,255,163,0.04)", border: "1px solid rgba(0,255,163,0.15)",
                 borderRadius: "4px", padding: "14px 16px", textAlign: "left",
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "4px" }}>
                   <span style={{ fontSize: "12px", color: g.text }}>{f.name}</span>
-                  <span style={{ fontSize: "10px", color: g.accent }}>✓ PINNED</span>
+                  <span style={{ fontSize: "10px", color: g.accent }}>{f.txHash ? "✓ ANCHORED" : "✓ PINNED"}</span>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <div style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.06em", display: "flex", gap: "6px", alignItems: "center" }}>
-                    <span style={{ flexShrink: 0, opacity: 0.7 }}>CID</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: g.accent, fontFamily: g.mono }}>
-                      {f.realCid ?? f.hash}
+
+                {/* IPFS CID */}
+                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "5px" }}>
+                  <span style={{ fontSize: "9px", color: g.dim, opacity: 0.7, flexShrink: 0, letterSpacing: "0.06em" }}>IPFS CID</span>
+                  {f.gatewayUrl ? (
+                    <a href={f.gatewayUrl} target="_blank" rel="noopener noreferrer"
+                      title={f.realCid}
+                      style={{ fontSize: "9px", color: g.accent, fontFamily: g.mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "none" }}>
+                      {(f.realCid ?? f.hash).slice(0, 28)}…
+                    </a>
+                  ) : (
+                    <span style={{ fontSize: "9px", color: g.accent, fontFamily: g.mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {(f.realCid ?? f.hash).slice(0, 28)}…
                     </span>
-                  </div>
-                  {f.gatewayUrl && (
-                    <div style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.06em", display: "flex", gap: "6px", alignItems: "center" }}>
-                      <span style={{ flexShrink: 0, opacity: 0.7 }}>URL</span>
-                      <a href={f.gatewayUrl} target="_blank" rel="noopener noreferrer" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#00d4ff", textDecoration: "underline", cursor: "pointer" }}>
-                        gateway.pinata.cloud/ipfs/…
-                      </a>
-                    </div>
                   )}
-                  {f.metadataCid && (
-                    <div style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.06em", display: "flex", gap: "6px", alignItems: "center" }}>
-                      <span style={{ flexShrink: 0, opacity: 0.7 }}>META</span>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.metadataCid}</span>
-                    </div>
+                </div>
+
+                {/* Cardano tx */}
+                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "9px", color: g.dim, opacity: 0.7, flexShrink: 0, letterSpacing: "0.06em" }}>CARDANO TX</span>
+                  {f.txHash ? (
+                    <a href={f.explorerUrl} target="_blank" rel="noopener noreferrer"
+                      title={f.txHash}
+                      style={{ fontSize: "9px", color: "#00d4ff", fontFamily: g.mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline" }}>
+                      {f.txHash.slice(0, 28)}…
+                    </a>
+                  ) : (
+                    <span style={{ fontSize: "9px", color: g.dim, opacity: 0.5 }}>not anchored</span>
+                  )}
+                </div>
+
+                {/* Action links */}
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {f.gatewayUrl && (
+                    <a href={f.gatewayUrl} target="_blank" rel="noopener noreferrer" style={{
+                      fontFamily: "'Cinzel', serif", fontSize: "7px", letterSpacing: "0.16em",
+                      padding: "4px 10px", border: "1px solid rgba(0,255,163,0.3)", borderRadius: "2px",
+                      color: g.accent, textDecoration: "none", whiteSpace: "nowrap",
+                    }}>VIEW ON IPFS ↗</a>
+                  )}
+                  {f.explorerUrl && (
+                    <a href={f.explorerUrl} target="_blank" rel="noopener noreferrer" style={{
+                      fontFamily: "'Cinzel', serif", fontSize: "7px", letterSpacing: "0.16em",
+                      padding: "4px 10px", border: "1px solid rgba(0,212,255,0.3)", borderRadius: "2px",
+                      color: "#00d4ff", textDecoration: "none", whiteSpace: "nowrap",
+                    }}>VIEW ON CARDANOSCAN ↗</a>
                   )}
                 </div>
               </div>
@@ -363,7 +412,7 @@ export default function PinFiles() {
                         <div style={{ fontSize: "10px", color: g.dim }}>{formatBytes(f.size)}</div>
                       </div>
                       {step === "confirm" ? (
-                        <span style={{ fontSize: "11px", color: (progress[f.id] ?? 0) < 100 ? "hsl(var(--primary))" : g.accent, flexShrink: 0 }}>
+                        <span style={{ fontSize: "10px", color: (progress[f.id] ?? 0) < 100 ? "hsl(var(--primary))" : g.accent, flexShrink: 0 }}>
                           {(progress[f.id] ?? 0) < 100 ? `${progress[f.id] ?? 0}%` : "✓"}
                         </span>
                       ) : (
@@ -371,13 +420,18 @@ export default function PinFiles() {
                       )}
                     </div>
                     {step === "confirm" && (
-                      <div style={{ height: "2px", background: "hsl(var(--primary)/0.12)", borderRadius: "1px", overflow: "hidden" }}>
-                        <div style={{
-                          height: "100%", width: `${progress[f.id] || 0}%`,
-                          background: `linear-gradient(90deg, ${g.accent}, ${g.accentBlue})`,
-                          transition: "width 0.4s ease",
-                        }} />
-                      </div>
+                      <>
+                        <div style={{ height: "2px", background: "hsl(var(--primary)/0.12)", borderRadius: "1px", overflow: "hidden", marginBottom: "5px" }}>
+                          <div style={{
+                            height: "100%", width: `${progress[f.id] || 0}%`,
+                            background: `linear-gradient(90deg, ${g.accent}, ${g.accentBlue})`,
+                            transition: "width 0.4s ease",
+                          }} />
+                        </div>
+                        <div style={{ fontSize: "9px", color: "hsl(var(--primary))", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.85 }}>
+                          {phase[f.id] ?? "…"}
+                        </div>
+                      </>
                     )}
                     {step !== "confirm" && (
                       <div style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -488,7 +542,17 @@ export default function PinFiles() {
                 boxShadow: files.length > 0 && !pinning ? "0 0 20px hsl(var(--primary)/0.08)" : "none",
               }}
             >
-              {pinning ? "PINNING TO IPFS..." : !walletConnected ? "CONNECT & PIN" : files.length === 0 ? "SELECT FILES FIRST" : "SIGN & PIN TO CARDANO"}
+              {pinning
+                ? (() => {
+                    const lbl = Object.values(phase).find(Boolean) ?? "";
+                    if (lbl.toLowerCase().includes("signature") || lbl.toLowerCase().includes("eternl")) return "AWAITING WALLET SIGNATURE…";
+                    if (lbl.toLowerCase().includes("submitting") || lbl.toLowerCase().includes("cardano")) return "SUBMITTING TO CHAIN…";
+                    if (lbl.toLowerCase().includes("building") || lbl.toLowerCase().includes("tx")) return "BUILDING TRANSACTION…";
+                    return "PINNING TO IPFS…";
+                  })()
+                : !walletConnected ? "CONNECT & PIN"
+                : files.length === 0 ? "SELECT FILES FIRST"
+                : "SIGN & PIN TO CARDANO"}
             </button>
 
             {!walletConnected && files.length > 0 && (
