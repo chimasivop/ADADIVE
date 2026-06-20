@@ -260,49 +260,55 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="divide-y divide-primary/10">
-                {activity?.map((event) => {
-                  let Icon = Clock;
-                  let iconColor = "hsl(var(--muted-foreground))";
-                  
-                  if (event.type === "deal_created")   { Icon = ArrowRightLeft; iconColor = "hsl(var(--chart-2))"; }
-                  else if (event.type === "deal_activated") { Icon = Database;  iconColor = "hsl(var(--primary))"; }
-                  else if (event.type === "deal_completed") { Icon = CheckCircle2; iconColor = "hsl(var(--chart-4))"; }
-                  else if (event.type === "provider_joined") { Icon = UserPlus; iconColor = "hsl(var(--chart-3))"; }
-                  else if (event.type === "provider_updated") { Icon = ServerCog; iconColor = "hsl(var(--muted-foreground))"; }
+                {Array.isArray(activity) && activity.length > 0 ? (
+                  activity.map((event) => {
+                    let Icon = Clock;
+                    let iconColor = "hsl(var(--muted-foreground))";
+                    
+                    if (event.type === "deal_created")   { Icon = ArrowRightLeft; iconColor = "hsl(var(--chart-2))"; }
+                    else if (event.type === "deal_activated") { Icon = Database;  iconColor = "hsl(var(--primary))"; }
+                    else if (event.type === "deal_completed") { Icon = CheckCircle2; iconColor = "hsl(var(--chart-4))"; }
+                    else if (event.type === "provider_joined") { Icon = UserPlus; iconColor = "hsl(var(--chart-3))"; }
+                    else if (event.type === "provider_updated") { Icon = ServerCog; iconColor = "hsl(var(--muted-foreground))"; }
 
-                  return (
-                    <div key={event.id} className="p-4 hover:bg-primary/5 transition-colors flex gap-4">
-                      <div
-                        className="mt-0.5 p-1.5 rounded-sm bg-background border border-primary/15"
-                        style={{ color: iconColor }}
-                      >
-                        <Icon className="size-4" />
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <p
-                          style={{
-                            fontFamily: "'DM Mono', monospace",
-                            fontSize: "11px",
-                            color: "hsl(var(--foreground))",
-                            lineHeight: 1.5,
-                          }}
+                    return (
+                      <div key={event.id} className="p-4 hover:bg-primary/5 transition-colors flex gap-4">
+                        <div
+                          className="mt-0.5 p-1.5 rounded-sm bg-background border border-primary/15"
+                          style={{ color: iconColor }}
                         >
-                          {event.description}
-                        </p>
-                        <p
-                          style={{
-                            fontFamily: "'DM Mono', monospace",
-                            fontSize: "9px",
-                            color: "hsl(var(--muted-foreground))",
-                            letterSpacing: "0.05em",
-                          }}
-                        >
-                          {format(new Date(event.timestamp), "MMM d, HH:mm:ss")}
-                        </p>
+                          <Icon className="size-4" />
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p
+                            style={{
+                              fontFamily: "'DM Mono', monospace",
+                              fontSize: "11px",
+                              color: "hsl(var(--foreground))",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {event.description}
+                          </p>
+                          <p
+                            style={{
+                              fontFamily: "'DM Mono', monospace",
+                              fontSize: "9px",
+                              color: "hsl(var(--muted-foreground))",
+                              letterSpacing: "0.05em",
+                            }}
+                          >
+                            {format(new Date(event.timestamp), "MMM d, HH:mm:ss")}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center text-xs text-muted-foreground font-mono">
+                    NO RECENT EVENT DATA AVAILABLE
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

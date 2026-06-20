@@ -187,13 +187,25 @@ export const schemas = {
     }),
   }),
 
+  // ── POST /api/providers ─────────────────────────────────────
+  createProvider: z.object({
+    body: z.object({
+      name:               safeName,
+      nodeId:             z.string().trim().min(1),
+      totalStorageGb:     z.coerce.number().positive(),
+      pricePerGbPerEpoch: z.coerce.number().positive(),
+      region:             z.string().trim().min(1),
+    }),
+  }),
+
   // ── POST /api/deals/create ──────────────────────────────────
   createDeal: z.object({
     body: z.object({
-      providerAddress:  cardanoAddress,
-      userAddress:      cardanoAddress,
-      durationEpochs:   z.coerce.number().int().min(1).max(1000),
-      pricePerEpochTHT: z.coerce.number().positive().max(1000),
+      providerId:     z.coerce.number().int().positive(),
+      clientAddress:  cardanoAddress,
+      storageGb:      z.coerce.number().positive(),
+      durationEpochs: z.coerce.number().int().positive(),
+      dataHash:       z.string().trim().min(1),
     }),
   }),
 

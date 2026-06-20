@@ -29,7 +29,7 @@ router.get("/providers", async (req: Request, res: Response): Promise<void> => {
 
 router.post(
   "/providers",
-  validate(schemas.providerApplication),
+  validate(schemas.createProvider),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const body = req.body;
@@ -37,11 +37,12 @@ router.post(
         .insert(providersTable)
         .values({
           name: body.name,
-          email: body.email,
-          wallet: body.wallet,
-          capacity: body.capacity,
+          nodeId: body.nodeId,
+          totalStorageGb: body.totalStorageGb,
+          pricePerGbPerEpoch: body.pricePerGbPerEpoch,
           region: body.region,
-          reason: body.reason,
+          status: "active",
+          reputationScore: 100,
         })
         .returning();
 
@@ -57,7 +58,7 @@ router.get(
   "/providers/:id",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       if (Number.isNaN(id)) {
         res.status(400).json({ error: "Invalid provider ID" });
         return;
@@ -85,7 +86,7 @@ router.get(
   "/providers/:id/deals",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       if (Number.isNaN(id)) {
         res.status(400).json({ error: "Invalid provider ID" });
         return;

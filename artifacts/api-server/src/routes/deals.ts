@@ -34,24 +34,37 @@ router.post(
     try {
       const body = req.body;
 
-      const totalCostAda = body.durationEpochs * body.pricePerEpochTHT;
+      const [provider] = await db
+        .select()
+        .from(providersTable)
+        .where(eq(providersTable.id, body.providerId));
+
+      if (!provider) {
+        res.status(404).json({ error: "Provider not found" });
+        return;
+      }
+
+      const totalCostAda = body.storageGb * body.durationEpochs * provider.pricePerGbPerEpoch;
 
       const [deal] = await db
         .insert(dealsTable)
         .values({
-          providerAddress: body.providerAddress,
-          userAddress: body.userAddress,
+          providerId: body.providerId,
+          providerName: provider.name,
+          clientAddress: body.clientAddress,
+          storageGb: body.storageGb,
           durationEpochs: body.durationEpochs,
           totalCostAda,
+          dataHash: body.dataHash,
           status: "pending",
         })
         .returning();
 
       await db.insert(activityTable).values({
         type: "deal_created",
-        description: `New deal proposed: ${body.durationEpochs} epochs with provider`,
+        description: `New deal proposed: ${body.durationEpochs} epochs with provider ${provider.name}`,
         relatedId: deal.id,
-        metadata: { providerAddress: body.providerAddress, durationEpochs: body.durationEpochs },
+        metadata: { providerName: provider.name, durationEpochs: body.durationEpochs },
       });
 
       res.status(201).json(deal);
@@ -66,7 +79,7 @@ router.get(
   "/deals/:id",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       if (Number.isNaN(id)) {
         res.status(400).json({ error: "Invalid deal ID" });
         return;
@@ -95,7 +108,7 @@ router.patch(
   validate(schemas.updateProviderApplication),
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       if (Number.isNaN(id)) {
         res.status(400).json({ error: "Invalid deal ID" });
         return;
@@ -117,7 +130,6 @@ router.patch(
         .update(dealsTable)
         .set({
           status: body.status,
-          updatedAt: new Date(),
         })
         .where(eq(dealsTable.id, id))
         .returning();
@@ -127,7 +139,7 @@ router.patch(
           type: "deal_activated",
           description: `Deal #${updated.id} activated`,
           relatedId: updated.id,
-          metadata: { providerAddress: updated.providerAddress },
+          metadata: { providerName: updated.providerName },
         });
       } else if (body.status === "completed") {
         await db.insert(activityTable).values({

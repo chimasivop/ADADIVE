@@ -75,7 +75,7 @@ router.get(
   async (req: Request, res: Response): Promise<void> => {
     if (!requirePinata(res)) return;
     try {
-      const result = await storage.checkPinStatus(req.params.cid);
+      const result = await storage.checkPinStatus(req.params.cid as string);
       res.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -101,7 +101,7 @@ router.get(
   validate(schemas.getWallet),
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const result = await storage.getAddressInfo(req.params.address);
+      const result = await storage.getAddressInfo(req.params.address as string);
       res.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
