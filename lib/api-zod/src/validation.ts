@@ -227,11 +227,12 @@ export function validate(schema: z.ZodSchema) {
 
       console.warn(`[ADADIVE] ❌ Validation failed on ${req.method} ${req.path}:`, errors);
 
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "Invalid request data",
         details: errors,
       });
+      return;
     }
 
     // Replace with parsed/sanitised data

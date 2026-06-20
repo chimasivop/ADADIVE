@@ -62,21 +62,21 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Total Storage"
-          value={network?.totalStorageTb ? `${network.totalStorageTb.toFixed(2)} TB` : undefined}
-          subtitle={`${network?.networkUtilizationPercent.toFixed(1)}% Utilised`}
+          value={network?.totalStorageTb !== undefined ? `${network.totalStorageTb.toFixed(2)} TB` : undefined}
+          subtitle={network?.networkUtilizationPercent !== undefined ? `${network.networkUtilizationPercent.toFixed(1)}% Utilised` : undefined}
           icon={HardDrive}
           loading={networkLoading}
         />
         <StatCard 
           title="Active Deals"
-          value={network?.activeDeals}
-          subtitle={`${network?.totalDealsAllTime} All Time`}
+          value={network?.activeDeals !== undefined ? String(network.activeDeals) : undefined}
+          subtitle={network?.totalDealsAllTime !== undefined ? `${network.totalDealsAllTime} All Time` : undefined}
           icon={Database}
           loading={networkLoading}
         />
         <StatCard 
           title="THT Locked"
-          value={network?.totalAdaLocked ? THT.label(network.totalAdaLocked.toLocaleString()) : undefined}
+          value={network?.totalAdaLocked !== undefined ? THT.label(network.totalAdaLocked.toLocaleString()) : undefined}
           subtitle="In Active Escrow"
           icon={Coins}
           loading={networkLoading}
@@ -211,14 +211,14 @@ export default function Dashboard() {
             <div className="space-y-4">
               <StatCard 
                 title="Active Providers"
-                value={network?.activeProviders}
-                subtitle={`Out of ${network?.totalProviders} total`}
+                value={network?.activeProviders !== undefined ? String(network.activeProviders) : undefined}
+                subtitle={network?.totalProviders !== undefined ? `Out of ${network.totalProviders} total` : undefined}
                 icon={ServerCog}
                 loading={networkLoading}
               />
               <StatCard 
                 title="Avg Reputation"
-                value={network?.avgReputationScore ? `${network.avgReputationScore.toFixed(1)} / 100` : undefined}
+                value={network?.avgReputationScore !== undefined ? `${network.avgReputationScore.toFixed(1)} / 100` : undefined}
                 subtitle="Network Wide"
                 icon={Shield}
                 loading={networkLoading}

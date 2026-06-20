@@ -492,7 +492,7 @@ export default function PinFiles() {
                         <div className="flex gap-2 flex-wrap">
                           <span style={{ fontSize: "9px", color: g.dim }}>{p.pricePerGbPerEpoch.toFixed(5)} THT/GB</span>
                           <span style={{ fontSize: "9px", color: g.dim }}>{p.region}</span>
-                          <span style={{ fontSize: "9px", color: g.dim }}>{p.uptimePercent?.toFixed(1)}%</span>
+                          <span style={{ fontSize: "9px", color: g.dim }}>{p.uptimePercent != null ? `${p.uptimePercent.toFixed(1)}%` : "—"}</span>
                         </div>
                       </div>
                     );
