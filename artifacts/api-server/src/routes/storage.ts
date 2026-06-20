@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
 import { validate, schemas } from "@workspace/api-zod";
 import * as storage from "../lib/storage.js";
