@@ -1,90 +1,108 @@
-import { Router, type IRouter } from "express";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { Router, type IRouter, type Request, type Response } from "express";
+import { eq } from "drizzle-orm";
 import { db, providersTable, dealsTable } from "@workspace/db";
-import {
-  ListProvidersQueryParams,
-  CreateProviderBody,
-  GetProviderParams,
-  GetProviderDealsParams,
-} from "@workspace/api-zod";
+import { validate, schemas } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-router.get("/providers", async (req, res): Promise<void> => {
-  const query = ListProvidersQueryParams.safeParse(req.query);
-  if (!query.success) {
-    res.status(400).json({ error: query.error.message });
-    return;
-  }
+router.get("/providers", async (req: Request, res: Response): Promise<void> => {
+  try {
+    let rows = await db.select().from(providersTable).orderBy(providersTable.reputationScore);
 
-  let rows = await db.select().from(providersTable).orderBy(providersTable.reputationScore);
+    // Optional filtering by status and reputation score
+    const status = req.query.status as string | undefined;
+    const minReputation = req.query.minReputation ? parseInt(req.query.minReputation as string) : undefined;
 
-  const { status, minReputation } = query.data;
-  if (status && status !== "all") {
-    rows = rows.filter((p) => p.status === status);
-  }
-  if (minReputation != null) {
-    rows = rows.filter((p) => p.reputationScore >= minReputation);
-  }
+    if (status && status !== "all") {
+      rows = rows.filter((p) => p.status === status);
+    }
+    if (minReputation != null && !Number.isNaN(minReputation)) {
+      rows = rows.filter((p) => p.reputationScore >= minReputation);
+    }
 
-  res.json(rows);
+    res.json(rows);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
 });
 
-router.post("/providers", async (req, res): Promise<void> => {
-  const parsed = CreateProviderBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
+router.post(
+  "/providers",
+  validate(schemas.providerApplication),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const body = req.body;
+      const [provider] = await db
+        .insert(providersTable)
+        .values({
+          name: body.name,
+          email: body.email,
+          wallet: body.wallet,
+          capacity: body.capacity,
+          region: body.region,
+          reason: body.reason,
+        })
+        .returning();
+
+      res.status(201).json(provider);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
+);
 
-  const [provider] = await db
-    .insert(providersTable)
-    .values({
-      name: parsed.data.name,
-      nodeId: parsed.data.nodeId,
-      totalStorageGb: parsed.data.totalStorageGb,
-      pricePerGbPerEpoch: parsed.data.pricePerGbPerEpoch,
-      region: parsed.data.region,
-    })
-    .returning();
+router.get(
+  "/providers/:id",
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) {
+        res.status(400).json({ error: "Invalid provider ID" });
+        return;
+      }
 
-  res.status(201).json(provider);
-});
+      const [provider] = await db
+        .select()
+        .from(providersTable)
+        .where(eq(providersTable.id, id));
 
-router.get("/providers/:id", async (req, res): Promise<void> => {
-  const params = GetProviderParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
+      if (!provider) {
+        res.status(404).json({ error: "Provider not found" });
+        return;
+      }
+
+      res.json(provider);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
+);
 
-  const [provider] = await db
-    .select()
-    .from(providersTable)
-    .where(eq(providersTable.id, params.data.id));
+router.get(
+  "/providers/:id/deals",
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) {
+        res.status(400).json({ error: "Invalid provider ID" });
+        return;
+      }
 
-  if (!provider) {
-    res.status(404).json({ error: "Provider not found" });
-    return;
+      const deals = await db
+        .select()
+        .from(dealsTable)
+        .where(eq(dealsTable.providerId, id))
+        .orderBy(dealsTable.createdAt);
+
+      res.json(deals);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
-
-  res.json(provider);
-});
-
-router.get("/providers/:id/deals", async (req, res): Promise<void> => {
-  const params = GetProviderDealsParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const deals = await db
-    .select()
-    .from(dealsTable)
-    .where(eq(dealsTable.providerId, params.data.id))
-    .orderBy(dealsTable.createdAt);
-
-  res.json(deals);
-});
+);
 
 export default router;

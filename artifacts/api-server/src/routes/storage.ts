@@ -1,5 +1,6 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
+import { validate, schemas } from "@workspace/api-zod";
 import * as storage from "../lib/storage.js";
 
 const router = Router();
@@ -27,53 +28,61 @@ function runUpload(req: Request, res: Response): Promise<void> {
 }
 
 // ── POST /storage/pin — upload file → Pinata IPFS → deal package ─────────────
-router.post("/storage/pin", async (req: Request, res: Response): Promise<void> => {
-  if (!requirePinata(res)) return;
+router.post(
+  "/storage/pin",
+  validate(schemas.pinFile),
+  async (req: Request, res: Response): Promise<void> => {
+    if (!requirePinata(res)) return;
 
-  try {
-    await runUpload(req, res);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(400).json({ error: `File upload error: ${msg}` });
-    return;
-  }
+    try {
+      await runUpload(req, res);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ error: `File upload error: ${msg}` });
+      return;
+    }
 
-  if (!req.file) {
-    res.status(400).json({ error: "No file uploaded" });
-    return;
-  }
+    if (!req.file) {
+      res.status(400).json({ error: "No file uploaded" });
+      return;
+    }
 
-  try {
-    const body = req.body as Record<string, string>;
-    const result = await storage.createStorageDeal(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype,
-      {
-        providerAddress:  body.providerAddress,
-        userAddress:      body.userAddress,
-        durationEpochs:   parseInt(body.durationEpochs)   || 10,
-        pricePerEpochTHT: parseFloat(body.pricePerEpochTHT) || 0.0013,
-      },
-    );
-    res.json(result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+    try {
+      const body = req.body;
+      const result = await storage.createStorageDeal(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        {
+          providerAddress:  body.providerAddress,
+          userAddress:      body.userAddress,
+          durationEpochs:   body.durationEpochs,
+          pricePerEpochTHT: body.pricePerEpochTHT,
+        },
+      );
+      res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
-});
+);
 
 // ── GET /storage/pins/:cid/status — check if CID is still pinned ─────────────
-router.get("/storage/pins/:cid/status", async (req: Request, res: Response): Promise<void> => {
-  if (!requirePinata(res)) return;
-  try {
-    const result = await storage.checkPinStatus(String(req.params.cid));
-    res.json(result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+router.get(
+  "/storage/pins/:cid/status",
+  validate(schemas.checkPinStatus),
+  async (req: Request, res: Response): Promise<void> => {
+    if (!requirePinata(res)) return;
+    try {
+      const result = await storage.checkPinStatus(req.params.cid);
+      res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
-});
+);
 
 // ── GET /network/status — Koios / Cardano network health ─────────────────────
 router.get("/network/status", async (_req: Request, res: Response): Promise<void> => {
@@ -87,14 +96,18 @@ router.get("/network/status", async (_req: Request, res: Response): Promise<void
 });
 
 // ── GET /wallet/:address — address info from Koios ────────────────────────────
-router.get("/wallet/:address", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const result = await storage.getAddressInfo(String(req.params.address));
-    res.json(result);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
+router.get(
+  "/wallet/:address",
+  validate(schemas.getWallet),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await storage.getAddressInfo(req.params.address);
+      res.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
-});
+);
 
 export default router;

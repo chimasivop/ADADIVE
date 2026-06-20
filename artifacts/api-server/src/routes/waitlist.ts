@@ -1,38 +1,36 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { db, waitlistTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
-import { JoinWaitlistBody } from "@workspace/api-zod";
+import { validate, schemas } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-router.post("/waitlist", async (req, res): Promise<void> => {
-  const parsed = JoinWaitlistBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid email address" });
-    return;
-  }
-
-  try {
-    const [entry] = await db
-      .insert(waitlistTable)
-      .values({ email: parsed.data.email })
-      .returning();
-    res.status(201).json(entry);
-  } catch (err: unknown) {
-    if (
-      err instanceof Error &&
-      "code" in err &&
-      (err as NodeJS.ErrnoException).code === "23505"
-    ) {
-      res.status(409).json({ error: "Already on waitlist" });
-      return;
+router.post(
+  "/waitlist",
+  validate(schemas.joinWaitlist),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const [entry] = await db
+        .insert(waitlistTable)
+        .values({ email: req.body.email })
+        .returning();
+      res.status(201).json(entry);
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        "code" in err &&
+        (err as NodeJS.ErrnoException).code === "23505"
+      ) {
+        res.status(409).json({ error: "Already on waitlist" });
+        return;
+      }
+      req.log.error(err, "Failed to insert waitlist entry");
+      res.status(500).json({ error: "Internal server error" });
     }
-    req.log.error(err, "Failed to insert waitlist entry");
-    res.status(500).json({ error: "Internal server error" });
   }
-});
+);
 
-router.get("/waitlist", async (req, res): Promise<void> => {
+router.get("/waitlist", async (req: Request, res: Response): Promise<void> => {
   const authHeader = req.headers.authorization ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   const adminPassword = process.env.ADMIN_PASSWORD;

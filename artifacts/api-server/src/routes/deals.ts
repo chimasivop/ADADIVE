@@ -1,141 +1,149 @@
-import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { Router, type IRouter, type Request, type Response } from "express";
+import { eq } from "drizzle-orm";
 import { db, dealsTable, providersTable, activityTable } from "@workspace/db";
-import {
-  ListDealsQueryParams,
-  CreateDealBody,
-  GetDealParams,
-  UpdateDealParams,
-  UpdateDealBody,
-} from "@workspace/api-zod";
+import { validate, schemas } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-router.get("/deals", async (req, res): Promise<void> => {
-  const query = ListDealsQueryParams.safeParse(req.query);
-  if (!query.success) {
-    res.status(400).json({ error: query.error.message });
-    return;
-  }
+router.get("/deals", async (req: Request, res: Response): Promise<void> => {
+  try {
+    let rows = await db.select().from(dealsTable).orderBy(dealsTable.createdAt);
 
-  let rows = await db.select().from(dealsTable).orderBy(dealsTable.createdAt);
+    // Optional filtering
+    const status = req.query.status as string | undefined;
+    const providerId = req.query.providerId ? parseInt(req.query.providerId as string) : undefined;
 
-  const { status, providerId } = query.data;
-  if (status && status !== "all") {
-    rows = rows.filter((d) => d.status === status);
-  }
-  if (providerId != null) {
-    rows = rows.filter((d) => d.providerId === providerId);
-  }
+    if (status && status !== "all") {
+      rows = rows.filter((d) => d.status === status);
+    }
+    if (providerId != null && !Number.isNaN(providerId)) {
+      rows = rows.filter((d) => d.providerId === providerId);
+    }
 
-  res.json(rows);
+    res.json(rows);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
 });
 
-router.post("/deals", async (req, res): Promise<void> => {
-  const parsed = CreateDealBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
+router.post(
+  "/deals",
+  validate(schemas.createDeal),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const body = req.body;
+
+      const totalCostAda = body.durationEpochs * body.pricePerEpochTHT;
+
+      const [deal] = await db
+        .insert(dealsTable)
+        .values({
+          providerAddress: body.providerAddress,
+          userAddress: body.userAddress,
+          durationEpochs: body.durationEpochs,
+          totalCostAda,
+          status: "pending",
+        })
+        .returning();
+
+      await db.insert(activityTable).values({
+        type: "deal_created",
+        description: `New deal proposed: ${body.durationEpochs} epochs with provider`,
+        relatedId: deal.id,
+        metadata: { providerAddress: body.providerAddress, durationEpochs: body.durationEpochs },
+      });
+
+      res.status(201).json(deal);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
+);
 
-  const [provider] = await db
-    .select()
-    .from(providersTable)
-    .where(eq(providersTable.id, parsed.data.providerId));
+router.get(
+  "/deals/:id",
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) {
+        res.status(400).json({ error: "Invalid deal ID" });
+        return;
+      }
 
-  if (!provider) {
-    res.status(404).json({ error: "Provider not found" });
-    return;
+      const [deal] = await db
+        .select()
+        .from(dealsTable)
+        .where(eq(dealsTable.id, id));
+
+      if (!deal) {
+        res.status(404).json({ error: "Deal not found" });
+        return;
+      }
+
+      res.json(deal);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
+);
 
-  const totalCostAda =
-    parsed.data.storageGb * parsed.data.durationEpochs * provider.pricePerGbPerEpoch;
+router.patch(
+  "/deals/:id",
+  validate(schemas.updateProviderApplication),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) {
+        res.status(400).json({ error: "Invalid deal ID" });
+        return;
+      }
 
-  const [deal] = await db
-    .insert(dealsTable)
-    .values({
-      providerId: parsed.data.providerId,
-      providerName: provider.name,
-      clientAddress: parsed.data.clientAddress,
-      storageGb: parsed.data.storageGb,
-      durationEpochs: parsed.data.durationEpochs,
-      totalCostAda,
-      dataHash: parsed.data.dataHash,
-      status: "pending",
-    })
-    .returning();
+      const body = req.body;
 
-  await db.insert(activityTable).values({
-    type: "deal_created",
-    description: `New deal proposed: ${parsed.data.storageGb} GB with ${provider.name}`,
-    relatedId: deal.id,
-    metadata: { providerId: provider.id, storageGb: parsed.data.storageGb },
-  });
+      const [deal] = await db
+        .select()
+        .from(dealsTable)
+        .where(eq(dealsTable.id, id));
 
-  res.status(201).json(deal);
-});
+      if (!deal) {
+        res.status(404).json({ error: "Deal not found" });
+        return;
+      }
 
-router.get("/deals/:id", async (req, res): Promise<void> => {
-  const params = GetDealParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
+      const [updated] = await db
+        .update(dealsTable)
+        .set({
+          status: body.status,
+          updatedAt: new Date(),
+        })
+        .where(eq(dealsTable.id, id))
+        .returning();
+
+      if (body.status === "active") {
+        await db.insert(activityTable).values({
+          type: "deal_activated",
+          description: `Deal #${updated.id} activated`,
+          relatedId: updated.id,
+          metadata: { providerAddress: updated.providerAddress },
+        });
+      } else if (body.status === "completed") {
+        await db.insert(activityTable).values({
+          type: "deal_completed",
+          description: `Deal #${updated.id} completed successfully`,
+          relatedId: updated.id,
+          metadata: { totalCostAda: updated.totalCostAda },
+        });
+      }
+
+      res.json(updated);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
   }
-
-  const [deal] = await db
-    .select()
-    .from(dealsTable)
-    .where(eq(dealsTable.id, params.data.id));
-
-  if (!deal) {
-    res.status(404).json({ error: "Deal not found" });
-    return;
-  }
-
-  res.json(deal);
-});
-
-router.patch("/deals/:id", async (req, res): Promise<void> => {
-  const params = UpdateDealParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const body = UpdateDealBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
-    return;
-  }
-
-  const [deal] = await db
-    .update(dealsTable)
-    .set(body.data)
-    .where(eq(dealsTable.id, params.data.id))
-    .returning();
-
-  if (!deal) {
-    res.status(404).json({ error: "Deal not found" });
-    return;
-  }
-
-  if (body.data.status === "active") {
-    await db.insert(activityTable).values({
-      type: "deal_activated",
-      description: `Deal #${deal.id} activated with ${deal.providerName}`,
-      relatedId: deal.id,
-      metadata: { providerId: deal.providerId, storageGb: deal.storageGb },
-    });
-  } else if (body.data.status === "completed") {
-    await db.insert(activityTable).values({
-      type: "deal_completed",
-      description: `Deal #${deal.id} completed — ${deal.storageGb} GB stored successfully`,
-      relatedId: deal.id,
-      metadata: { totalCostAda: deal.totalCostAda },
-    });
-  }
-
-  res.json(deal);
-});
+);
 
 export default router;
