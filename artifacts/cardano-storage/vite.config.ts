@@ -13,6 +13,8 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH || "/";
 
+const apiTarget = process.env.API_URL || "http://localhost:5000";
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -55,7 +57,7 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://localhost:5000",
+        target: apiTarget,
         changeOrigin: true,
       },
     },
@@ -64,5 +66,11 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: {
+      "/api": {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    },
   },
 });
