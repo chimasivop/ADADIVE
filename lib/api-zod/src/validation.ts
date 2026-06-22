@@ -209,6 +209,23 @@ export const schemas = {
     }),
   }),
 
+  // ── PATCH /api/deals/:id ───────────────────────────────────
+  updateDeal: z.object({
+    params: z.object({
+      id: z.coerce.number().int().positive("Invalid deal ID"),
+    }),
+    body: z
+      .object({
+        status: z.enum(["pending", "active", "completed", "failed"]).optional(),
+        startEpoch: z.coerce.number().int().optional(),
+        endEpoch: z.coerce.number().int().optional(),
+        txHash: z.string().trim().min(1).optional(),
+      })
+      .refine((body) => Object.keys(body).length > 0, {
+        message: "At least one deal field must be provided",
+      }),
+  }),
+
 };
 
 // ============================================================

@@ -105,34 +105,28 @@ router.get(
 
 router.patch(
   "/deals/:id",
-  validate(schemas.updateProviderApplication),
+  validate(schemas.updateDeal),
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const id = parseInt(req.params.id as string);
-      if (Number.isNaN(id)) {
-        res.status(400).json({ error: "Invalid deal ID" });
-        return;
-      }
+      const id = Number(req.params.id);
 
       const body = req.body;
-
-      const [deal] = await db
-        .select()
-        .from(dealsTable)
-        .where(eq(dealsTable.id, id));
-
-      if (!deal) {
-        res.status(404).json({ error: "Deal not found" });
-        return;
-      }
+      const updateData: Partial<typeof dealsTable.$inferInsert> = {};
+      if (body.status !== undefined) updateData.status = body.status;
+      if (body.startEpoch !== undefined) updateData.startEpoch = body.startEpoch;
+      if (body.endEpoch !== undefined) updateData.endEpoch = body.endEpoch;
+      if (body.txHash !== undefined) updateData.txHash = body.txHash;
 
       const [updated] = await db
         .update(dealsTable)
-        .set({
-          status: body.status,
-        })
+        .set(updateData)
         .where(eq(dealsTable.id, id))
         .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "Deal not found" });
+        return;
+      }
 
       if (body.status === "active") {
         await db.insert(activityTable).values({
