@@ -1,0 +1,27 @@
+name: Contracts CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "contracts/adadive-escrow/**"
+      - ".github/workflows/contracts-ci.yml"
+  pull_request:
+    paths:
+      - "contracts/adadive-escrow/**"
+      - ".github/workflows/contracts-ci.yml"
+
+jobs:
+  aiken:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts/adadive-escrow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aiken-lang/setup-aiken@v1
+        with:
+          version: v1.1.22
+      - run: aiken fmt --check
+      - run: aiken check -D
+      - run: aiken build
