@@ -128,6 +128,7 @@ export default function Landing() {
   const [, setLocation] = useLocation();
   const goApp   = () => setLocation("/app");
   const goToken = () => setLocation("/token");
+  const whitepaperUrl = `${import.meta.env.BASE_URL}ADADIVE-Whitepaper-v1.0.pdf`;
 
   const [email, setEmail]       = useState("");
   const [subState, setSubState] = useState<"idle" | "loading" | "done" | "duplicate">("idle");
@@ -180,6 +181,7 @@ export default function Landing() {
         <div className="a-nav-desktop" style={{ gap:"28px", alignItems:"center" }}>
           {["Protocol","Providers","Deals"].map(n => <button key={n} className="a-nav-link" onClick={goApp}>{n}</button>)}
           <button className="a-nav-link" onClick={goToken} style={{ color:T.gold, opacity:.85 }}>THT Token</button>
+          <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link">Whitepaper</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ color:"#5865F2" }}>Discord</a>
           <button className="a-btn-primary" style={{ padding:"8px 22px", fontSize:"10px" }} onClick={goApp}>Launch App</button>
         </div>
@@ -199,6 +201,7 @@ export default function Landing() {
         <div style={{ position:"fixed", top:"60px", left:0, right:0, zIndex:49, background:"rgba(5,7,15,.97)", borderBottom:"1px solid rgba(201,169,110,.12)", padding:"20px 24px", display:"flex", flexDirection:"column", gap:"18px" }}>
           {["Protocol","Providers","Deals"].map(n => <button key={n} className="a-nav-link" onClick={() => { goApp(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px" }}>{n}</button>)}
           <button className="a-nav-link" onClick={() => { goToken(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px", color:T.gold }}>THT Token</button>
+          <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize:"12px" }}>Whitepaper ↗</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ fontSize:"12px", color:"#5865F2" }}>Discord Server ↗</a>
           <button className="a-btn-primary" style={{ padding:"10px 20px", fontSize:"10px", width:"fit-content" }} onClick={() => { goApp(); setMobileMenuOpen(false); }}>Launch App</button>
         </div>
@@ -460,6 +463,7 @@ export default function Landing() {
             <button key={l} className="a-nav-link" onClick={goApp}>{l}</button>
           ))}
           <button className="a-nav-link" onClick={goToken}>THT Token</button>
+          <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link">Whitepaper</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ color:"#5865F2" }}>Discord</a>
         </div>
         <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", color:T.mist, opacity:.5 }}>PREPROD TESTNET · BUILD 0.1.0-α</span>
