@@ -5,6 +5,7 @@ import dealsRouter from "./deals";
 import statsRouter from "./stats";
 import waitlistRouter from "./waitlist";
 import storageRouter from "./storage";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(providersRouter);
 router.use(dealsRouter);
 router.use(statsRouter);
 router.use(waitlistRouter);
+router.use("/auth", authRouter);
 
 export default router;
