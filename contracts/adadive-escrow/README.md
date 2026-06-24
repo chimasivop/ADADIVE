@@ -33,6 +33,27 @@ assumption (see "Why an oracle" below).
 - `Settle` is time-bounded to on/before `deadline`; after that the only path is
   `Refund`, keeping the two flows from overlapping ambiguously.
 
+### Off-chain integration note: validity-range bounds
+
+The time checks (`must_end_before` / `must_start_after` in `lib/adadive/escrow.ak`)
+compare against the `Finite` bound value and **do not inspect the `is_inclusive`
+flag**. The Cardano ledger natively represents the upper validity bound
+(`invalid-hereafter`) as **exclusive**, so off-chain transaction builders must
+construct ranges to match what the validator expects:
+
+- **`Settle`** requires `upper_bound = Finite(t)` with `t <= deadline`. If the
+  off-chain builder uses the standard exclusive upper bound (e.g.
+  `invalid-hereafter = deadline + 1` to mean "valid through `deadline`"), the
+  resulting `Finite(deadline + 1) <= deadline` check is `False` and a legitimate
+  `Settle` will be **rejected**. Build the upper bound so its `Finite` value is
+  `<= deadline` (i.e. set `invalid-hereafter <= deadline`).
+- **`Refund`** requires `lower_bound = Finite(t)` with `t > deadline` (the
+  ledger's lower bound is inclusive, so this is unaffected by the flag).
+
+These are conservative checks — they can only cause valid transactions to be
+rejected, never invalid ones to be accepted — but the off-chain code must
+construct ranges accordingly.
+
 ### Why an oracle (and not pure on-chain proof)?
 
 A Cardano validator cannot natively observe "is this file still pinned on IPFS
