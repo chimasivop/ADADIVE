@@ -25,3 +25,5 @@ jobs:
       - run: aiken fmt --check
       - run: aiken check -D
       - run: aiken build
+      # Fail if the committed blueprint is stale (out of sync with the source).
+      - run: git diff --exit-code plutus.json
