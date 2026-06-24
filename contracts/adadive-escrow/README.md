@@ -32,6 +32,18 @@ assumption (see "Why an oracle" below).
 - The client **cannot** reclaim before `deadline`, except via a mutual `Cancel`.
 - `Settle` is time-bounded to on/before `deadline`; after that the only path is
   `Refund`, keeping the two flows from overlapping ambiguously.
+- The destination of the escrowed funds is enforced on-chain, not just the
+  signatures: `Settle` requires an output paying at least `payment` lovelace to
+  the `provider`, and `Refund` requires an output paying at least `payment`
+  lovelace to the `client`. A correctly-signed transaction therefore cannot
+  redirect the escrow to an arbitrary address. `Cancel` is the exception — the
+  two co-signing parties (`client` + `provider`) jointly decide where the
+  unwound funds go, so its destination is intentionally unconstrained.
+
+> **Note:** `payment` is interpreted as **lovelace**. The output check uses
+> `assets.lovelace_of(output.value) >= payment`, so v1 escrows must hold ADA.
+> The `>=` comparison lets the recipient's output also carry change / min-ADA
+> without failing the check.
 
 ### Off-chain integration note: validity-range bounds
 
@@ -73,7 +85,7 @@ contracts/adadive-escrow/
 │   └── escrow.ak                    # pure validate() authorization logic
 └── validators/
     ├── deal_escrow.ak               # on-chain spend entrypoint
-    └── deal_escrow_test.ak          # 15 unit tests (happy + adversarial)
+    └── deal_escrow_test.ak          # 20 unit tests (happy + adversarial)
 ```
 
 The authorization logic lives in `adadive/escrow.validate` (a pure function) so
@@ -91,7 +103,7 @@ type DealDatum {
   provider: VerificationKeyHash,
   oracle: VerificationKeyHash,
   data_hash: ByteArray,        // IPFS CID / data hash
-  payment: Int,                // lovelace or THT qty (informational)
+  payment: Int,                // lovelace (enforced as payout amount)
   storage_gb: Int,
   duration_epochs: Int,
   start_time: Int,             // POSIX ms
@@ -137,9 +149,10 @@ aiken check         # type-check + run unit tests
 aiken build         # regenerate plutus.json blueprint
 ```
 
-`aiken check` runs all 15 unit tests in `validators/deal_escrow_test.ak`,
+`aiken check` runs all 20 unit tests in `validators/deal_escrow_test.ak`,
 covering each happy path and the adversarial cases (missing signatures, wrong
-signer, wrong timing, and the v1 scope guards).
+signer, wrong timing, wrong/underpaid payout destination, and the v1 scope
+guards).
 
 ## Not done yet
 

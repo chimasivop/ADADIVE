@@ -8,36 +8,50 @@ use adadive/types.{
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash}
 use aiken/interval.{Finite, IntervalBound}
-use cardano/transaction.{ValidityRange}
+use cardano/address.{Address, VerificationKey}
+use cardano/assets
+use cardano/transaction.{Output, ValidityRange}
 
 /// Decide whether spending an escrowed deal UTxO is authorized.
 ///
 /// v1 only governs `OracleAttested` deals still in the `Locked` phase; any
 /// other datum shape is rejected, reserving those variants for the v2
 /// optimistic-challenge validator (a separate script hash).
+///
+/// Authorization is enforced via signatures, timing, **and** the destination of
+/// the escrowed funds: `Settle` must pay the provider and `Refund` must pay the
+/// client (each at least `deal.payment` lovelace). Signatures alone do not
+/// authorize an arbitrary spend.
 pub fn validate(
   deal: DealDatum,
   redeemer: DealRedeemer,
   range: ValidityRange,
   signatories: List<VerificationKeyHash>,
+  outputs: List<Output>,
 ) -> Bool {
   let is_v1_scope = deal.model == OracleAttested && deal.phase == Locked
 
   is_v1_scope && when redeemer is {
     // Oracle attests valid proof-of-storage and the provider claims, before
-    // the settlement deadline.
+    // the settlement deadline, and the escrow is paid out to the provider.
     Settle ->
       signed_by(signatories, deal.oracle) && signed_by(
         signatories,
         deal.provider,
-      ) && must_end_before(range, deal.deadline)
-    // After the deadline the client may unilaterally reclaim the escrow.
+      ) && must_end_before(range, deal.deadline) && paid_at_least(
+        outputs,
+        deal.provider,
+        deal.payment,
+      )
+    // After the deadline the client may unilaterally reclaim the escrow back to
+    // itself.
     Refund ->
       signed_by(signatories, deal.client) && must_start_after(
         range,
         deal.deadline,
-      )
-    // Both parties mutually agree to unwind the deal at any time.
+      ) && paid_at_least(outputs, deal.client, deal.payment)
+    // Both parties mutually agree to unwind the deal at any time. The
+    // destination is left to the co-signing parties.
     Cancel ->
       signed_by(signatories, deal.client) && signed_by(
         signatories,
@@ -52,6 +66,29 @@ pub fn signed_by(
   vk: VerificationKeyHash,
 ) -> Bool {
   list.has(signatories, vk)
+}
+
+/// True if at least one transaction output pays `>= amount` lovelace to a
+/// payment address controlled by `recipient` (a verification-key credential).
+///
+/// Uses `>=` so the recipient may also receive change / min-ADA in the same
+/// output without failing the check. Stake credentials are not constrained.
+pub fn paid_at_least(
+  outputs: List<Output>,
+  recipient: VerificationKeyHash,
+  amount: Int,
+) -> Bool {
+  list.any(
+    outputs,
+    fn(output) {
+      let Output { address, value, .. } = output
+      when address is {
+        Address { payment_credential: VerificationKey(vk), .. } ->
+          vk == recipient && assets.lovelace_of(value) >= amount
+        _ -> False
+      }
+    },
+  )
 }
 
 /// True if the whole transaction validity range is strictly after `deadline`,

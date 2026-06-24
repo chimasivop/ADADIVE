@@ -42,8 +42,9 @@ pub type DealDatum {
   oracle: VerificationKeyHash,
   /// Hash / IPFS CID of the stored data this deal covers.
   data_hash: ByteArray,
-  /// Amount escrowed for the provider (lovelace, or THT quantity), informational
-  /// for indexers; spend authorization is enforced via signatures + timing.
+  /// Amount escrowed for the provider, in **lovelace**. Enforced on-chain: a
+  /// `Settle` must pay at least this much to the provider and a `Refund` at
+  /// least this much to the client (see `adadive/escrow.validate`).
   payment: Int,
   /// Storage size in gigabytes the provider committed to.
   storage_gb: Int,

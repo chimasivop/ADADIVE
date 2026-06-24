@@ -11,6 +11,9 @@ use adadive/types.{
 }
 use aiken/crypto.{VerificationKeyHash}
 use aiken/interval
+use cardano/address.{Address, VerificationKey}
+use cardano/assets
+use cardano/transaction.{NoDatum, Output}
 
 // ----------------------------------------------------------------------------
 // Fixtures
@@ -30,13 +33,15 @@ const stranger: VerificationKeyHash =
 
 const deadline: Int = 1_700_000_000_000
 
+const payment: Int = 1_000_000
+
 fn base_datum() -> DealDatum {
   DealDatum {
     client,
     provider,
     oracle,
     data_hash: #"deadbeef",
-    payment: 1_000_000,
+    payment,
     storage_gb: 10,
     duration_epochs: 6,
     start_time: 1_600_000_000_000,
@@ -44,6 +49,19 @@ fn base_datum() -> DealDatum {
     model: OracleAttested,
     challenge_window: 0,
     phase: Locked,
+  }
+}
+
+/// An output paying `amount` lovelace to a verification-key payment address.
+fn pay_to(recipient: VerificationKeyHash, amount: Int) -> Output {
+  Output {
+    address: Address {
+      payment_credential: VerificationKey(recipient),
+      stake_credential: None,
+    },
+    value: assets.from_lovelace(amount),
+    datum: NoDatum,
+    reference_script: None,
   }
 }
 
@@ -57,15 +75,28 @@ test settle_with_oracle_and_provider_before_deadline() {
     Settle,
     interval.before(deadline),
     [oracle, provider],
+    [pay_to(provider, payment)],
   )
 }
 
 test settle_fails_without_oracle() {
-  !escrow.validate(base_datum(), Settle, interval.before(deadline), [provider])
+  !escrow.validate(
+    base_datum(),
+    Settle,
+    interval.before(deadline),
+    [provider],
+    [pay_to(provider, payment)],
+  )
 }
 
 test settle_fails_without_provider() {
-  !escrow.validate(base_datum(), Settle, interval.before(deadline), [oracle])
+  !escrow.validate(
+    base_datum(),
+    Settle,
+    interval.before(deadline),
+    [oracle],
+    [pay_to(provider, payment)],
+  )
 }
 
 test settle_fails_after_deadline() {
@@ -76,6 +107,7 @@ test settle_fails_after_deadline() {
     Settle,
     interval.after(deadline + 1),
     [oracle, provider],
+    [pay_to(provider, payment)],
   )
 }
 
@@ -85,6 +117,40 @@ test settle_fails_with_unbounded_range() {
     Settle,
     interval.everything,
     [oracle, provider],
+    [pay_to(provider, payment)],
+  )
+}
+
+test settle_fails_when_provider_underpaid() {
+  // Correct signers and timing, but the provider output is short of `payment`.
+  !escrow.validate(
+    base_datum(),
+    Settle,
+    interval.before(deadline),
+    [oracle, provider],
+    [pay_to(provider, payment - 1)],
+  )
+}
+
+test settle_fails_when_payment_goes_to_wrong_party() {
+  // Correct signers and timing, but the funds are paid to the client instead
+  // of the provider.
+  !escrow.validate(
+    base_datum(),
+    Settle,
+    interval.before(deadline),
+    [oracle, provider],
+    [pay_to(client, payment)],
+  )
+}
+
+test settle_fails_with_no_outputs() {
+  !escrow.validate(
+    base_datum(),
+    Settle,
+    interval.before(deadline),
+    [oracle, provider],
+    [],
   )
 }
 
@@ -93,13 +159,25 @@ test settle_fails_with_unbounded_range() {
 // ----------------------------------------------------------------------------
 
 test refund_by_client_after_deadline() {
-  escrow.validate(base_datum(), Refund, interval.after(deadline + 1), [client])
+  escrow.validate(
+    base_datum(),
+    Refund,
+    interval.after(deadline + 1),
+    [client],
+    [pay_to(client, payment)],
+  )
 }
 
 test refund_fails_at_exactly_deadline() {
   // Refund must be strictly after the deadline so it cannot overlap with the
   // on/before-deadline Settle path.
-  !escrow.validate(base_datum(), Refund, interval.after(deadline), [client])
+  !escrow.validate(
+    base_datum(),
+    Refund,
+    interval.after(deadline),
+    [client],
+    [pay_to(client, payment)],
+  )
 }
 
 test refund_fails_before_deadline() {
@@ -108,15 +186,50 @@ test refund_fails_before_deadline() {
     Refund,
     interval.before(deadline - 1),
     [client],
+    [pay_to(client, payment)],
   )
 }
 
 test refund_fails_with_unbounded_range() {
-  !escrow.validate(base_datum(), Refund, interval.everything, [client])
+  !escrow.validate(
+    base_datum(),
+    Refund,
+    interval.everything,
+    [client],
+    [pay_to(client, payment)],
+  )
 }
 
 test refund_fails_for_non_client() {
-  !escrow.validate(base_datum(), Refund, interval.after(deadline), [provider])
+  !escrow.validate(
+    base_datum(),
+    Refund,
+    interval.after(deadline + 1),
+    [provider],
+    [pay_to(client, payment)],
+  )
+}
+
+test refund_fails_when_client_underpaid() {
+  !escrow.validate(
+    base_datum(),
+    Refund,
+    interval.after(deadline + 1),
+    [client],
+    [pay_to(client, payment - 1)],
+  )
+}
+
+test refund_fails_when_payment_goes_to_wrong_party() {
+  // Correct signer and timing, but the funds are paid to the provider instead
+  // of the client.
+  !escrow.validate(
+    base_datum(),
+    Refund,
+    interval.after(deadline + 1),
+    [client],
+    [pay_to(provider, payment)],
+  )
 }
 
 // ----------------------------------------------------------------------------
@@ -124,15 +237,23 @@ test refund_fails_for_non_client() {
 // ----------------------------------------------------------------------------
 
 test cancel_with_both_parties() {
-  escrow.validate(base_datum(), Cancel, interval.everything, [client, provider])
+  // Cancel does not constrain the output destination; the co-signing parties
+  // decide where the unwound funds go.
+  escrow.validate(
+    base_datum(),
+    Cancel,
+    interval.everything,
+    [client, provider],
+    [],
+  )
 }
 
 test cancel_fails_without_provider() {
-  !escrow.validate(base_datum(), Cancel, interval.everything, [client])
+  !escrow.validate(base_datum(), Cancel, interval.everything, [client], [])
 }
 
 test cancel_fails_without_client() {
-  !escrow.validate(base_datum(), Cancel, interval.everything, [provider])
+  !escrow.validate(base_datum(), Cancel, interval.everything, [provider], [])
 }
 
 test cancel_fails_for_stranger_pair() {
@@ -141,6 +262,7 @@ test cancel_fails_for_stranger_pair() {
     Cancel,
     interval.everything,
     [stranger, provider],
+    [],
   )
 }
 
@@ -150,7 +272,13 @@ test cancel_fails_for_stranger_pair() {
 
 test settle_fails_when_model_is_optimistic() {
   let d = DealDatum { ..base_datum(), model: OptimisticChallenge }
-  !escrow.validate(d, Settle, interval.before(deadline), [oracle, provider])
+  !escrow.validate(
+    d,
+    Settle,
+    interval.before(deadline),
+    [oracle, provider],
+    [pay_to(provider, payment)],
+  )
 }
 
 test settle_fails_when_phase_is_claimed() {
@@ -158,5 +286,11 @@ test settle_fails_when_phase_is_claimed() {
     ..base_datum(),
     phase: Claimed { challenge_deadline: deadline },
   }
-  !escrow.validate(d, Settle, interval.before(deadline), [oracle, provider])
+  !escrow.validate(
+    d,
+    Settle,
+    interval.before(deadline),
+    [oracle, provider],
+    [pay_to(provider, payment)],
+  )
 }

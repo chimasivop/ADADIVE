@@ -16,6 +16,10 @@
 ////   * The oracle cannot take funds without the provider (and is never a
 ////     recipient), so a rogue oracle cannot steal — only withhold/grief.
 ////   * The client cannot reclaim before `deadline` except by mutual `Cancel`.
+////   * The fund destination is enforced on-chain: `Settle` must pay the
+////     provider and `Refund` must pay the client (each at least `payment`
+////     lovelace), so a correctly-signed spend cannot be redirected elsewhere.
+////     `Cancel` leaves the destination to the two co-signing parties.
 ////
 //// The actual authorization logic lives in `adadive/escrow.validate` so it can
 //// be unit tested directly; this module is just the on-chain entrypoint.
@@ -32,7 +36,13 @@ validator deal_escrow {
     self: Transaction,
   ) {
     expect Some(deal) = datum
-    escrow.validate(deal, redeemer, self.validity_range, self.extra_signatories)
+    escrow.validate(
+      deal,
+      redeemer,
+      self.validity_range,
+      self.extra_signatories,
+      self.outputs,
+    )
   }
 
   else(_) {
