@@ -29,7 +29,8 @@ pub fn validate(
   signatories: List<VerificationKeyHash>,
   outputs: List<Output>,
 ) -> Bool {
-  let is_v1_scope = deal.model == OracleAttested && deal.phase == Locked
+  let is_v1_scope =
+    deal.model == OracleAttested && deal.phase == Locked && keys_distinct(deal)
 
   is_v1_scope && when redeemer is {
     // Oracle attests valid proof-of-storage and the provider claims, before
@@ -57,6 +58,19 @@ pub fn validate(
         signatories,
         deal.provider,
       )
+  }
+}
+
+/// True if the deal's three roles (`client`, `provider`, `oracle`) are all
+/// distinct keys. This is a v1 scope guard: if two roles shared a key the
+/// two-signature requirements would collapse (e.g. `oracle == provider` would
+/// let the provider settle unilaterally, or `client == provider` would make
+/// `Cancel` unilateral), so such a datum is rejected outright.
+pub fn keys_distinct(deal: DealDatum) -> Bool {
+  and {
+    deal.client != deal.provider,
+    deal.client != deal.oracle,
+    deal.provider != deal.oracle,
   }
 }
 

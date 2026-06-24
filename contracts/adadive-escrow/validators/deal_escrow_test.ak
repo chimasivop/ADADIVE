@@ -294,3 +294,26 @@ test settle_fails_when_phase_is_claimed() {
     [pay_to(provider, payment)],
   )
 }
+
+// Distinctness guard: if two roles share a key the two-signature requirements
+// would collapse, so the datum must be rejected outright.
+
+test settle_fails_when_oracle_equals_provider() {
+  // With oracle == provider, a single provider signature would otherwise
+  // satisfy both `signed_by` checks and let the provider settle unilaterally.
+  let d = DealDatum { ..base_datum(), oracle: provider }
+  !escrow.validate(
+    d,
+    Settle,
+    interval.before(deadline),
+    [provider],
+    [pay_to(provider, payment)],
+  )
+}
+
+test cancel_fails_when_client_equals_provider() {
+  // With client == provider, a single signature would otherwise make Cancel
+  // unilateral.
+  let d = DealDatum { ..base_datum(), provider: client }
+  !escrow.validate(d, Cancel, interval.everything, [client], [])
+}

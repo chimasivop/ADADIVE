@@ -39,6 +39,11 @@ assumption (see "Why an oracle" below).
   redirect the escrow to an arbitrary address. `Cancel` is the exception — the
   two co-signing parties (`client` + `provider`) jointly decide where the
   unwound funds go, so its destination is intentionally unconstrained.
+- The three roles (`client`, `provider`, `oracle`) must be **distinct keys**.
+  The validator rejects any datum where two roles share a key, since that would
+  collapse a two-signature requirement to one (e.g. `oracle == provider` would
+  let the provider settle alone; `client == provider` would make `Cancel`
+  unilateral).
 
 > **Note:** `payment` is interpreted as **lovelace**. The output check uses
 > `assets.lovelace_of(output.value) >= payment`, so v1 escrows must hold ADA.
@@ -85,7 +90,7 @@ contracts/adadive-escrow/
 │   └── escrow.ak                    # pure validate() authorization logic
 └── validators/
     ├── deal_escrow.ak               # on-chain spend entrypoint
-    └── deal_escrow_test.ak          # 20 unit tests (happy + adversarial)
+    └── deal_escrow_test.ak          # 22 unit tests (happy + adversarial)
 ```
 
 The authorization logic lives in `adadive/escrow.validate` (a pure function) so
@@ -149,10 +154,26 @@ aiken check         # type-check + run unit tests
 aiken build         # regenerate plutus.json blueprint
 ```
 
-`aiken check` runs all 20 unit tests in `validators/deal_escrow_test.ak`,
+`aiken check` runs all 22 unit tests in `validators/deal_escrow_test.ak`,
 covering each happy path and the adversarial cases (missing signatures, wrong
-signer, wrong timing, wrong/underpaid payout destination, and the v1 scope
-guards).
+signer, wrong timing, wrong/underpaid payout destination, non-distinct role
+keys, and the v1 scope guards).
+
+## Off-chain integration requirements
+
+When the off-chain code (deferred — see "Not done yet") builds the lock
+transaction, it **must** validate the datum before sending funds to the script:
+
+- **Distinct role keys.** `client`, `provider`, and `oracle` must be three
+  distinct keys (enforced on-chain via `keys_distinct` in `contracts/adadive-escrow/lib/adadive/escrow.ak`).
+  A datum reusing a key across roles fails the v1 scope guard for *every*
+  redeemer, so the resulting UTxO is **permanently unspendable** — the funds are
+  bricked. Reject such a deal off-chain before locking.
+- **Positive `payment` in lovelace.** `payment` is the on-chain payout amount in
+  lovelace; the off-chain builder must lock at least that much ADA and should
+  reject non-positive values.
+- **Validity-range bounds.** Construct `Settle` / `Refund` validity ranges per
+  the "Off-chain integration note: validity-range bounds" section above.
 
 ## Not done yet
 

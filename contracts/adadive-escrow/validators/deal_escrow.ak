@@ -20,6 +20,9 @@
 ////     provider and `Refund` must pay the client (each at least `payment`
 ////     lovelace), so a correctly-signed spend cannot be redirected elsewhere.
 ////     `Cancel` leaves the destination to the two co-signing parties.
+////   * The `client`, `provider`, and `oracle` keys must be distinct; a datum
+////     that reuses a key across roles is rejected, so a shared key can never
+////     collapse a two-signature requirement to one.
 ////
 //// The actual authorization logic lives in `adadive/escrow.validate` so it can
 //// be unit tested directly; this module is just the on-chain entrypoint.
