@@ -44,6 +44,9 @@ assumption (see "Why an oracle" below).
   collapse a two-signature requirement to one (e.g. `oracle == provider` would
   let the provider settle alone; `client == provider` would make `Cancel`
   unilateral).
+- `payment` must be **positive**. The validator rejects a datum with
+  `payment <= 0`, since a `payment` of 0 would make the payout check trivially
+  pass for any output and defeat the destination enforcement.
 
 > **Note:** `payment` is interpreted as **lovelace**. The output check uses
 > `assets.lovelace_of(output.value) >= payment`, so v1 escrows must hold ADA.
@@ -90,7 +93,7 @@ contracts/adadive-escrow/
 │   └── escrow.ak                    # pure validate() authorization logic
 └── validators/
     ├── deal_escrow.ak               # on-chain spend entrypoint
-    └── deal_escrow_test.ak          # 22 unit tests (happy + adversarial)
+    └── deal_escrow_test.ak          # 23 unit tests (happy + adversarial)
 ```
 
 The authorization logic lives in `adadive/escrow.validate` (a pure function) so
@@ -154,10 +157,10 @@ aiken check         # type-check + run unit tests
 aiken build         # regenerate plutus.json blueprint
 ```
 
-`aiken check` runs all 22 unit tests in `validators/deal_escrow_test.ak`,
+`aiken check` runs all 23 unit tests in `validators/deal_escrow_test.ak`,
 covering each happy path and the adversarial cases (missing signatures, wrong
 signer, wrong timing, wrong/underpaid payout destination, non-distinct role
-keys, and the v1 scope guards).
+keys, non-positive payment, and the v1 scope guards).
 
 ## Off-chain integration requirements
 
@@ -170,8 +173,9 @@ transaction, it **must** validate the datum before sending funds to the script:
   redeemer, so the resulting UTxO is **permanently unspendable** — the funds are
   bricked. Reject such a deal off-chain before locking.
 - **Positive `payment` in lovelace.** `payment` is the on-chain payout amount in
-  lovelace; the off-chain builder must lock at least that much ADA and should
-  reject non-positive values.
+  lovelace; the off-chain builder must lock at least that much ADA. A
+  non-positive `payment` is rejected on-chain (so the UTxO would be unspendable),
+  but off-chain should reject it earlier to avoid bricking funds.
 - **Validity-range bounds.** Construct `Settle` / `Refund` validity ranges per
   the "Off-chain integration note: validity-range bounds" section above.
 

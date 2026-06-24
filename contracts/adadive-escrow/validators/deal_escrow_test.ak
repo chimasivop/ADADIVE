@@ -317,3 +317,16 @@ test cancel_fails_when_client_equals_provider() {
   let d = DealDatum { ..base_datum(), provider: client }
   !escrow.validate(d, Cancel, interval.everything, [client], [])
 }
+
+test settle_fails_when_payment_is_zero() {
+  // A `payment` of 0 would otherwise make `paid_at_least` trivially pass for
+  // any output, so the scope guard rejects non-positive payments outright.
+  let d = DealDatum { ..base_datum(), payment: 0 }
+  !escrow.validate(
+    d,
+    Settle,
+    interval.before(deadline),
+    [oracle, provider],
+    [pay_to(provider, 0)],
+  )
+}

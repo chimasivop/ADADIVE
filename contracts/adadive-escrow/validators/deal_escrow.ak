@@ -23,6 +23,8 @@
 ////   * The `client`, `provider`, and `oracle` keys must be distinct; a datum
 ////     that reuses a key across roles is rejected, so a shared key can never
 ////     collapse a two-signature requirement to one.
+////   * `payment` must be positive; a datum with `payment <= 0` is rejected so
+////     the payout check cannot be trivially satisfied.
 ////
 //// The actual authorization logic lives in `adadive/escrow.validate` so it can
 //// be unit tested directly; this module is just the on-chain entrypoint.

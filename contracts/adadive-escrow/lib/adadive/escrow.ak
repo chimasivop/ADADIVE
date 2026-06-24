@@ -22,6 +22,10 @@ use cardano/transaction.{Output, ValidityRange}
 /// the escrowed funds: `Settle` must pay the provider and `Refund` must pay the
 /// client (each at least `deal.payment` lovelace). Signatures alone do not
 /// authorize an arbitrary spend.
+///
+/// The v1 scope guard also rejects malformed datums: the three roles must be
+/// distinct keys (see `keys_distinct`) and `payment` must be positive, so a
+/// `payment` of 0 cannot make the payout check trivially pass.
 pub fn validate(
   deal: DealDatum,
   redeemer: DealRedeemer,
@@ -29,8 +33,12 @@ pub fn validate(
   signatories: List<VerificationKeyHash>,
   outputs: List<Output>,
 ) -> Bool {
-  let is_v1_scope =
-    deal.model == OracleAttested && deal.phase == Locked && keys_distinct(deal)
+  let is_v1_scope = and {
+    deal.model == OracleAttested,
+    deal.phase == Locked,
+    keys_distinct(deal),
+    deal.payment > 0,
+  }
 
   is_v1_scope && when redeemer is {
     // Oracle attests valid proof-of-storage and the provider claims, before
