@@ -54,12 +54,14 @@ pub fn signed_by(
   list.has(signatories, vk)
 }
 
-/// True if the whole transaction validity range is at or after `deadline`,
-/// i.e. the transaction cannot be submitted before `deadline`.
+/// True if the whole transaction validity range is strictly after `deadline`,
+/// i.e. the transaction cannot be submitted at or before `deadline`. This keeps
+/// the `Refund` path from overlapping with the on/before-`deadline` `Settle`
+/// path at exactly `deadline`.
 pub fn must_start_after(range: ValidityRange, deadline: Int) -> Bool {
   when range.lower_bound is {
     IntervalBound { bound_type: Finite(tx_earliest), .. } ->
-      deadline <= tx_earliest
+      deadline < tx_earliest
     _ -> False
   }
 }

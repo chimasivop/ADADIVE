@@ -93,7 +93,13 @@ test settle_fails_with_unbounded_range() {
 // ----------------------------------------------------------------------------
 
 test refund_by_client_after_deadline() {
-  escrow.validate(base_datum(), Refund, interval.after(deadline), [client])
+  escrow.validate(base_datum(), Refund, interval.after(deadline + 1), [client])
+}
+
+test refund_fails_at_exactly_deadline() {
+  // Refund must be strictly after the deadline so it cannot overlap with the
+  // on/before-deadline Settle path.
+  !escrow.validate(base_datum(), Refund, interval.after(deadline), [client])
 }
 
 test refund_fails_before_deadline() {
