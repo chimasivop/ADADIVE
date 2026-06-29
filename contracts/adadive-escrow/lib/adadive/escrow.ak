@@ -5,12 +5,19 @@
 use adadive/types.{
   Cancel, DealDatum, DealRedeemer, Locked, OracleAttested, Refund, Settle,
 }
+use aiken/bytearray
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash}
 use aiken/interval.{Finite, IntervalBound}
 use cardano/address.{Address, VerificationKey}
 use cardano/assets
 use cardano/transaction.{Output, ValidityRange}
+
+/// Maximum storage size in GB (1 exabyte)
+const MAX_STORAGE_GB: Int = 1_000_000
+
+/// Maximum deal duration in epochs (~700 days)
+const MAX_DURATION_EPOCHS: Int = 100_000
 
 /// Decide whether spending an escrowed deal UTxO is authorized.
 ///
@@ -24,8 +31,9 @@ use cardano/transaction.{Output, ValidityRange}
 /// authorize an arbitrary spend.
 ///
 /// The v1 scope guard also rejects malformed datums: the three roles must be
-/// distinct keys (see `keys_distinct`) and `payment` must be positive, so a
-/// `payment` of 0 cannot make the payout check trivially pass.
+/// distinct keys (see `keys_distinct`), `payment` must be positive, deal
+/// parameters must have valid bounds, deadline must be after start_time, and
+/// data_hash must be non-empty.
 pub fn validate(
   deal: DealDatum,
   redeemer: DealRedeemer,
@@ -38,6 +46,14 @@ pub fn validate(
     deal.phase == Locked,
     keys_distinct(deal),
     deal.payment > 0,
+    deal.storage_gb > 0,
+    deal.storage_gb <= MAX_STORAGE_GB,
+    deal.duration_epochs > 0,
+    deal.duration_epochs <= MAX_DURATION_EPOCHS,
+    deal.start_time > 0,
+    deal.deadline > 0,
+    deal.deadline > deal.start_time,
+    bytearray.size(deal.data_hash) > 0,
   }
 
   is_v1_scope && when redeemer is {
@@ -59,13 +75,14 @@ pub fn validate(
         range,
         deal.deadline,
       ) && paid_at_least(outputs, deal.client, deal.payment)
-    // Both parties mutually agree to unwind the deal at any time. The
-    // destination is left to the co-signing parties.
+    // Both parties mutually agree to unwind the deal at any time. The client
+    // must receive at least their escrowed payment back (prevents fund theft
+    // via Cancel collusion).
     Cancel ->
       signed_by(signatories, deal.client) && signed_by(
         signatories,
         deal.provider,
-      )
+      ) && paid_at_least(outputs, deal.client, deal.payment)
   }
 }
 

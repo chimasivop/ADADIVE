@@ -9,7 +9,7 @@
 ////   * `Refund` — after `deadline`, the `client` may unilaterally reclaim the
 ////     escrow because the provider never settled.
 ////   * `Cancel` — the `client` and `provider` mutually agree to unwind the
-////     deal at any time.
+////     deal at any time. The client must receive at least `payment` back.
 ////
 //// Security properties (v1):
 ////   * The provider cannot take funds without the oracle's approval.
@@ -19,12 +19,15 @@
 ////   * The fund destination is enforced on-chain: `Settle` must pay the
 ////     provider and `Refund` must pay the client (each at least `payment`
 ////     lovelace), so a correctly-signed spend cannot be redirected elsewhere.
-////     `Cancel` leaves the destination to the two co-signing parties.
+////     `Cancel` requires the client to receive at least `payment` back,
+////     preventing fund theft via client+provider collusion.
 ////   * The `client`, `provider`, and `oracle` keys must be distinct; a datum
 ////     that reuses a key across roles is rejected, so a shared key can never
 ////     collapse a two-signature requirement to one.
 ////   * `payment` must be positive; a datum with `payment <= 0` is rejected so
 ////     the payout check cannot be trivially satisfied.
+////   * Deal parameters have bounds: storage_gb > 0, duration_epochs > 0,
+////     deadline > start_time, data_hash non-empty.
 ////
 //// The actual authorization logic lives in `adadive/escrow.validate` so it can
 //// be unit tested directly; this module is just the on-chain entrypoint.

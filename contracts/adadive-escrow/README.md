@@ -4,9 +4,8 @@ On-chain validators for ADADIVE storage deals, written in [Aiken](https://aiken-
 (Plutus V3). This package contains the **v1 deal escrow** validator plus its
 unit tests and compiled blueprint.
 
-> **Status:** preprod / testnet only. Not yet integrated with the app and not
-> audited. Do **not** point this at mainnet or real funds before an independent
-> review.
+> **Status:** preprod / testnet only. Not yet integrated with the app.
+> Security audit completed (see `SECURITY_AUDIT.md`).
 
 ## What it does
 
@@ -17,7 +16,7 @@ The funds can only leave the script in three ways:
 | --- | --- | --- | --- |
 | `Settle` | `oracle` **and** `provider` co-sign | on/before `deadline` | provider is paid |
 | `Refund` | `client` | strictly after `deadline` | client reclaims escrow |
-| `Cancel` | `client` **and** `provider` co-sign | any time | deal is unwound |
+| `Cancel` | `client` **and** `provider` co-sign | any time | deal is unwound (client must receive ≥payment) |
 
 The **oracle/arbiter** is a trusted key that co-signs `Settle` to attest that
 the provider produced valid proof-of-storage *off-chain*. This is the v1 trust
@@ -36,9 +35,9 @@ assumption (see "Why an oracle" below).
   signatures: `Settle` requires an output paying at least `payment` lovelace to
   the `provider`, and `Refund` requires an output paying at least `payment`
   lovelace to the `client`. A correctly-signed transaction therefore cannot
-  redirect the escrow to an arbitrary address. `Cancel` is the exception — the
-  two co-signing parties (`client` + `provider`) jointly decide where the
-  unwound funds go, so its destination is intentionally unconstrained.
+  redirect the escrow to an arbitrary address. `Cancel` also requires the
+  client to receive at least `payment` back, preventing fund theft via
+  client+provider collusion.
 - The three roles (`client`, `provider`, `oracle`) must be **distinct keys**.
   The validator rejects any datum where two roles share a key, since that would
   collapse a two-signature requirement to one (e.g. `oracle == provider` would
@@ -47,6 +46,9 @@ assumption (see "Why an oracle" below).
 - `payment` must be **positive**. The validator rejects a datum with
   `payment <= 0`, since a `payment` of 0 would make the payout check trivially
   pass for any output and defeat the destination enforcement.
+- Deal parameters have **bounds**: `storage_gb` and `duration_epochs` must be
+  positive and within reasonable limits; `deadline` must be strictly after
+  `start_time`; `data_hash` must be non-empty.
 
 > **Note:** `payment` is interpreted as **lovelace**. The output check uses
 > `assets.lovelace_of(output.value) >= payment`, so v1 escrows must hold ADA.
@@ -91,9 +93,10 @@ contracts/adadive-escrow/
 ├── lib/adadive/
 │   ├── types.ak                     # DealDatum, DealRedeemer, enums
 │   └── escrow.ak                    # pure validate() authorization logic
-└── validators/
-    ├── deal_escrow.ak               # on-chain spend entrypoint
-    └── deal_escrow_test.ak          # 23 unit tests (happy + adversarial)
+├── validators/
+│   ├── deal_escrow.ak               # on-chain spend entrypoint
+│   └── deal_escrow_test.ak          # 60 unit tests (happy + adversarial)
+└── SECURITY_AUDIT.md                # security audit report
 ```
 
 The authorization logic lives in `adadive/escrow.validate` (a pure function) so
@@ -157,10 +160,11 @@ aiken check         # type-check + run unit tests
 aiken build         # regenerate plutus.json blueprint
 ```
 
-`aiken check` runs all 23 unit tests in `validators/deal_escrow_test.ak`,
+`aiken check` runs all 60 unit tests in `validators/deal_escrow_test.ak`,
 covering each happy path and the adversarial cases (missing signatures, wrong
 signer, wrong timing, wrong/underpaid payout destination, non-distinct role
-keys, non-positive payment, and the v1 scope guards).
+keys, non-positive payment, datum field bounds, time ordering, data hash
+validation, and the v1 scope guards).
 
 ## Off-chain integration requirements
 
