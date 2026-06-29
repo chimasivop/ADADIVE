@@ -5,7 +5,6 @@
 use adadive/types.{
   Cancel, DealDatum, DealRedeemer, Locked, OracleAttested, Refund, Settle,
 }
-use aiken/bytearray
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash}
 use aiken/interval.{Finite, IntervalBound}
@@ -14,10 +13,10 @@ use cardano/assets
 use cardano/transaction.{Output, ValidityRange}
 
 /// Maximum storage size in GB (1 exabyte)
-const MAX_STORAGE_GB: Int = 1_000_000
+const max_storage_gb: Int = 1_000_000
 
 /// Maximum deal duration in epochs (~700 days)
-const MAX_DURATION_EPOCHS: Int = 100_000
+const max_duration_epochs: Int = 100_000
 
 /// Decide whether spending an escrowed deal UTxO is authorized.
 ///
@@ -47,13 +46,13 @@ pub fn validate(
     keys_distinct(deal),
     deal.payment > 0,
     deal.storage_gb > 0,
-    deal.storage_gb <= MAX_STORAGE_GB,
+    deal.storage_gb <= max_storage_gb,
     deal.duration_epochs > 0,
-    deal.duration_epochs <= MAX_DURATION_EPOCHS,
+    deal.duration_epochs <= max_duration_epochs,
     deal.start_time > 0,
     deal.deadline > 0,
     deal.deadline > deal.start_time,
-    bytearray.size(deal.data_hash) > 0,
+    deal.data_hash != #"",
   }
 
   is_v1_scope && when redeemer is {
