@@ -1,0 +1,197 @@
+{
+  "preamble": {
+    "title": "chimasivop/adadive-escrow",
+    "description": "Aiken contracts for project 'chimasivop/adadive-escrow'",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.22+39d6b04"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "deal_escrow.deal_escrow.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/adadive~1types~1DealDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/adadive~1types~1DealRedeemer"
+        }
+      },
+      "compiledCode": "59026601010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cdc3a400530070024888966002600460106ea800e26466453001159800980098059baa0028cc0048c03cc040c040c040c040c040c040c040c04000644646600200200644b30010018a508acc004cdc79bae30120010038a518998010011809800a01c40452300f3010001980718061baa0029807180798079807980798079807980798061baa004488888c966002b30013375e980103d879800030143015301530153015301530153015301530153012375400713375e98103d87980003014301530153015301530153015301530153015301530153012375400714a08082264b300130080018acc004cc018008dd7180a980b180b18099baa0048acc004cc018008dd7180298099baa0048992cc004c034c04cdd5000c4cdc49bad3016301437540026eb4c020c050dd5002c5282024301530133754600a60266ea800e2941011452820228acc004c0300062b300133006002375c602a60266ea8012264b3001300d301337540031337126eb4c020c050dd50029bad30163014375400314a08090c054c04cdd5180a98099baa0038a504045159800998030011bae301530133754009133006002375c600a60266ea801229410112022404460226ea803629410101bac3005301137540128b201498059baa0079807001a444b300130040028acc004c03cdd5005400e2c80822b300130080028acc004c03cdd5005400e2c80822b30013370e90020014566002601e6ea802a007164041164034806900d0c030c034004dc3a400060126ea800e2c8038600e00260066ea801e29344d95900101",
+      "hash": "8a7da1558ee7e2c068c889a61ae9dc4e01e6fec03e1d8e51d10c4bba"
+    },
+    {
+      "title": "deal_escrow.deal_escrow.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "59026601010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cdc3a400530070024888966002600460106ea800e26466453001159800980098059baa0028cc0048c03cc040c040c040c040c040c040c040c04000644646600200200644b30010018a508acc004cdc79bae30120010038a518998010011809800a01c40452300f3010001980718061baa0029807180798079807980798079807980798061baa004488888c966002b30013375e980103d879800030143015301530153015301530153015301530153012375400713375e98103d87980003014301530153015301530153015301530153015301530153012375400714a08082264b300130080018acc004cc018008dd7180a980b180b18099baa0048acc004cc018008dd7180298099baa0048992cc004c034c04cdd5000c4cdc49bad3016301437540026eb4c020c050dd5002c5282024301530133754600a60266ea800e2941011452820228acc004c0300062b300133006002375c602a60266ea8012264b3001300d301337540031337126eb4c020c050dd50029bad30163014375400314a08090c054c04cdd5180a98099baa0038a504045159800998030011bae301530133754009133006002375c600a60266ea801229410112022404460226ea803629410101bac3005301137540128b201498059baa0079807001a444b300130040028acc004c03cdd5005400e2c80822b300130080028acc004c03cdd5005400e2c80822b30013370e90020014566002601e6ea802a007164041164034806900d0c030c034004dc3a400060126ea800e2c8038600e00260066ea801e29344d95900101",
+      "hash": "8a7da1558ee7e2c068c889a61ae9dc4e01e6fec03e1d8e51d10c4bba"
+    }
+  ],
+  "definitions": {
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "adadive/types/DealDatum": {
+      "title": "DealDatum",
+      "description": "The datum attached to an escrowed deal UTxO.",
+      "anyOf": [
+        {
+          "title": "DealDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "client",
+              "description": "Client who funded the deal and may reclaim on expiry/cancellation.",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "provider",
+              "description": "Provider who receives payment on successful settlement.",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "oracle",
+              "description": "Trusted arbiter that attests proof-of-storage in the v1 oracle model.",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "data_hash",
+              "description": "Hash / IPFS CID of the stored data this deal covers.",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "payment",
+              "description": "Amount escrowed for the provider (lovelace, or THT quantity), informational\n for indexers; spend authorization is enforced via signatures + timing.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "storage_gb",
+              "description": "Storage size in gigabytes the provider committed to.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "duration_epochs",
+              "description": "Storage duration in Cardano epochs.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "start_time",
+              "description": "POSIX time (ms) when the deal became active.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "deadline",
+              "description": "POSIX time (ms) by which the provider must settle; afterwards the client\n may unilaterally refund.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "model",
+              "description": "Settlement model in force. v1 requires `OracleAttested`.",
+              "$ref": "#/definitions/adadive~1types~1SettlementModel"
+            },
+            {
+              "title": "challenge_window",
+              "description": "v2 challenge window length (ms). Ignored by v1; set to 0 for v1 deals.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "phase",
+              "description": "Current lifecycle phase. v1 requires `Locked`.",
+              "$ref": "#/definitions/adadive~1types~1DealPhase"
+            }
+          ]
+        }
+      ]
+    },
+    "adadive/types/DealPhase": {
+      "title": "DealPhase",
+      "description": "Lifecycle phase of the escrowed deal. v1 only ever sees `Locked`; the other\n phases exist so v2's claim/challenge flow slots in without a datum change.",
+      "anyOf": [
+        {
+          "title": "Locked",
+          "description": "Funds are escrowed; awaiting settlement, refund, or cancellation.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Claimed",
+          "description": "v2 (reserved): provider has posted a completion claim; challenge window\n is open until `challenge_deadline`.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "challenge_deadline",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "adadive/types/DealRedeemer": {
+      "title": "DealRedeemer",
+      "description": "Actions that can be taken against an escrowed deal UTxO.\n\n Constructors are append-only: v2 will add `ProviderClaim`, `Challenge`, and\n `Finalize` without removing or reordering these, so existing off-chain\n encoders remain valid.",
+      "anyOf": [
+        {
+          "title": "Settle",
+          "description": "v1: oracle + provider co-sign to release payment to the provider.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Refund",
+          "description": "Client reclaims the escrow after `deadline` has passed with no settlement.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        },
+        {
+          "title": "Cancel",
+          "description": "Client and provider mutually agree to unwind the deal at any time.",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    },
+    "adadive/types/SettlementModel": {
+      "title": "SettlementModel",
+      "description": "Which settlement rules govern a deal. v1 deals are always `OracleAttested`.\n `OptimisticChallenge` is reserved for v2 and is rejected by the v1\n validator, so a v1 script can never be tricked into running v2 semantics.",
+      "anyOf": [
+        {
+          "title": "OracleAttested",
+          "description": "v1: a trusted arbiter (`oracle`) co-signs settlement to attest that the\n provider has demonstrated valid proof-of-storage off-chain.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "OptimisticChallenge",
+          "description": "v2 (reserved): provider claims optimistically; anyone may submit a fraud\n proof during `challenge_window` before funds finalize.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/crypto/VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    }
+  }
+}
