@@ -53,3 +53,4 @@ Thumbs.db
 .env.local
 .env.*.local
 adadive_export.sql
+package-lock.json
