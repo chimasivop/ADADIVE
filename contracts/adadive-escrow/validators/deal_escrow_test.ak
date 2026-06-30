@@ -457,11 +457,7 @@ test cancel_fails_when_client_paid_to_oracle() {
 // ----------------------------------------------------------------------------
 
 test settle_fails_when_model_is_optimistic() {
-  let d =
-    DealDatum {
-      ..base_datum(),
-      model: OptimisticChallenge,
-    }
+  let d = DealDatum { ..base_datum(), model: OptimisticChallenge }
   !escrow.validate(
     d,
     Settle,
@@ -472,11 +468,7 @@ test settle_fails_when_model_is_optimistic() {
 }
 
 test refund_fails_when_model_is_optimistic() {
-  let d =
-    DealDatum {
-      ..base_datum(),
-      model: OptimisticChallenge,
-    }
+  let d = DealDatum { ..base_datum(), model: OptimisticChallenge }
   !escrow.validate(
     d,
     Refund,
@@ -487,11 +479,7 @@ test refund_fails_when_model_is_optimistic() {
 }
 
 test cancel_fails_when_model_is_optimistic() {
-  let d =
-    DealDatum {
-      ..base_datum(),
-      model: OptimisticChallenge,
-    }
+  let d = DealDatum { ..base_datum(), model: OptimisticChallenge }
   !escrow.validate(
     d,
     Cancel,
@@ -502,11 +490,10 @@ test cancel_fails_when_model_is_optimistic() {
 }
 
 test settle_fails_when_phase_is_claimed() {
-  let d =
-    DealDatum {
-      ..base_datum(),
-      phase: Claimed { challenge_deadline: deadline },
-    }
+  let d = DealDatum {
+    ..base_datum(),
+    phase: Claimed { challenge_deadline: deadline },
+  }
   !escrow.validate(
     d,
     Settle,
@@ -517,11 +504,10 @@ test settle_fails_when_phase_is_claimed() {
 }
 
 test refund_fails_when_phase_is_claimed() {
-  let d =
-    DealDatum {
-      ..base_datum(),
-      phase: Claimed { challenge_deadline: deadline },
-    }
+  let d = DealDatum {
+    ..base_datum(),
+    phase: Claimed { challenge_deadline: deadline },
+  }
   !escrow.validate(
     d,
     Refund,
