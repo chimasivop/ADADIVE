@@ -4,6 +4,21 @@
 > require ECDSA-Ed25519 cryptographic signatures from private keys that only you possess.
 > This guide provides exact step-by-step commands for your local machine.
 
+> **⚠️ IMPORTANT: Script Hash Inconsistency Detected**
+> 
+> Before running any tests, run the diagnostic script:
+> ```bash
+> python3 diagnose.py
+> ```
+> 
+> If script hash mismatches are reported, rebuild the contract:
+> ```bash
+> cd contracts/adadive-escrow
+> aiken build
+> ```
+> 
+> See the "Critical: Script Hash Consistency" section below for details.
+
 ---
 
 ## Prerequisites

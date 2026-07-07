@@ -15,7 +15,11 @@ import requests
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 WALLET_DIR   = os.path.expanduser("~/cardano-wallet")
 ESCROW_ADDR  = "addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2"
-SCRIPT_HASH  = "85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b"
+# Script hash derived from escrow.addr (Blake2b-224 of the deployed Plutus script)
+# NOTE: This hash doesn't match the current escrow_spend.plutus file (which computes
+# to 7599237f...). The escrow.addr was generated from an older build. For deployment,
+# rebuild with Aiken and regenerate all artifacts.
+SCRIPT_HASH  = "00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55"
 ESCROW_PLUTUS = os.path.join(SCRIPT_DIR, "escrow_spend.plutus")
 BF_URL       = "https://cardano-preprod.blockfrost.io/api/v0"
 BF_KEY       = os.environ.get(
@@ -75,6 +79,7 @@ def load_script():
     We decode once to get the raw script bytes for PyCardano.
     """
     import cbor2
+    import hashlib
     from pycardano import PlutusV2Script
 
     if not os.path.exists(ESCROW_PLUTUS):
@@ -88,7 +93,8 @@ def load_script():
     script = PlutusV2Script(script_bytes)
 
     # Sanity-check: computed hash must match the known on-chain hash
-    computed = bytes(script.hash()).hex()
+    # PyCardano's PlutusV2Script is a bytes subclass, compute hash manually
+    computed = hashlib.blake2b(bytes(script), digest_size=28).digest().hex()
     if computed != SCRIPT_HASH:
         warn(f"Script hash mismatch: computed {computed} != expected {SCRIPT_HASH}")
         warn("The validator on-chain may differ from escrow_spend.plutus.")

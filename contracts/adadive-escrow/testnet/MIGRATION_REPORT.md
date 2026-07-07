@@ -124,15 +124,44 @@ The following items were **not** completed and should be addressed in the new en
 
 ### High priority — must test before merging
 
-| # | Item |
-|---|------|
-| T1 | Run `python3 -m py_compile` on all 6 scripts to confirm zero syntax errors |
-| T2 | Run `00_setup_wallets.py` and verify keypairs are written correctly |
-| T3 | Run `01_lock.py --payment 5000000 --deadline-hours 0.1` and confirm tx on Cardanoscan |
-| T4 | Run `02_settle.py` within the deadline and confirm provider receives funds |
-| T5 | Run `01_lock.py` again, wait for deadline to pass, run `03_refund.py` |
-| T6 | Run `01_lock.py` again, run `04_cancel.py`, confirm client receives funds |
-| T7 | Verify `load_script()` hash check passes (computed == `85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b`) |
+| # | Item | Status |
+|---|------|--------|
+| T1 | Run `python3 -m py_compile` on all 6 scripts to confirm zero syntax errors | ✅ Done |
+| T2 | Run `00_setup_wallets.py` and verify keypairs are written correctly | ✅ Done |
+| T3 | Run `01_lock.py --payment 5000000 --deadline-hours 0.1` and confirm tx on Cardanoscan | ⏳ Need funds |
+| T4 | Run `02_settle.py` within the deadline and confirm provider receives funds | ⏳ Need funds + validator fix |
+| T5 | Run `01_lock.py` again, wait for deadline to pass, run `03_refund.py` | ⏳ Need funds |
+| T6 | Run `01_lock.py` again, run `04_cancel.py`, confirm client receives funds | ⏳ Need funds |
+| T7 | Verify `load_script()` hash check passes | ⚠️ Fixed but script hash mismatch |
+
+### CRITICAL: Script Hash Inconsistency
+
+**Issue Discovered**: The contract artifacts are inconsistent:
+- `escrow_spend.plutus` has cborHex that computes to `7599237f1a201fb5a9cd7ff1e637ca3a992de8280d231250c06ad77d`
+- `escrow.addr` was derived from `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`
+- `plutus.json` expects `85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b`
+- On-chain: script hash `00a587ce...` not registered, no reference script UTxO
+
+**Status**: The PyCardano scripts have been updated to work with the escrow.addr that's on-chain. The `SCRIPT_HASH` constant in `common.py` has been updated to `00a587ce...` to match.
+
+**IMPORTANT**: The `escrow_spend.plutus` file does NOT contain the correct contract code for the deployed address. Before running E2E tests:
+
+1. Install Aiken: `curl -sLO https://github.com/input-output-hk/aiken/releases/download/1.1.22/aiken-1.1.22-x86_64-unknown-linux-gnu.tar.gz && tar xzf aiken-*.tar.gz && mv aiken ~/.local/bin/`
+
+2. Rebuild the contract:
+```bash
+cd contracts/adadive-escrow/
+aiken build
+```
+
+3. Update the testnet files from the new build:
+   - `testnet/escrow_spend.plutus` - extract from `plutus.json`
+   - `testnet/escrow.addr` - compute with cardano-cli
+   - `testnet/script.hash` - the Blake2b-224 hash of the script
+
+4. Update `common.py` `SCRIPT_HASH` to match the new build
+
+5. Deploy the validator as a reference script UTxO
 
 ### Medium priority — may need adjustment based on runtime behaviour
 
