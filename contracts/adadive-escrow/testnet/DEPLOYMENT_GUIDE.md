@@ -460,10 +460,11 @@ print(f"Datum Hash: {binascii.hexlify(datum_hash).decode()}")
 | Item | Value |
 |---|---|
 | **Script Hash** | `85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b` |
-| **Escrow Address** | `addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2` |
+| **Escrow Address** | `addr_test1wzz7mqxsrgdwp9nqkwtmflz0exxz9zpv0urq44zha2nwq7cwxas68` |
 | **Network** | Cardano Preprod (testnet-magic 1) |
 | **Min UTxO** | 2 ADA |
-| **Redeemer — Settle** | `{"constructor": 0, "fields": []}` |
-| **Redeemer — Refund** | `{"constructor": 1, "fields": []}` |
-| **Redeemer — Cancel** | `{"constructor": 2, "fields": []}` |
-| **Datum Phase** | `Locked` = `{"constructor": 0, "fields": []}` |
+| **Redeemer — Settle** | `{"constructor": 0, "fields": []}` (CBORTag 121) |
+| **Redeemer — Refund** | `{"constructor": 1, "fields": []}` (CBORTag 122) |
+| **Redeemer — Cancel** | `{"constructor": 2, "fields": []}` (CBORTag 123) |
+| **Datum Phase** | `Locked` = `{"constructor": 0, "fields": []}` (CBORTag 121) |
+| **Datum Model** | `OracleAttested` = `{"constructor": 0, "fields": []}` (CBORTag 121) |
