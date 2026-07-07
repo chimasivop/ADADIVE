@@ -4,20 +4,10 @@
 > require ECDSA-Ed25519 cryptographic signatures from private keys that only you possess.
 > This guide provides exact step-by-step commands for your local machine.
 
-> **⚠️ IMPORTANT: Script Hash Inconsistency Detected**
+> **✅ Contract Rebuilt:** The contract has been rebuilt with Aiken and all artifacts are consistent.
 > 
-> Before running any tests, run the diagnostic script:
-> ```bash
-> python3 diagnose.py
-> ```
-> 
-> If script hash mismatches are reported, rebuild the contract:
-> ```bash
-> cd contracts/adadive-escrow
-> aiken build
-> ```
-> 
-> See the "Critical: Script Hash Consistency" section below for details.
+> - **Script Hash**: `85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b`
+> - **Escrow Address**: `addr_test1wzz7mqxsrgdwp9nqkwtmflz0exxz9zpv0urq44zha2nwq7cwxas68`
 
 ---
 
