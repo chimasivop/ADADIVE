@@ -30,15 +30,36 @@ from pycardano import (
     TransactionBuilder, TransactionOutput, Value, VerificationKeyHash,
 )
 from pycardano.plutus import RawPlutusData
-from cbor2 import CBORTag
+from pycardano.serialization import RawCBOR
+from cbor2 import CBORTag, loads
+
+
+def _get_datum_fields(utxo):
+    """Extract CBOR fields from a UTxO's inline datum."""
+    datum = utxo.output.datum
+    if datum is None:
+        die("No datum found in UTxO")
+    
+    try:
+        if isinstance(datum, RawPlutusData):
+            inner = datum.data
+        elif isinstance(datum, RawCBOR):
+            inner = loads(datum.cbor)
+        else:
+            die(f"Unknown datum type: {type(datum)}")
+        
+        if isinstance(inner, CBORTag):
+            return inner.value
+    except Exception as e:
+        die(f"Could not decode datum: {e}")
+    
+    die("Datum is not a CBORTag")
 
 
 def _datum_int(utxo, idx: int, name: str) -> int:
-    datum = utxo.output.datum
-    if isinstance(datum, RawPlutusData) and isinstance(datum.data, CBORTag):
-        fields = datum.data.value
-        if len(fields) > idx:
-            return int(fields[idx])
+    fields = _get_datum_fields(utxo)
+    if len(fields) > idx:
+        return int(fields[idx])
     die(f"Could not read {name} from datum")
 
 

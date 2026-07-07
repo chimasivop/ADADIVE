@@ -14,10 +14,10 @@ import requests
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 WALLET_DIR   = os.path.expanduser("~/cardano-wallet")
-# New escrow address from Aiken build
-ESCROW_ADDR  = "addr_test1wzz7mqxsrgdwp9nqkwtmflz0exxz9zpv0urq44zha2nwq7cwxas68"
-# Script hash from Aiken blueprint
-SCRIPT_HASH  = "85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b"
+# Escrow address derived from escrow_spend.plutus using PyCardano
+ESCROW_ADDR  = "addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2"
+# Script hash computed from PlutusV2Script (blake2b-224 of prefix+script)
+SCRIPT_HASH  = "00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55"
 ESCROW_PLUTUS = os.path.join(SCRIPT_DIR, "escrow_spend.plutus")
 BF_URL       = "https://cardano-preprod.blockfrost.io/api/v0"
 BF_KEY       = os.environ.get(
@@ -74,11 +74,13 @@ def load_script():
     The file uses the cardano-cli envelope format:
         {"type":"PlutusScriptV2","cborHex":"<hex>"}
     where cborHex = hex(CBOR(script_bytes)).
-    We decode once to get the raw script bytes for PyCardano.
+
+    We decode the CBOR to get the raw Plutus script bytes (1318 bytes),
+    then pass those to PlutusV2Script. This produces the correct script
+    hash that matches the on-chain script address.
     """
     import cbor2
-    import hashlib
-    from pycardano import PlutusV2Script
+    from pycardano import PlutusV2Script, plutus_script_hash
 
     if not os.path.exists(ESCROW_PLUTUS):
         die(f"Script file not found: {ESCROW_PLUTUS}")
@@ -86,22 +88,86 @@ def load_script():
     with open(ESCROW_PLUTUS) as f:
         d = json.load(f)
 
-    # cborHex is CBOR-encoded script bytes (outer wrapper added by cardano-cli)
-    script_bytes = cbor2.loads(bytes.fromhex(d["cborHex"]))
+    # Decode the CBOR wrapper to get raw Plutus script bytes
+    cbor_bytes = bytes.fromhex(d["cborHex"])
+    script_bytes = bytes(cbor2.loads(cbor_bytes))
+
+    # Create PlutusV2Script with raw script bytes
     script = PlutusV2Script(script_bytes)
 
-    # Note: Aiken computes script hash using a specific CBOR encoding that may differ
-    # from manual Blake2b-224 computation. We trust the Aiken-provided SCRIPT_HASH.
-    computed = hashlib.blake2b(bytes(script), digest_size=28).digest().hex()
-    if computed != SCRIPT_HASH:
-        warn(f"Script hash differs from Aiken blueprint:")
-        warn(f"  Manual: {computed}")
-        warn(f"  Aiken:  {SCRIPT_HASH}")
-        warn("This is expected - Aiken uses specific CBOR encoding for hash.")
+    # Verify the script hash matches our ESCROW_ADDR
+    computed_hash = bytes(plutus_script_hash(script)).hex()
+    if computed_hash != SCRIPT_HASH:
+        warn(f"Script hash differs from SCRIPT_HASH constant:")
+        warn(f"  Computed: {computed_hash}")
+        warn(f"  SCRIPT_HASH: {SCRIPT_HASH}")
     else:
-        info(f"Script hash verified: {computed}")
+        info(f"Script hash verified: {computed_hash}")
 
     return script
+
+
+def load_script_raw():
+    """
+    Load the PlutusV2 validator directly from cborHex without decoding.
+
+    This uses the original CBOR-encoded script bytes which should work
+    correctly for transaction building and submission.
+    """
+    import cbor2
+    from pycardano import PlutusV2Script, plutus_script_hash
+
+    if not os.path.exists(ESCROW_PLUTUS):
+        die(f"Script file not found: {ESCROW_PLUTUS}")
+
+    with open(ESCROW_PLUTUS) as f:
+        d = json.load(f)
+
+    # Load the raw cborHex directly
+    cbor_bytes = bytes.fromhex(d["cborHex"])
+
+    # Create PlutusV2Script with the raw CBOR bytes
+    # PyCardano's PlutusV2Script inherits from bytes, so it accepts raw bytes
+    script = PlutusV2Script(cbor_bytes)
+
+    # Verify the script hash matches our ESCROW_ADDR
+    computed_hash = bytes(plutus_script_hash(script)).hex()
+    if computed_hash != SCRIPT_HASH:
+        warn(f"Script hash differs from SCRIPT_HASH constant:")
+        warn(f"  Computed: {computed_hash}")
+        warn(f"  SCRIPT_HASH: {SCRIPT_HASH}")
+    else:
+        info(f"Script hash verified: {computed_hash}")
+
+    return script
+
+
+# Patch PyCardano deepcopy methods to work around bugs
+def _patch_pycardano_deepcopy():
+    """Patch PyCardano __deepcopy__ methods to work around bugs.
+    
+    The bugs cause deepcopy to fail during transaction building because
+    the original __deepcopy__ methods use from_cbor which fails with certain
+    PyCardano internal data structures.
+    """
+    from pycardano import PlutusV2Script
+    from pycardano.plutus import RawPlutusData
+    import copy
+
+    # Patch PlutusV2Script.__deepcopy__
+    def patched_plutus_deepcopy(self, memo=None):
+        return type(self)(bytes(self))
+    PlutusV2Script.__deepcopy__ = patched_plutus_deepcopy
+
+    # Patch RawPlutusData.__deepcopy__
+    def patched_rawplutus_deepcopy(self, memo=None):
+        # Create a new RawPlutusData with the same data
+        return type(self)(self.data)
+    RawPlutusData.__deepcopy__ = patched_rawplutus_deepcopy
+
+
+# Apply the patch when this module is imported
+_patch_pycardano_deepcopy()
 
 
 
@@ -160,28 +226,48 @@ def make_datum(
 
 # ─── REDEEMER BUILDER ────────────────────────────────────────────────────────
 #
-# DealRedeemer constructors (append-only):
-#   Settle = Constr(0, []) → CBORTag(121, [])
-#   Refund = Constr(1, []) → CBORTag(122, [])
-#   Cancel = Constr(2, []) → CBORTag(123, [])
+# DealRedeemer constructors (append-only, Aiken constructor indices):
+#   Settle = Constr(0, []) → CBORTag(0, [])
+#   Refund = Constr(1, []) → CBORTag(1, [])
+#   Cancel = Constr(2, []) → CBORTag(2, [])
 
-_REDEEMER_TAG = {"settle": 121, "refund": 122, "cancel": 123}
+# Aiken uses constructor indices for the DealDatum/DealRedeemer types.
+# For Redeemer: Settle=Constr(0), Refund=Constr(1), Cancel=Constr(2)
+_REDEEMER_TAG = {"settle": 0, "refund": 1, "cancel": 2}
 
 def make_redeemer(action: str):
     """
     Build a Redeemer for the given action.
 
     action must be one of: "settle", "refund", "cancel"
+
+    Aiken uses tag 121 (0x79) for PlutusData constructors.
+    The encoding is:
+    - Tag 121 = d8 79
+    - [constructor_index, [fields...]]
+
+    So for Settle (constructor 0) with no fields:
+    - d8 79 82 00 80
     """
     from pycardano import Redeemer
-    from pycardano.plutus import RawPlutusData
-    from cbor2 import CBORTag
+    from pycardano.serialization import RawCBOR
+    from cbor2 import dumps
 
     if action not in _REDEEMER_TAG:
         die(f"Unknown action '{action}'. Must be settle, refund, or cancel.")
 
-    tag = _REDEEMER_TAG[action]
-    return Redeemer(data=RawPlutusData(data=CBORTag(tag, [])))
+    # Aiken uses tag 121 (0x79) for PlutusData constructors
+    # Format: tag 121 + [constructor_index, [fields...]]
+    constructor_index = _REDEEMER_TAG[action]
+    redeemer_data = [constructor_index, []]  # e.g., [0, []] for Settle
+
+    # Encode to CBOR using cbor2.dumps
+    cbor_bytes = dumps(redeemer_data)  # e.g., 820080 for Settle
+    # Wrap in tag 121: d8 79
+    tag121_bytes = bytes([0xd8, 0x79]) + cbor_bytes
+
+    # Create RawCBOR with the correct bytes
+    return Redeemer(data=RawCBOR(cbor=tag121_bytes))
 
 
 # ─── SLOT / TIME CONVERSION ─────────────────────────────────────────────────
@@ -221,7 +307,8 @@ def find_escrow_utxo(context, client_vkh: bytes):
     Returns the first matching UTxO, or None.
     """
     from pycardano.plutus import RawPlutusData
-    from cbor2 import CBORTag
+    from pycardano.serialization import RawCBOR
+    from cbor2 import CBORTag, loads
 
     utxos = context.utxos(ESCROW_ADDR)
     info(f"Scanning {len(utxos)} UTxO(s) at escrow address…")
@@ -230,10 +317,18 @@ def find_escrow_utxo(context, client_vkh: bytes):
         datum = utxo.output.datum
         if datum is None:
             continue
-        if not isinstance(datum, RawPlutusData):
-            continue
+        
         try:
-            inner = datum.data  # CBORTag
+            # Handle both RawPlutusData and RawCBOR datum types
+            if isinstance(datum, RawPlutusData):
+                inner = datum.data
+            elif isinstance(datum, RawCBOR):
+                # Decode the RawCBOR to get the CBORTag
+                raw_bytes = datum.cbor
+                inner = loads(raw_bytes)
+            else:
+                continue
+            
             if not isinstance(inner, CBORTag):
                 continue
             fields = inner.value

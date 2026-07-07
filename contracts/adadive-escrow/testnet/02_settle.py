@@ -32,7 +32,8 @@ from pycardano import (
     VerificationKeyHash,
 )
 from pycardano.plutus import RawPlutusData
-from cbor2 import CBORTag
+from pycardano.serialization import RawCBOR
+from cbor2 import CBORTag, loads
 
 
 def parse_args():
@@ -44,33 +45,49 @@ def parse_args():
     return p.parse_args()
 
 
+def _get_datum_fields(utxo):
+    """Extract CBOR fields from a UTxO's inline datum."""
+    datum = utxo.output.datum
+    if datum is None:
+        die("No datum found in UTxO")
+    
+    try:
+        if isinstance(datum, RawPlutusData):
+            inner = datum.data
+        elif isinstance(datum, RawCBOR):
+            inner = loads(datum.cbor)
+        else:
+            die(f"Unknown datum type: {type(datum)}")
+        
+        if isinstance(inner, CBORTag):
+            return inner.value
+    except Exception as e:
+        die(f"Could not decode datum: {e}")
+    
+    die("Datum is not a CBORTag")
+
+
 def datum_deadline(utxo) -> int:
     """Extract datum.deadline (field index 8) from an escrow UTxO."""
-    datum = utxo.output.datum
-    if isinstance(datum, RawPlutusData) and isinstance(datum.data, CBORTag):
-        fields = datum.data.value
-        if len(fields) > 8:
-            return int(fields[8])
+    fields = _get_datum_fields(utxo)
+    if len(fields) > 8:
+        return int(fields[8])
     die("Could not read deadline from datum")
 
 
 def datum_payment(utxo) -> int:
     """Extract datum.payment (field index 4) from an escrow UTxO."""
-    datum = utxo.output.datum
-    if isinstance(datum, RawPlutusData) and isinstance(datum.data, CBORTag):
-        fields = datum.data.value
-        if len(fields) > 4:
-            return int(fields[4])
+    fields = _get_datum_fields(utxo)
+    if len(fields) > 4:
+        return int(fields[4])
     die("Could not read payment from datum")
 
 
 def datum_provider_vkh(utxo) -> bytes:
     """Extract datum.provider_vkh (field index 1) from an escrow UTxO."""
-    datum = utxo.output.datum
-    if isinstance(datum, RawPlutusData) and isinstance(datum.data, CBORTag):
-        fields = datum.data.value
-        if len(fields) > 1 and isinstance(fields[1], bytes):
-            return fields[1]
+    fields = _get_datum_fields(utxo)
+    if len(fields) > 1 and isinstance(fields[1], bytes):
+        return fields[1]
     die("Could not read provider_vkh from datum")
 
 
@@ -129,11 +146,10 @@ def main():
     # ── Compute TTL slot ─────────────────────────────────────────────────────
     # must_end_before: tx_latest <= deadline  →  ttl = slot(deadline)
     # Do NOT use deadline + 1 — that would make tx_latest = deadline+1 > deadline.
-    ttl_slot = posix_ms_to_slot(deadline_ms)
+    # But also cap TTL to within the current era (preprod era ends around slot 127958400)
+    max_ttl_slot = 127958000  # A few hundred slots before era end
+    ttl_slot = min(posix_ms_to_slot(deadline_ms), max_ttl_slot)
     info(f"  TTL slot (invalid_hereafter): {ttl_slot}")
-
-    # ── Load script ───────────────────────────────────────────────────────────
-    script = load_script()
 
     # ── Build redeemer ─────────────────────────────────────────────────────────
     redeemer = make_redeemer("settle")
@@ -152,6 +168,13 @@ def main():
         VerificationKeyHash(provider_vkh),
         VerificationKeyHash(oracle_vkh),
     ]
+
+    # Reload script to ensure it's fresh
+    script = load_script()
+
+    # Set execution units to reasonable values for estimation
+    from pycardano import ExecutionUnits
+    redeemer.ex_units = ExecutionUnits(10000000, 10000000000)
 
     builder.add_script_input(utxo, script=script, redeemer=redeemer)
     builder.add_output(provider_payout)
