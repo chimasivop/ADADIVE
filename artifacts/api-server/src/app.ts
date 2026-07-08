@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -8,6 +9,9 @@ const app: Express = express();
 const allowedOrigins = (process.env.ALLOWED_ORIGIN || "https://adadive.xyz")
   .split(",")
   .map((origin) => origin.trim());
+
+// Parse cookies before routes so req.cookies is available for OIDC callback
+app.use(cookieParser());
 
 app.use(
   pinoHttp({

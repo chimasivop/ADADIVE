@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { db, dealsTable, providersTable, activityTable } from "@workspace/db";
 import { validate, schemas } from "@workspace/api-zod";
+import { requireAuth } from "../middlewares/authMiddleware";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,7 @@ router.get("/deals", async (req: Request, res: Response): Promise<void> => {
 
 router.post(
   "/deals",
+  requireAuth,
   validate(schemas.createDeal),
   async (req: Request, res: Response): Promise<void> => {
     try {
@@ -105,6 +107,7 @@ router.get(
 
 router.patch(
   "/deals/:id",
+  requireAuth,
   validate(schemas.updateDeal),
   async (req: Request, res: Response): Promise<void> => {
     try {

@@ -85,3 +85,16 @@ export async function authMiddleware(
   req.user = refreshed.user;
   next();
 }
+
+// Middleware to require authentication on protected routes
+export function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  next();
+}

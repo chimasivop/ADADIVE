@@ -2,6 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import multer from "multer";
 import { validate, schemas } from "@workspace/api-zod";
 import * as storage from "../lib/storage.js";
+import { requireAuth } from "../middlewares/authMiddleware";
 
 const router = Router();
 
@@ -18,29 +19,14 @@ function requirePinata(res: Response): boolean {
   return true;
 }
 
-function runUpload(req: Request, res: Response): Promise<void> {
-  return new Promise((resolve, reject) => {
-    upload.single("file")(req, res, (err: unknown) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-
 // ── POST /storage/pin — upload file → Pinata IPFS → deal package ─────────────
 router.post(
   "/storage/pin",
+  requireAuth,
+  upload.single("file"),
   validate(schemas.pinFile),
   async (req: Request, res: Response): Promise<void> => {
     if (!requirePinata(res)) return;
-
-    try {
-      await runUpload(req, res);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(400).json({ error: `File upload error: ${msg}` });
-      return;
-    }
 
     if (!req.file) {
       res.status(400).json({ error: "No file uploaded" });

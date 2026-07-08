@@ -6,8 +6,12 @@ import statsRouter from "./stats";
 import waitlistRouter from "./waitlist";
 import storageRouter from "./storage";
 import authRouter from "./auth";
+import { authMiddleware } from "../middlewares/authMiddleware";
 
 const router: IRouter = Router();
+
+// Apply auth middleware globally so req.isAuthenticated() is available on every request
+router.use(authMiddleware);
 
 router.use(healthRouter);
 router.use(storageRouter);

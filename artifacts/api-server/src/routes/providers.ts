@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { db, providersTable, dealsTable } from "@workspace/db";
 import { validate, schemas } from "@workspace/api-zod";
+import { requireAuth } from "../middlewares/authMiddleware";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,7 @@ router.get("/providers", async (req: Request, res: Response): Promise<void> => {
 
 router.post(
   "/providers",
+  requireAuth,
   validate(schemas.createProvider),
   async (req: Request, res: Response): Promise<void> => {
     try {
