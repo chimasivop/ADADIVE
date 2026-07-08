@@ -75,9 +75,8 @@ def load_script():
         {"type":"PlutusScriptV2","cborHex":"<hex>"}
     where cborHex = hex(CBOR(script_bytes)).
 
-    We decode the CBOR envelope to get the raw Plutus script bytes,
-    then pass those to PlutusV2Script. This produces the script hash
-    that matches the on-chain deployed validator.
+    For Plutus V2 scripts in the witness set, the raw Plutus bytecode
+    should be used.
     """
     import cbor2
     from pycardano import PlutusV2Script, plutus_script_hash
@@ -107,12 +106,32 @@ def load_script():
     return script
 
 
-def load_script_raw():
+def load_script_raw_bytes():
     """
-    Alias for load_script() - kept for backwards compatibility.
-    Both now use PlutusV3Script with CBOR-encoded bytes.
+    Return the raw Plutus bytecode (without any CBOR wrapper).
+    This is needed for manual witness construction with CIP-0057 key layout.
     """
-    return load_script()
+    import cbor2
+
+    if not os.path.exists(ESCROW_PLUTUS):
+        die(f"Script file not found: {ESCROW_PLUTUS}")
+
+    with open(ESCROW_PLUTUS) as f:
+        d = json.load(f)
+
+    cbor_bytes = bytes.fromhex(d["cborHex"])
+    return bytes(cbor2.loads(cbor_bytes))
+
+
+def _patch_pycardano_witness_keys():
+    """
+    Removed - caused CBOR structure issues.
+    """
+    pass
+
+
+# DO NOT apply the patch - it breaks transaction structure
+# The original PyCardano key layout (6 for V2, 7 for V3) is correct for Conway era
 
 
 # Patch PyCardano deepcopy methods to work around bugs
