@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import { db, providersTable, dealsTable } from "@workspace/db";
 import { validate, schemas } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/authMiddleware";
@@ -8,18 +8,24 @@ const router: IRouter = Router();
 
 router.get("/providers", async (req: Request, res: Response): Promise<void> => {
   try {
-    let rows = await db.select().from(providersTable).orderBy(providersTable.reputationScore);
-
-    // Optional filtering by status and reputation score
     const status = req.query.status as string | undefined;
-    const minReputation = req.query.minReputation ? parseInt(req.query.minReputation as string) : undefined;
+    const minReputationParam = req.query.minReputation as string | undefined;
+    const minReputation = minReputationParam ? parseInt(minReputationParam) : undefined;
 
+    // Build SQL WHERE conditions
+    const conditions = [];
     if (status && status !== "all") {
-      rows = rows.filter((p) => p.status === status);
+      conditions.push(eq(providersTable.status, status));
     }
     if (minReputation != null && !Number.isNaN(minReputation)) {
-      rows = rows.filter((p) => p.reputationScore >= minReputation);
+      conditions.push(gte(providersTable.reputationScore, minReputation));
     }
+
+    const rows = await db
+      .select()
+      .from(providersTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(providersTable.reputationScore);
 
     res.json(rows);
   } catch (err) {

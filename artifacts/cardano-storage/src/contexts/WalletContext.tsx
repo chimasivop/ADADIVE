@@ -5,7 +5,7 @@ import { THT } from "@/lib/token";
 interface WalletState {
   connected: boolean;
   connecting: boolean;
-  address: string | null;
+  address: string | null; // bech32 format (addr_test1...)
   adaBalance: number | null;
   thtBalance: number | null;
   error: string | null;
@@ -33,9 +33,43 @@ function bytesToHex(bytes: Uint8Array): string {
     .join("");
 }
 
-function shortenAddress(hex: string): string {
-  if (hex.length < 16) return hex;
-  return hex.slice(0, 8) + "..." + hex.slice(-6);
+// Convert hex bytes to bech32 address using CSL
+async function hexToBech32(hex: string): Promise<string> {
+  // Check if already bech32 (starts with addr_)
+  if (hex.startsWith("addr_")) return hex;
+  
+  try {
+    const CSL = await getCSL();
+    const bytes = hexToBytes(hex);
+    return CSL.Address.from_bytes(bytes).to_bech32();
+  } catch {
+    // Fallback: return as-is if CSL not available
+    return hex;
+  }
+}
+
+// Load CSL from CDN
+function getCSL(): Promise<any> {
+  if ((window as any).CardanoWasm) return Promise.resolve((window as any).CardanoWasm);
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const check = setInterval(() => {
+      attempts++;
+      if ((window as any).CardanoWasm) {
+        clearInterval(check);
+        resolve((window as any).CardanoWasm);
+      }
+      if (attempts > 100) {
+        clearInterval(check);
+        reject(new Error("CSL timeout"));
+      }
+    }, 100);
+  });
+}
+
+function shortenAddress(bech32: string): string {
+  if (bech32.length < 16) return bech32;
+  return bech32.slice(0, 12) + "..." + bech32.slice(-8);
 }
 
 function parseThtBalance(cborHex: string): { ada: number; tht: number } {
@@ -105,7 +139,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       ]);
 
       const { ada, tht } = parseThtBalance(balanceCbor);
-      const address = addresses?.[0] ?? null;
+      // Convert hex to bech32 address
+      const addressHex = addresses?.[0] ?? null;
+      const address = addressHex ? await hexToBech32(addressHex) : null;
 
       setState({
         connected: true,

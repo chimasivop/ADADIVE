@@ -1,6 +1,6 @@
 # E2E Test Status
 
-## P0 Security Fixes - Commit: fix: P0 security blockers - auth middleware, cookie-parser, mutation guards
+## P0 Security Fixes - Commit: f0604e0
 
 ### Changes Applied
 
@@ -14,16 +14,7 @@
 | Auth guard | `storage.ts` | Added `requireAuth` to `POST /api/storage/pin` | ✅ Complete |
 | multer/validation order | `storage.ts` | Fixed `POST /api/storage/pin` - moved multer before validation | ✅ Complete |
 
-### Files Modified
-
-- `artifacts/api-server/src/app.ts`
-- `artifacts/api-server/src/middlewares/authMiddleware.ts`
-- `artifacts/api-server/src/routes/index.ts`
-- `artifacts/api-server/src/routes/deals.ts`
-- `artifacts/api-server/src/routes/providers.ts`
-- `artifacts/api-server/src/routes/storage.ts`
-
-### Testing Notes
+### P0 Testing Notes
 
 | Test | Expected Result | Notes |
 |------|-----------------|-------|
@@ -34,8 +25,34 @@
 | `POST /api/storage/pin` (anonymous) | 401 Unauthorized | Auth guard returns `{"error":"Authentication required"}` |
 | `POST /api/storage/pin` (with auth + file) | 200/201 with CID | multer now parses multipart before validation |
 
-### Deployed
+---
 
-- [ ] Awaiting deployment to production
-- [ ] Verify all 401 responses work correctly
-- [ ] Verify file uploads work with authentication
+## P1 High-Priority Fixes
+
+### Changes Applied
+
+| Fix | File | Description | Status |
+|-----|------|-------------|--------|
+| THT policy ID | `cardano-storage/src/lib/token.ts` | Made policy ID configurable via `VITE_THT_POLICY_ID` env var (was 54 chars, needs 56) | ✅ Complete |
+| Real epoch from Koios | `api-server/src/routes/stats.ts` | Replaced hardcoded epoch calc with `getCurrentEpochFromKoios()` | ✅ Complete |
+| Real price history | `api-server/src/routes/stats.ts` | Replaced `Math.random()` with SQL aggregation from deals table | ✅ Complete |
+| Address bech32 display | `cardano-storage/src/contexts/WalletContext.tsx` | Decode hex to bech32 via CSL `Address.from_bytes().to_bech32()` | ✅ Complete |
+| SQL filtering deals | `api-server/src/routes/deals.ts` | Replaced `.filter()` with `eq()`/`and()` SQL WHERE clauses | ✅ Complete |
+| SQL filtering providers | `api-server/src/routes/providers.ts` | Replaced `.filter()` with `eq()`/`gte()` SQL WHERE clauses | ✅ Complete |
+| Rate limiting | `api-server/src/routes/waitlist.ts` | Added `express-rate-limit` middleware to `GET /api/waitlist` | ✅ Complete |
+| Timing attack fix | `api-server/src/routes/waitlist.ts` | Replaced `===` with `crypto.timingSafeEqual()` | ✅ Complete |
+| FK constraint | `lib/db/src/schema/deals.ts` | Added `.references(() => providersTable.id, { onDelete: "cascade" })` | ✅ Complete |
+
+### P1 Testing Notes
+
+| Test | Expected Result | Notes |
+|------|-----------------|-------|
+| THT balance display | Shows non-zero if THT exists | Set `VITE_THT_POLICY_ID` to correct 56-char policy after deployment |
+| `GET /api/stats/network` | `currentEpoch` from Koios | Returns `null` with `currentEpochSource: "unavailable"` if Koios unreachable |
+| `GET /api/stats/economy` | Real price history | `priceHistory` contains DB aggregation, or `{placeholder: true}` if no deals |
+| Wallet address display | `addr_test1q...` format | Addresses now properly converted from hex bytes to bech32 |
+| `GET /api/deals?status=active` | Filtered SQL results | Uses SQL WHERE instead of in-memory filter |
+| `GET /api/providers?minReputation=80` | Filtered SQL results | Uses SQL WHERE `>=` instead of in-memory filter |
+| `GET /api/waitlist` (no auth) | 401 Unauthorized | Rate limited to 100 req/15min |
+| `GET /api/waitlist` (rate limited) | 429 Too Many Requests | Returns `{ "error": "Too many requests..." }` |
+| Delete provider with deals | Cascade delete | FK constraint ensures deals deleted when provider removed |

@@ -2,8 +2,32 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { db, waitlistTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { validate, schemas } from "@workspace/api-zod";
+import rateLimit from "express-rate-limit";
+import { timingSafeEqual } from "crypto";
 
 const router: IRouter = Router();
+
+// Rate limiter for admin endpoints
+const adminRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per window
+  message: { error: "Too many requests, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Timing-safe password comparison to prevent timing attacks
+function secureCompare(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    // Still do comparison to maintain constant time
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
 
 router.post(
   "/waitlist",
@@ -30,12 +54,13 @@ router.post(
   }
 );
 
-router.get("/waitlist", async (req: Request, res: Response): Promise<void> => {
+router.get("/waitlist", adminRateLimiter, async (req: Request, res: Response): Promise<void> => {
   const authHeader = req.headers.authorization ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   const adminPassword = process.env.ADMIN_PASSWORD;
 
-  if (!adminPassword || token !== adminPassword) {
+  // Use timing-safe comparison to prevent timing attacks
+  if (!adminPassword || !secureCompare(token, adminPassword)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

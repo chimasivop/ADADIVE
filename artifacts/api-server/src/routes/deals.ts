@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, dealsTable, providersTable, activityTable } from "@workspace/db";
 import { validate, schemas } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/authMiddleware";
@@ -8,18 +8,24 @@ const router: IRouter = Router();
 
 router.get("/deals", async (req: Request, res: Response): Promise<void> => {
   try {
-    let rows = await db.select().from(dealsTable).orderBy(dealsTable.createdAt);
-
-    // Optional filtering
     const status = req.query.status as string | undefined;
-    const providerId = req.query.providerId ? parseInt(req.query.providerId as string) : undefined;
+    const providerIdParam = req.query.providerId as string | undefined;
+    const providerId = providerIdParam ? parseInt(providerIdParam) : undefined;
 
+    // Build SQL WHERE conditions
+    const conditions = [];
     if (status && status !== "all") {
-      rows = rows.filter((d) => d.status === status);
+      conditions.push(eq(dealsTable.status, status));
     }
     if (providerId != null && !Number.isNaN(providerId)) {
-      rows = rows.filter((d) => d.providerId === providerId);
+      conditions.push(eq(dealsTable.providerId, providerId));
     }
+
+    const rows = await db
+      .select()
+      .from(dealsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(dealsTable.createdAt);
 
     res.json(rows);
   } catch (err) {

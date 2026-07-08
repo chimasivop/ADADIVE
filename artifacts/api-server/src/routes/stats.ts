@@ -1,8 +1,20 @@
 import { Router, type IRouter } from "express";
-import { sql } from "drizzle-orm";
+import axios from "axios";
+import { sql, desc } from "drizzle-orm";
 import { db, providersTable, dealsTable, activityTable } from "@workspace/db";
 
 const router: IRouter = Router();
+
+const KOIOS_BASE_URL = process.env.KOIOS_URL ?? "https://preprod.koios.rest/api/v1";
+
+async function getCurrentEpochFromKoios(): Promise<number | null> {
+  try {
+    const res = await axios.get(`${KOIOS_BASE_URL}/tip`, { timeout: 5000 });
+    return res.data[0]?.epoch_no ?? null;
+  } catch {
+    return null;
+  }
+}
 
 router.get("/stats/network", async (_req, res): Promise<void> => {
   const [providerStats] = await db
@@ -23,7 +35,8 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
     })
     .from(dealsTable);
 
-  const currentEpoch = 500 + Math.floor((Date.now() - new Date("2024-01-01").getTime()) / (1000 * 60 * 60 * 5));
+  // Get real epoch from Koios
+  const currentEpoch = await getCurrentEpochFromKoios();
 
   const totalStorageTb = providerStats.totalStorageTb ?? 0;
   const usedStorageTb = providerStats.usedStorageTb ?? 0;
@@ -40,6 +53,7 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
     totalAdaLocked: Number((providerStats.totalAdaLocked ?? 0).toFixed(2)),
     avgReputationScore: Number((providerStats.avgReputationScore ?? 0).toFixed(1)),
     currentEpoch,
+    currentEpochSource: currentEpoch !== null ? "koios" : "unavailable",
     networkUtilizationPercent: Number(networkUtilizationPercent.toFixed(1)),
   });
 });
@@ -71,19 +85,30 @@ router.get("/stats/economy", async (_req, res): Promise<void> => {
     .from(providersTable)
     .groupBy(providersTable.region);
 
-  // Generate synthetic price history for the last 20 epochs
-  const currentEpoch = 500 + Math.floor((Date.now() - new Date("2024-01-01").getTime()) / (1000 * 60 * 60 * 5));
-  const basePrice = Number(priceStats.avgPrice ?? 0.0012);
-  const priceHistory = Array.from({ length: 20 }, (_, i) => {
-    const epoch = currentEpoch - 19 + i;
-    const variance = (Math.sin(i * 0.8) * 0.0002) + (Math.random() * 0.0001 - 0.00005);
-    const dealsCount = Math.floor(3 + Math.random() * 8);
-    return {
-      epoch,
-      priceAda: Number(Math.max(0.0005, basePrice + variance).toFixed(6)),
-      dealsCount,
-    };
-  });
+  // Get real price history from deal data, aggregated by date
+  const priceHistoryRaw = await db
+    .select({
+      createdDate: sql<string>`date(created_at)`,
+      avgPrice: sql<number>`avg(total_cost_ada / nullif(storage_gb * duration_epochs, 0))`,
+      dealsCount: sql<number>`count(*)::int`,
+    })
+    .from(dealsTable)
+    .where(sql`created_at > now() - interval '30 days'`)
+    .groupBy(sql`date(created_at)`)
+    .orderBy(desc(sql`date(created_at)`))
+    .limit(20);
+
+  // Get real epoch from Koios
+  const currentEpoch = await getCurrentEpochFromKoios();
+
+  // Transform to epoch-based history or use as-is for daily history
+  const priceHistory = priceHistoryRaw.length > 0
+    ? priceHistoryRaw.map((p, i) => ({
+        date: p.createdDate,
+        priceAda: Number((p.avgPrice ?? priceStats.avgPrice ?? 0.0012).toFixed(6)),
+        dealsCount: p.dealsCount,
+      }))
+    : [{ date: "no_data", priceAda: 0, dealsCount: 0, placeholder: true }];
 
   res.json({
     adaPerGbPerEpoch: Number(Number(priceStats.avgPrice ?? 0).toFixed(6)),
@@ -91,6 +116,7 @@ router.get("/stats/economy", async (_req, res): Promise<void> => {
     avgDealDurationEpochs: Number(Number(dealAgg.avgDealDurationEpochs ?? 0).toFixed(0)),
     totalAdaEarnedAllTime: Number(Number(dealAgg.totalAdaEarnedAllTime ?? 0).toFixed(2)),
     dailyAdaVolume: Number(Number(dealAgg.dailyAdaVolume ?? 0).toFixed(2)),
+    currentEpoch,
     priceHistory,
     storageByRegion: regionStats.map((r) => ({
       region: r.region,

@@ -1,12 +1,15 @@
 import { pgTable, serial, text, real, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { providersTable } from "./providers";
 
 export const dealStatusEnum = pgEnum("deal_status", ["pending", "active", "completed", "failed"]);
 
 export const dealsTable = pgTable("deals", {
   id: serial("id").primaryKey(),
-  providerId: integer("provider_id").notNull(),
+  providerId: integer("provider_id")
+    .notNull()
+    .references(() => providersTable.id, { onDelete: "cascade" }),
   providerName: text("provider_name").notNull(),
   clientAddress: text("client_address").notNull(),
   storageGb: real("storage_gb").notNull(),
