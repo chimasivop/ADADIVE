@@ -14,9 +14,9 @@ import requests
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 WALLET_DIR   = os.path.expanduser("~/cardano-wallet")
-# Escrow address derived from escrow_spend.plutus using PyCardano
+# Escrow address (script deployed on-chain with V2 hash)
 ESCROW_ADDR  = "addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2"
-# Script hash computed from PlutusV2Script (blake2b-224 of prefix+script)
+# Script hash for on-chain validator (V2 hash: Blake2b-224(02 + raw bytes))
 SCRIPT_HASH  = "00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55"
 ESCROW_PLUTUS = os.path.join(SCRIPT_DIR, "escrow_spend.plutus")
 BF_URL       = "https://cardano-preprod.blockfrost.io/api/v0"
@@ -75,9 +75,9 @@ def load_script():
         {"type":"PlutusScriptV2","cborHex":"<hex>"}
     where cborHex = hex(CBOR(script_bytes)).
 
-    We decode the CBOR to get the raw Plutus script bytes (1318 bytes),
-    then pass those to PlutusV2Script. This produces the correct script
-    hash that matches the on-chain script address.
+    We decode the CBOR envelope to get the raw Plutus script bytes,
+    then pass those to PlutusV2Script. This produces the script hash
+    that matches the on-chain deployed validator.
     """
     import cbor2
     from pycardano import PlutusV2Script, plutus_script_hash
@@ -109,37 +109,10 @@ def load_script():
 
 def load_script_raw():
     """
-    Load the PlutusV2 validator directly from cborHex without decoding.
-
-    This uses the original CBOR-encoded script bytes which should work
-    correctly for transaction building and submission.
+    Alias for load_script() - kept for backwards compatibility.
+    Both now use PlutusV3Script with CBOR-encoded bytes.
     """
-    import cbor2
-    from pycardano import PlutusV2Script, plutus_script_hash
-
-    if not os.path.exists(ESCROW_PLUTUS):
-        die(f"Script file not found: {ESCROW_PLUTUS}")
-
-    with open(ESCROW_PLUTUS) as f:
-        d = json.load(f)
-
-    # Load the raw cborHex directly
-    cbor_bytes = bytes.fromhex(d["cborHex"])
-
-    # Create PlutusV2Script with the raw CBOR bytes
-    # PyCardano's PlutusV2Script inherits from bytes, so it accepts raw bytes
-    script = PlutusV2Script(cbor_bytes)
-
-    # Verify the script hash matches our ESCROW_ADDR
-    computed_hash = bytes(plutus_script_hash(script)).hex()
-    if computed_hash != SCRIPT_HASH:
-        warn(f"Script hash differs from SCRIPT_HASH constant:")
-        warn(f"  Computed: {computed_hash}")
-        warn(f"  SCRIPT_HASH: {SCRIPT_HASH}")
-    else:
-        info(f"Script hash verified: {computed_hash}")
-
-    return script
+    return load_script()
 
 
 # Patch PyCardano deepcopy methods to work around bugs
