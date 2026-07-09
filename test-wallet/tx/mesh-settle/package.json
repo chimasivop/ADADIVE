@@ -1,0 +1,21 @@
+{
+  "name": "@adadive/mesh-settle",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "settle": "tsx settle.ts",
+    "settle:simple": "tsx settle-simple.ts",
+    "settle:dry": "tsx settle.ts --dry-run",
+    "check-status": "tsx check-status.ts"
+  },
+  "dependencies": {
+    "@meshsdk/core": "latest",
+    "@meshsdk/provider": "latest",
+    "@emurgo/cardano-serialization-lib-nodejs": "^15.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}
