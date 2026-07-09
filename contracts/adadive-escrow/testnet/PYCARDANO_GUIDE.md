@@ -160,7 +160,7 @@ DealDatum = Constr(0, [           -- CBORTag(121, [...])
 ## Contract Address (Preprod)
 
 ```
-addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2
+addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq
 ```
 
 Script hash: `85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b`  

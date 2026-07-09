@@ -36,7 +36,7 @@ KOIOS_URL = "https://preprod.koios.rest/api/v1"
 NETWORK_MAGIC = 1  # Preprod
 
 # Known addresses and keys
-ESCROW_ADDR = "addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2"
+ESCROW_ADDR = "addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq"
 WALLET_ADDR = "addr_test1vrtyktsm0hnrcncg9kw2xsh8knas4lutj5rf4ngudug3wcqnwj4p7"
 
 # Script hash (from deployment)

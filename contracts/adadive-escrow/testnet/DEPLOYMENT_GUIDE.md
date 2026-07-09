@@ -99,7 +99,7 @@ echo "Script Hash: $SCRIPT_HASH"
 
 ESCROW_ADDR=$(cat "$TESTNET_DIR/escrow.addr")
 echo "Escrow Address: $ESCROW_ADDR"
-# Expected: addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2
+# Expected: addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq
 
 # === GET PROTOCOL PARAMS ===
 cardano-cli query protocol-parameters \

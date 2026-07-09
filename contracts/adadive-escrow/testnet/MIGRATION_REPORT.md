@@ -287,7 +287,7 @@ python3 04_cancel.py
 |------|-------|
 | Network | Cardano Preprod |
 | Script hash | `85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b` |
-| Escrow address | `addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2` |
+| Escrow address | `addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq` |
 | Script file | `contracts/adadive-escrow/testnet/escrow_spend.plutus` |
 | Blockfrost key | env `BLOCKFROST_PROJECT_ID` (default embedded in `common.py`) |
 | Wallet dir | `~/cardano-wallet/{client,provider,oracle}/` |

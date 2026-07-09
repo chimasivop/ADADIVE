@@ -1,0 +1,197 @@
+{
+  "preamble": {
+    "title": "chimasivop/adadive-escrow",
+    "description": "Aiken contracts for project 'chimasivop/adadive-escrow'",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.23+8949565"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "deal_escrow.deal_escrow.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/adadive~1types~1DealDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/adadive~1types~1DealRedeemer"
+        }
+      },
+      "compiledCode": "59052601010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cdc3a400530070024888966002600460106ea800e26466453001159800980098059baa0028cc0048c03cc040c040c040c040c040c040c0400064601e602060206020602060206020602060200032300f30103010001918079808000c8c03cc040c040c040c0400064601e602060206020602060200032300f301030103010301030103010001911919800800801912cc00400629422b30013371e6eb8c04800400e2946266004004602600280710114dc7a44100980718061baa0024888888888a6002444646600200200844b30010018a508acc004c8c966002602460386ea80062b30013371e6eb8c07cc074dd500080344cdc480299199119801001000912cc004006007132325980099b914881000018acc004c03800626eb4c08800a00a8102266008008604a0068100dd718100009811000a04232323300100137566044604600a44b3001001801c4c8c96600266e45221000018acc004c03c00626eacc08c00a00a810a266008008604c0068108dd718108009811800a04414bd6f7b6300a400114a080da294101b180f180e1baa301e001301b3754603a00314a3133002002301e001406480e26014602c6ea803a6eb0c024c058dd50074dd61804180b1baa00e4888966002b30013375e98103d8798000301c301d301d301d301d301d301d301d301d301d301a375400b15980099baf4c0103d8798000301c301d301d301d301d301d301d301d301d301d301d301d301a375400b159800acc006600266e3cdd7180e180d1baa005375c601660346ea8016942945018456600330013371e6eb8c070c068dd50029bae300c301a375400b4a14a280c2330013371e6eb8c02cc068dd50029bae300c301a375400b4a14a280c22941018452820308992cc004c004dd69805980d9baa0068acc004c004dd69805180d9baa0068acc004cdc49bad300a301b375400c904044bd456600260026eb4c024c06cdd5003456600266e24dd69804980d9baa0064830268322b30013001375a601e60366ea801a2b30013001375a601c60366ea801a2b3001337106eb4c03cc06cdd50031bad300e301b375400d1980098039bae301d301e301e301e301b375400d4a14a280ca2941019452820328a50406514a080ca2941019452820328a50406514a080c8dc42400114a080c22941018452820308992cc004c0400062b300133008003375c601a60366ea801a2b300133008003375c601860366ea801a2b30013259800980a980d9baa001899b89375a603c60386ea8004dd69807980e1baa0078a504068603a60366ea8c030c06cdd5002466002005375c601860366ea801a6eb4c02cc06cdd5003200a8a50406514a080ca294101945660026028003159800998040019bae301d301b375400d159800992cc004c054c06cdd5000c4cdc41bad300f301c375400e6eb4c078c070dd5000c5282034301d301b3754603a60366ea8012330010029bae301d301b375400d375a601660366ea8019005452820328a504065159800998040019bae301d301b375400d159800998040019bae300c301b375400d198008014dd7180e980d9baa0069bad300b301b375400c802a294101945282032406480c8c064dd500ac528203022c805260166ea801e601c0069112cc004c01000a2b3001300f37540150038b20208acc004c02000a2b3001300f37540150038b20208acc004cdc3a400800515980098079baa00a801c5901045900d201a4034300c300d001370e900018049baa0038b200e180380098019baa0078a4d13656400401",
+      "hash": "85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b"
+    },
+    {
+      "title": "deal_escrow.deal_escrow.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "59052601010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cdc3a400530070024888966002600460106ea800e26466453001159800980098059baa0028cc0048c03cc040c040c040c040c040c040c0400064601e602060206020602060206020602060200032300f30103010001918079808000c8c03cc040c040c040c0400064601e602060206020602060200032300f301030103010301030103010001911919800800801912cc00400629422b30013371e6eb8c04800400e2946266004004602600280710114dc7a44100980718061baa0024888888888a6002444646600200200844b30010018a508acc004c8c966002602460386ea80062b30013371e6eb8c07cc074dd500080344cdc480299199119801001000912cc004006007132325980099b914881000018acc004c03800626eb4c08800a00a8102266008008604a0068100dd718100009811000a04232323300100137566044604600a44b3001001801c4c8c96600266e45221000018acc004c03c00626eacc08c00a00a810a266008008604c0068108dd718108009811800a04414bd6f7b6300a400114a080da294101b180f180e1baa301e001301b3754603a00314a3133002002301e001406480e26014602c6ea803a6eb0c024c058dd50074dd61804180b1baa00e4888966002b30013375e98103d8798000301c301d301d301d301d301d301d301d301d301d301a375400b15980099baf4c0103d8798000301c301d301d301d301d301d301d301d301d301d301d301d301a375400b159800acc006600266e3cdd7180e180d1baa005375c601660346ea8016942945018456600330013371e6eb8c070c068dd50029bae300c301a375400b4a14a280c2330013371e6eb8c02cc068dd50029bae300c301a375400b4a14a280c22941018452820308992cc004c004dd69805980d9baa0068acc004c004dd69805180d9baa0068acc004cdc49bad300a301b375400c904044bd456600260026eb4c024c06cdd5003456600266e24dd69804980d9baa0064830268322b30013001375a601e60366ea801a2b30013001375a601c60366ea801a2b3001337106eb4c03cc06cdd50031bad300e301b375400d1980098039bae301d301e301e301e301b375400d4a14a280ca2941019452820328a50406514a080ca2941019452820328a50406514a080c8dc42400114a080c22941018452820308992cc004c0400062b300133008003375c601a60366ea801a2b300133008003375c601860366ea801a2b30013259800980a980d9baa001899b89375a603c60386ea8004dd69807980e1baa0078a504068603a60366ea8c030c06cdd5002466002005375c601860366ea801a6eb4c02cc06cdd5003200a8a50406514a080ca294101945660026028003159800998040019bae301d301b375400d159800992cc004c054c06cdd5000c4cdc41bad300f301c375400e6eb4c078c070dd5000c5282034301d301b3754603a60366ea8012330010029bae301d301b375400d375a601660366ea8019005452820328a504065159800998040019bae301d301b375400d159800998040019bae300c301b375400d198008014dd7180e980d9baa0069bad300b301b375400c802a294101945282032406480c8c064dd500ac528203022c805260166ea801e601c0069112cc004c01000a2b3001300f37540150038b20208acc004c02000a2b3001300f37540150038b20208acc004cdc3a400800515980098079baa00a801c5901045900d201a4034300c300d001370e900018049baa0038b200e180380098019baa0078a4d13656400401",
+      "hash": "85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b"
+    }
+  ],
+  "definitions": {
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "adadive/types/DealDatum": {
+      "title": "DealDatum",
+      "description": "The datum attached to an escrowed deal UTxO.",
+      "anyOf": [
+        {
+          "title": "DealDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "client",
+              "description": "Client who funded the deal and may reclaim on expiry/cancellation.",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "provider",
+              "description": "Provider who receives payment on successful settlement.",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "oracle",
+              "description": "Trusted arbiter that attests proof-of-storage in the v1 oracle model.",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            },
+            {
+              "title": "data_hash",
+              "description": "Hash / IPFS CID of the stored data this deal covers.",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "payment",
+              "description": "Amount escrowed for the provider, in **lovelace**. Enforced on-chain: a\n `Settle` must pay at least this much to the provider and a `Refund` at\n least this much to the client (see `adadive/escrow.validate`).",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "storage_gb",
+              "description": "Storage size in gigabytes the provider committed to.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "duration_epochs",
+              "description": "Storage duration in Cardano epochs.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "start_time",
+              "description": "POSIX time (ms) when the deal became active.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "deadline",
+              "description": "POSIX time (ms) by which the provider must settle; afterwards the client\n may unilaterally refund.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "model",
+              "description": "Settlement model in force. v1 requires `OracleAttested`.",
+              "$ref": "#/definitions/adadive~1types~1SettlementModel"
+            },
+            {
+              "title": "challenge_window",
+              "description": "v2 challenge window length (ms). Ignored by v1; set to 0 for v1 deals.",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "phase",
+              "description": "Current lifecycle phase. v1 requires `Locked`.",
+              "$ref": "#/definitions/adadive~1types~1DealPhase"
+            }
+          ]
+        }
+      ]
+    },
+    "adadive/types/DealPhase": {
+      "title": "DealPhase",
+      "description": "Lifecycle phase of the escrowed deal. v1 only ever sees `Locked`; the other\n phases exist so v2's claim/challenge flow slots in without a datum change.",
+      "anyOf": [
+        {
+          "title": "Locked",
+          "description": "Funds are escrowed; awaiting settlement, refund, or cancellation.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Claimed",
+          "description": "v2 (reserved): provider has posted a completion claim; challenge window\n is open until `challenge_deadline`.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "challenge_deadline",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "adadive/types/DealRedeemer": {
+      "title": "DealRedeemer",
+      "description": "Actions that can be taken against an escrowed deal UTxO.\n\n Constructors are append-only: v2 will add `ProviderClaim`, `Challenge`, and\n `Finalize` without removing or reordering these, so existing off-chain\n encoders remain valid.",
+      "anyOf": [
+        {
+          "title": "Settle",
+          "description": "v1: oracle + provider co-sign to release payment to the provider.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Refund",
+          "description": "Client reclaims the escrow after `deadline` has passed with no settlement.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        },
+        {
+          "title": "Cancel",
+          "description": "Client and provider mutually agree to unwind the deal at any time.",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    },
+    "adadive/types/SettlementModel": {
+      "title": "SettlementModel",
+      "description": "Which settlement rules govern a deal. v1 deals are always `OracleAttested`.\n `OptimisticChallenge` is reserved for v2 and is rejected by the v1\n validator, so a v1 script can never be tricked into running v2 semantics.",
+      "anyOf": [
+        {
+          "title": "OracleAttested",
+          "description": "v1: a trusted arbiter (`oracle`) co-signs settlement to attest that the\n provider has demonstrated valid proof-of-storage off-chain.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "OptimisticChallenge",
+          "description": "v2 (reserved): provider claims optimistically; anyone may submit a fraud\n proof during `challenge_window` before funds finalize.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/crypto/VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    }
+  }
+}

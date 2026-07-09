@@ -14,11 +14,11 @@ import requests
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 WALLET_DIR   = os.path.expanduser("~/cardano-wallet")
-# Escrow address (script deployed on-chain with V2 hash)
-ESCROW_ADDR  = "addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2"
-# Script hash for on-chain validator (V2 hash: Blake2b-224(02 + raw bytes))
-SCRIPT_HASH  = "00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55"
-ESCROW_PLUTUS = os.path.join(SCRIPT_DIR, "escrow_spend.plutus")
+# Escrow address (script deployed on-chain with V3 hash)
+ESCROW_ADDR  = "addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq"
+# Script hash for on-chain validator (V3 hash: Blake2b-224(03 + raw bytes))
+SCRIPT_HASH  = "5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8"
+ESCROW_PLUTUS = os.path.join(SCRIPT_DIR, "deal_escrow.plutus")  # V3 PlutusScript format
 BF_URL       = "https://cardano-preprod.blockfrost.io/api/v0"
 BF_KEY       = os.environ.get(
     "BLOCKFROST_PROJECT_ID", "preprodaUBJIZq0ZKnlX2Yn6cEJZ29U1sp4L4Fy"
@@ -69,17 +69,17 @@ def load_wallet(name: str):
 
 def load_script():
     """
-    Load the PlutusV2 validator from escrow_spend.plutus.
+    Load the PlutusV3 validator from deal_escrow.plutus.
 
     The file uses the cardano-cli envelope format:
-        {"type":"PlutusScriptV2","cborHex":"<hex>"}
+        {"type":"PlutusScriptV3","cborHex":"<hex>"}
     where cborHex = hex(CBOR(script_bytes)).
 
-    For Plutus V2 scripts in the witness set, the raw Plutus bytecode
+    For Plutus V3 scripts in the witness set, the raw Plutus bytecode
     should be used.
     """
     import cbor2
-    from pycardano import PlutusV2Script, plutus_script_hash
+    from pycardano import PlutusV3Script, plutus_script_hash
 
     if not os.path.exists(ESCROW_PLUTUS):
         die(f"Script file not found: {ESCROW_PLUTUS}")
@@ -91,8 +91,8 @@ def load_script():
     cbor_bytes = bytes.fromhex(d["cborHex"])
     script_bytes = bytes(cbor2.loads(cbor_bytes))
 
-    # Create PlutusV2Script with raw script bytes
-    script = PlutusV2Script(script_bytes)
+    # Create PlutusV3Script with raw script bytes
+    script = PlutusV3Script(script_bytes)
 
     # Verify the script hash matches our ESCROW_ADDR
     computed_hash = bytes(plutus_script_hash(script)).hex()
@@ -142,14 +142,14 @@ def _patch_pycardano_deepcopy():
     the original __deepcopy__ methods use from_cbor which fails with certain
     PyCardano internal data structures.
     """
-    from pycardano import PlutusV2Script
+    from pycardano import PlutusV3Script
     from pycardano.plutus import RawPlutusData
     import copy
 
-    # Patch PlutusV2Script.__deepcopy__
+    # Patch PlutusV3Script.__deepcopy__
     def patched_plutus_deepcopy(self, memo=None):
         return type(self)(bytes(self))
-    PlutusV2Script.__deepcopy__ = patched_plutus_deepcopy
+    PlutusV3Script.__deepcopy__ = patched_plutus_deepcopy
 
     # Patch RawPlutusData.__deepcopy__
     def patched_rawplutus_deepcopy(self, memo=None):

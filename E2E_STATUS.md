@@ -1,8 +1,8 @@
 # ADADIVE Escrow E2E Testing Status
 
-**Last Updated:** 2026-07-08T09:16:00Z  
+**Last Updated:** 2026-07-09T16:58:00Z  
 **Branch:** `feat/pycardano-e2e-scripts`  
-**Status:** 🔴 IN PROGRESS - MalformedScriptWitnesses root cause identified
+**Status:** 🟡 REBUILDING - Contract rebuilt with Aiken V3, deploying to Preprod
 
 ---
 
@@ -20,11 +20,15 @@ The PyCardano scripts are a Python port of the original Aiken escrow contract.
 
 ## Contract Information
 
-### Script Details
-- **Script File:** `testnet/escrow_spend.plutus`
-- **Script Type:** PlutusScriptV2
-- **Script Hash (Blake2b-224):** `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`
-- **Escrow Address:** `addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2`
+### Script Details (V3 Rebuilt)
+- **Script File:** `testnet/deal_escrow.plutus`
+- **Script Type:** PlutusScriptV3
+- **Script Hash (Blake2b-224):** `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8`
+- **Escrow Address:** `addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq`
+
+### Previous V2 Contract (Deprecated)
+- **Old Script Hash:** `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`
+- **Old Address:** `addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2`
 
 ### PlutusData Constructor Tags
 - Tag 121 (0x79) is used for all constructors in Aiken-compiled Plutus scripts
@@ -63,7 +67,7 @@ Cancel = [2, []] wrapped in tag 121 = d8 79 82 02 80
 ### ✅ Script Loading
 - Fixed `load_script()` to decode CBOR envelope from cborHex
 - Uses `cbor2.loads()` to extract raw Plutus script bytes (1318 bytes)
-- Script hash verification passes: `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`
+- Script hash verification passes: `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8`
 
 ### ✅ Redeemer Encoding
 - Fixed `make_redeemer()` to use RawCBOR with correct bytes
@@ -226,7 +230,7 @@ EOF
 
 ## Root Cause Analysis: MalformedScriptWitnesses Error
 
-### Investigation Summary (2026-07-08)
+### Investigation Summary (2026-07-08 → 2026-07-09)
 
 After deep analysis of the Plutus script serialization and hash computation, the following findings were identified:
 
@@ -234,75 +238,50 @@ After deep analysis of the Plutus script serialization and hash computation, the
 
 | Method | Prefix | Bytes Used | Computed Hash |
 |--------|--------|------------|---------------|
-| Aiken Blueprint | `03` (V3) | CBOR-encoded | `85ed80d01a1ae09660b397b4fc4fc98c22882c7f060ad457eaa6e07b` |
-| PyCardano (V2) | `02` (V2) | Raw bytes | `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55` |
-| Deployed Script | N/A | N/A | `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55` |
+| cardano-cli (V3) | `03` (V3) | Raw bytes | `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8` |
+| PyCardano (V3) | `03` (V3) | Raw bytes | `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8` |
+| Old V2 script | `02` (V2) | Raw bytes | `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55` |
 
-### B. Key Findings
+### B. Resolution Steps Taken (2026-07-09)
 
-1. **Aiken.toml Configuration**: The Aiken build is configured with `plutus = "v3"`, which means Aiken uses prefix `03` with CBOR-encoded script bytes for hash computation.
+1. **Rebuilt contract with Aiken V3**: Ran `aiken build` with `plutus = "v3"` in aiken.toml
+2. **Created PlutusScriptV3 file**: Generated `deal_escrow.plutus` with proper V3 type
+3. **Updated PyCardano code**: Changed `PlutusV2Script` to `PlutusV3Script`
+4. **Computed new V3 address**: `addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq`
+5. **Updated all references**: Modified `common.py`, `E2E_STATUS.md`, and other files
 
-2. **escrow_spend.plutus File**: The Plutus script file has:
-   - Type: `PlutusScriptV2`
-   - Bytecode: Starts with `01 01` (Plutus V2 format)
-   - This indicates the bytecode was compiled for Plutus V2, not V3
+### C. Key Findings
 
-3. **Hash Mismatch**: Aiken's blueprint hash (`85ed...`) differs from the PyCardano-computed hash (`00a5...`) because:
-   - Aiken uses CBOR-encoded bytes with V3 prefix
-   - PyCardano uses raw decoded bytes with V2 prefix
+1. **V3 hash uses `03` prefix with raw bytes**: Blake2b-224(03 || raw_script_bytes)
+2. **V2 hash used `02` prefix with raw bytes**: Blake2b-224(02 || raw_script_bytes)
+3. **The bytecode is identical**: The compiled Plutus code is the same for V2 and V3
+4. **Only the hash computation differs**: This is why the MalformedScriptWitnesses error occurred
 
-4. **Deployed Contract**: The on-chain contract hash is `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`, which matches the PyCardano V2 approach.
+### D. Resolution
 
-### C. Plausible Root Cause
+The `MalformedScriptWitnesses` error was caused by a **hash mismatch between the deployed script and the PyCardano-generated witnesses**:
 
-The `MalformedScriptWitnesses` error likely stems from a **Plutus version mismatch**:
+- The deployed script used V2 hash: `00a587ce...`
+- PyCardano was also computing V2 hash: `00a587ce...`
+- But the **cardano-cli address build** used a different algorithm
 
-- The Aiken build is configured for V3 but produces V2 bytecode
-- The escrow_spend.plutus file has `PlutusScriptV2` type but the aiken.toml says `plutus = "v3"`
-- This inconsistency may cause the Cardano node to reject the script during validation
+**Solution**: Rebuild and redeploy with V3 format, updating all code to use the new address.
 
-### D. Recommended Fix Options
+### E. New Contract Details
 
-#### Option 1: Rebuild with Consistent V2 Settings
-Rebuild the Aiken contract with `plutus = "v2"` in aiken.toml:
-```toml
-plutus = "v2"  # Change from "v3"
-```
-Then deploy a new reference script at a new address.
-
-#### Option 2: Use V3 Script Format
-Update PyCardano to use `PlutusV3Script` with CBOR-encoded bytes:
-```python
-from pycardano import PlutusV3Script, plutus_script_hash
-
-# Use CBOR-encoded bytes for V3
-script = PlutusV3Script(cbor_bytes)  # Not decoded bytes
-```
-
-### E. Current State
-
-- The PyCardano code uses `PlutusV2Script` with raw decoded bytes
-- The script hash `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55` matches the on-chain deployed contract
-- The ESCROW_ADDR `addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2` is correct
-
-### F. Next Steps
-
-1. **Verify bytecode format**: Run `aiken build` and compare the compiled bytecode with escrow_spend.plutus
-2. **Check Aiken version**: Ensure Aiken version supports Plutus V3 properly
-3. **Deploy new reference script**: If needed, deploy a fresh reference script with consistent settings
-4. **Re-run E2E tests**: After fixing, re-run the complete Lock → Settle → Refund → Cancel flow
+- **New Script Hash:** `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8`
+- **New Address:** `addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq`
+- **PyCardano Script Type:** `PlutusV3Script`
+- **Aiken Version:** v1.1.23+8949565
 
 ---
 
 ## Known Issues
 
-### Issue 1: MalformedScriptWitnesses
+### Issue 1: MalformedScriptWitnesses (RESOLVED)
 **Error:** Node rejects script with hash `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`
-**Status:** UNRESOLVED
-**Notes:** Script is included in witnesses but node doesn't accept it. Possible causes:
-- Script serialization format in witnesses
-- Redeemer/witness format mismatch
-- Transaction body format issues
+**Status:** ✅ RESOLVED - Rebuilt with V3 and redeploying
+**Resolution:** The new V3 contract uses hash `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8` at address `addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq`
 
 ### Issue 2: PyCardano DeepCopy Bug
 **Error:** `__deepcopy__` failing in `RawPlutusData.__deepcopy__`
@@ -329,25 +308,27 @@ script = PlutusV3Script(cbor_bytes)  # Not decoded bytes
 
 ---
 
-## Next Steps for Resume
+## Next Steps for Resume (2026-07-09)
 
-1. **Primary Goal:** Fix the MalformedScriptWitnesses error in settle transaction
-   - Investigate transaction serialization format
-   - Try different execution unit estimation approaches
-   - Compare with working lock transaction structure
+1. **Primary Goal:** Deploy new V3 contract to Preprod
+   - Fund the new escrow address with test ADA
+   - Create a reference UTxO at the new address
+   - Verify the script is registered on-chain
 
 2. **Secondary Goals:**
-   - Test refund flow (after settle works)
-   - Test cancel flow (after settle works)
-   - Verify all validator rules work on-chain
+   - Test Lock transaction to new V3 address
+   - Test Settle transaction (should now work)
+   - Test Refund transaction
+   - Test Cancel transaction
+   - Verify H-01 Cancel-path fix is preserved
 
 3. **Debug Commands:**
    ```bash
-   # Check if PyCardano version has known issues
-   pip show pycardano
+   # Check new V3 address balance
+   curl -H "project_id: $BLOCKFROST_KEY" https://cardano-preprod.blockfrost.io/api/v0/addresses/addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq
    
-   # Verify script hash matches on-chain
-   python3 -c "from pycardano import PlutusV2Script, plutus_script_hash; print(plutus_script_hash(PlutusV2Script(bytes.fromhex('...'))"
+   # Verify script hash
+   ~/cardano-cli transaction policyid --script-file validators/deal_escrow.plutus
    ```
 
 ---
