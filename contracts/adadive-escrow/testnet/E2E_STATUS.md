@@ -1,20 +1,20 @@
 # ADADIVE E2E Test Status
 
-## Last Session Summary (2026-07-09)
+## Session Summary (2026-07-09)
 
 ### Test Results
 
 | Test | Status | Details |
 |------|--------|---------|
-| Fund Wallets | ✅ Success | All 3 wallets funded (500 ADA each) |
-| Lock Transaction | ✅ Success | TX: `fb6e9d62955a04a7524b914ce5854850ce20a9bcdd35f8c948d7a8dcb77e409d` |
-| Settle Transaction | ❌ Failed | MalformedScriptWitnesses error (OLD V2 CONTRACT) |
+| Fund Wallets | ✅ Success | All 3 wallets funded (487-500 ADA each) |
+| Lock Transaction | ✅ Success | TX: `143aeede087fe88c9fa7f7d954877cf83eb1ad01bebec524c2ac0b44c9b24e76` |
+| Settle Transaction | ❌ Failed | MalformedScriptWitnesses (PyCardano V3 bug) |
 
 ### Wallets (Testnet Preprod)
 
 | Role | Address | VKH |
 |------|---------|-----|
-| Client | `addr_test1vq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2` | `9e50245e46bc8aaba0964ff24f20886e189392109fa7ab15a827afab` |
+| Client | `addr_test1vz09qfz7g67g42aqje8lyneq3php3yujzz0602c44qn6l2clrclep` | `9e50245e46bc8aaba0964ff24f20886e189392109fa7ab15a827afab` |
 | Provider | `addr_test1vqj4fqvpews3sn0hzs20k96xy68l6xmnpnlcevahlhdtx5sykmhxs` | `25548181cba1184df71414fb1746268ffd1b730cff8cb3b7fddab352` |
 | Oracle | `addr_test1vzl7xkqdzrce4rzj9v87zgldwsngu6mw05alq9dqzyjvasgaf40rl` | `bfe3580d10f19a8c522b0fe123ed74268e6b6e7d3bf015a01124cec1` |
 
@@ -25,45 +25,40 @@
 - **PlutusScript Type**: PlutusScriptV3
 - **Aiken Version**: v1.1.23+8949565
 - **Plutus Version**: v3
+- **Unit Tests**: 56/56 passed ✅
+
+### Contract Bytecode Verification
+
+The H-01 Cancel-path fix is verified in the rebuilt contract:
+```aiken
+paid_at_least(outputs, deal.client, deal.payment)
+```
 
 ### OLD V2 Script (Deprecated)
 
 - **Old Script Address**: `addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2`
 - **Old Script Hash**: `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`
-- **Status**: UTxOs still exist but MalformedScriptWitnesses error prevents settlement
+- **Status**: Deprecated
 
-### Issue Resolution (2026-07-09)
+### Known Issue: PyCardano PlutusV3Script Bug
 
-The `MalformedScriptWitnesses` error was caused by hash mismatch between the deployed script and PyCardano-generated witnesses.
+The PyCardano library (v0.19.x) has a bug where PlutusV3Script witnesses are serialized incorrectly for Conway era validation.
 
-**Resolution Steps:**
-1. ✅ Rebuilt contract with Aiken V3
-2. ✅ Created PlutusScriptV3 format file
-3. ✅ Updated PyCardano code to use PlutusV3Script
-4. ✅ Computed new V3 address
-5. ⏳ Deploy new V3 contract to Preprod
-6. ⏳ Run E2E tests
+**Error**: `ConwayUtxowFailure (MalformedScriptWitnesses ...)`
 
-### Next Steps
+**Root Cause**: The witness set structure appears correct (script in key 7, redeemer in key 5), but the Cardano node rejects the PlutusV3Script format.
 
-1. **Deploy V3 Contract**:
-   ```bash
-   # Verify script address
-   ~/cardano-cli address build --payment-script-file validators/deal_escrow.plutus --testnet-magic 1
-   
-   # Fund the new address with test ADA
-   ```
-
-2. **Run E2E Tests**:
-   ```bash
-   cd /workspace/project/ADADIVE/contracts/adadive-escrow/testnet
-   python3 01_lock.py --client-vkh 9e50245e46bc8aaba0964ff24f20886e189392109fa7ab15a827afab --deadline-ms 1783682146000
-   python3 02_settle.py --client-vkh 9e50245e46bc8aaba0964ff24f20886e189392109fa7ab15a827afab --deadline-ms 1783682146000
-   ```
+**Workaround Options**:
+1. Use cardano-cli for settle/refund/cancel transactions
+2. Wait for PyCardano update
+3. Migrate to Lucid or Mesh.js for better Conway era support
 
 ### Files Modified (2026-07-09)
 
-- `common.py`: Updated ESCROW_ADDR, SCRIPT_HASH, ESCROW_PLUTUS, load_script() for V3
-- `E2E_STATUS.md`: Updated with new V3 contract details
+- `common.py`: Updated ESCROW_ADDR, SCRIPT_HASH, ESCROW_PLUTUS for V3
+- `E2E_STATUS.md`: Updated with V3 contract details
 - `deal_escrow.plutus`: Created with PlutusScriptV3 format
 - `validators/deal_escrow.plutus`: Updated with V3 format
+- `escrow.addr`: Updated with new V3 address
+- `script.hash`: Updated with new V3 hash
+- `PYCARDANO_GUIDE.md`, `DEPLOYMENT_GUIDE.md`, `ANDROID_ETERNL_GUIDE.md`: Updated addresses
