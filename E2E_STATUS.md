@@ -84,6 +84,30 @@ Each wallet has:
 - `contracts/adadive-escrow/testnet/keys/old/provider.json`
 - `contracts/adadive-escrow/testnet/keys/old/oracle.json`
 
+### Old Wallet VKH (for datum matching)
+
+The escrow UTxOs were created with OLD wallet VKHs in the datum:
+
+| Role    | VKH (for datum) | Old Address |
+|---------|-----------------|-------------|
+| Provider| `25548181cba1184df71414fb1746268ffd1b730cff8cb3b7fddab352` | `addr_test1vqj4fqvpews3sn0hzs20k96xy68l6xmnpnlcevahlhdtx5sykmhxs` |
+| Oracle  | `bfe3580d10f19a8c522b0fe123ed74268e6b6e7d3bf015a01124cec1` | `addr_test1vzl7xkqdzrce4rzj9v87zgldwsngu6mw05alq9dqzyjvasgaf40rl` |
+
+**⚠️ Settle transactions require OLD wallet private keys to sign, not new wallets!**
+
+---
+
+## 🔴 Plutus V3 Script Serialization Issue
+
+**Both PyCardano AND Mesh.js fail to correctly serialize Plutus V3 scripts:**
+
+1. **PyCardano** - `_ScriptRef.to_primitive()` fails with Plutus V3 scripts
+2. **Mesh.js** - `MalformedScriptWitnesses` error when submitting transactions with Plutus V3 scripts
+
+The Plutus V3 script from the Aiken-compiled contract is **valid** (hash matches `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8`), but both libraries fail to correctly serialize it for transaction submission.
+
+**Current Workaround:** Use cardano-cli directly for script transactions
+
 ---
 
 ## Mesh.js Scripts
