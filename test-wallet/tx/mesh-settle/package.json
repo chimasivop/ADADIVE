@@ -5,6 +5,7 @@
   "scripts": {
     "generate-wallets": "tsx generate_wallet.ts",
     "reference-script": "tsx reference-script.ts",
+    "refund:expired": "tsx refund-expired.ts",
     "settle:v2": "tsx settle-v2.ts",
     "settle": "tsx settle.ts",
     "settle:simple": "tsx settle-simple.ts",

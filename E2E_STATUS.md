@@ -69,19 +69,20 @@ Each wallet has:
 
 ---
 
-## ⚠️ FUNDING REQUIRED
+## ✅ WALLETS FUNDED (2026-07-11)
 
-**Before running any transactions, fund these wallets via the Cardano Preprod Faucet:**
+**Successfully transferred ADA from old funded wallet to new Mesh.js wallets:**
 
-1. Visit: https://docs.cardano.org/cardano-testnet/tools/faucet
-2. Select "Preprod Testnet" environment
-3. Select "Receive test ADA" action
-4. Enter each address and submit
+| Role    | Address | Balance |
+|---------|---------|---------|
+| Provider| `addr_test1qqjy0kc8uwmnkqxnewdjw8jz7nj8tkyz6p5ranjr035rvlfyglds0cah8vqd8jumyu0y9a8ywhvg95rg8m8yxlrgxe7scjfqze` | **950.00 ADA** |
+| Oracle  | `addr_test1qzgqy6matteypul5lm2qm5slvkqkyywxx770tscmgrz5ydvsqf4h6khjgrelflk5phfp7evpvgguvdau7hp3ksx9gg6syjmkgc` | **504.57 ADA** |
+| Client  | `addr_test1qqzhypzf627yh0ymrhsrf0uhykhyfq5ue0la5799n8vyh0s9wgzyn54ufw7fk80qxjlewfdwgjpfejllmfu2txwcfwlqp8geuk` | **504.57 ADA** |
 
-**Minimum funding:**
-- Provider: 10+ ADA (for collateral)
-- Oracle: 10+ ADA (for collateral and change)
-- Client: 15+ ADA (for lock transaction)
+**Old wallet key material recovered and saved to:**
+- `contracts/adadive-escrow/testnet/keys/old/client.json`
+- `contracts/adadive-escrow/testnet/keys/old/provider.json`
+- `contracts/adadive-escrow/testnet/keys/old/oracle.json`
 
 ---
 
