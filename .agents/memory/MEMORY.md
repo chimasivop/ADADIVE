@@ -1,0 +1,1 @@
+- [PyCardano preprod API quirks](pycardano-preprod.md) — cbor2/cbor2pure version conflict fix, correct Constr→CBORTag encoding, and script cborHex decode-once pattern.
