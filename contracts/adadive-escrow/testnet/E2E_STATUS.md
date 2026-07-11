@@ -1,14 +1,17 @@
 # ADADIVE E2E Test Status
 
-## Session Summary (2026-07-09)
+## Session Summary (2026-07-11)
 
 ### Test Results
 
 | Test | Status | Details |
 |------|--------|---------|
-| Fund Wallets | ✅ Success | All 3 wallets funded (487-500 ADA each) |
-| Lock Transaction | ✅ Success | TX: `143aeede087fe88c9fa7f7d954877cf83eb1ad01bebec524c2ac0b44c9b24e76` |
-| Settle Transaction | ❌ Failed | MalformedScriptWitnesses (PyCardano V3 bug) |
+| Contract Rebuild | ✅ Success | Aiken v1.1.23+8949565, bytecode verified |
+| Script Hash | ✅ Match | Local hash matches locally compiled code |
+| Lock Transaction | ⏳ Pending | Needs fresh deployment to new address |
+| Settle Transaction | ⏳ Pending | Waiting for Lock to confirm |
+| Refund Transaction | ⏳ Pending | Waiting for Settle |
+| Cancel Transaction | ⏳ Pending | Waiting for Lock |
 
 ### Wallets (Testnet Preprod)
 
@@ -18,14 +21,15 @@
 | Provider | `addr_test1vqj4fqvpews3sn0hzs20k96xy68l6xmnpnlcevahlhdtx5sykmhxs` | `25548181cba1184df71414fb1746268ffd1b730cff8cb3b7fddab352` |
 | Oracle | `addr_test1vzl7xkqdzrce4rzj9v87zgldwsngu6mw05alq9dqzyjvasgaf40rl` | `bfe3580d10f19a8c522b0fe123ed74268e6b6e7d3bf015a01124cec1` |
 
-### NEW V3 Script Information (2026-07-09)
+### NEW V3 Script Information (2026-07-11 - Locally Compiled)
 
-- **Script Address**: `addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq`
-- **Script Hash**: `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8`
+- **Script Address**: `addr_test1wp6ejgmlrgsplddfe4llre3hegafjt0g9qxjxyjscp4dwlgutljm3`
+- **Script Hash**: `7599237f1a201fb5a9cd7ff1e637ca3a992de8280d231250c06ad77d`
 - **PlutusScript Type**: PlutusScriptV3
 - **Aiken Version**: v1.1.23+8949565
 - **Plutus Version**: v3
 - **Unit Tests**: 56/56 passed ✅
+- **Bytecode Length**: 1318 bytes (raw), 2642 chars (CBOR hex)
 
 ### Contract Bytecode Verification
 
@@ -34,11 +38,12 @@ The H-01 Cancel-path fix is verified in the rebuilt contract:
 paid_at_least(outputs, deal.client, deal.payment)
 ```
 
-### OLD V2 Script (Deprecated)
+### OLD V3 Script (Deprecated - 2026-07-09)
 
-- **Old Script Address**: `addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2`
-- **Old Script Hash**: `00a587ce8ba6cd9899269fcfff6474ca3852d6a449f43f38bd2b9f55`
-- **Status**: Deprecated
+- **Old Script Address**: `addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq`
+- **Old Script Hash**: `5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8`
+- **Status**: Deprecated - was deployed with different bytecode than local files
+- **Reason for redeployment**: Local bytecode didn't match on-chain script hash
 
 ### Known Issue: PyCardano PlutusV3Script Bug
 

@@ -14,10 +14,10 @@ import requests
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 WALLET_DIR   = os.path.expanduser("~/cardano-wallet")
-# Escrow address (script deployed on-chain with V3 hash)
-ESCROW_ADDR  = "addr_test1wp02sa25fvgpjrgxtypv0jlwnkgryh64czfswt92y7mzdwq4cz4aq"
-# Script hash for on-chain validator (V3 hash: Blake2b-224(03 + raw bytes))
-SCRIPT_HASH  = "5ea875544b10190d065902c7cbee9d90325f55c093072caa27b626b8"
+# Escrow address (script compiled locally with Aiken v1.1.23)
+ESCROW_ADDR  = "addr_test1wp6ejgmlrgsplddfe4llre3hegafjt0g9qxjxyjscp4dwlgutljm3"
+# Script hash for on-chain validator (Blake2b-224 of raw Plutus bytecode)
+SCRIPT_HASH  = "7599237f1a201fb5a9cd7ff1e637ca3a992de8280d231250c06ad77d"
 ESCROW_PLUTUS = os.path.join(SCRIPT_DIR, "deal_escrow.plutus")  # V3 PlutusScript format
 BF_URL       = "https://cardano-preprod.blockfrost.io/api/v0"
 BF_KEY       = os.environ.get(
