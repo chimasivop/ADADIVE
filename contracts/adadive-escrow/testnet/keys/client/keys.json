@@ -3,5 +3,7 @@
   "address": "addr_test1qqzhypzf627yh0ymrhsrf0uhykhyfq5ue0la5799n8vyh0s9wgzyn54ufw7fk80qxjlewfdwgjpfejllmfu2txwcfwlqp8geuk",
   "privateKeyHex": "d030424168b287d2ed8165799281fee0daca7518fdf60cd1519d324161afa647643d7b0b3a17c722ade2281bd96875bb24a81842b5eb6fff10f7f2850671de75",
   "publicKeyHex": "05b5467df27b6a8c2af7bbdd217a699586e7a366b63a70f52cc64980db0ae40c",
-  "verificationKeyHash": "05720449d2bc4bbc9b1de034bf9725ae44829ccbffda78a599d84bbe"
+  "verificationKeyHash": "05720449d2bc4bbc9b1de034bf9725ae44829ccbffda78a599d84bbe",
+  "mnemonic": "health armor satisfy elite anxiety weapon area science umbrella exhaust mad metal gadget box timber start ring desert special bind critic army seek arrive",
+  "mnemonicNote": "24-word mnemonic. Generates DIFFERENT address than funded wallet."
 }

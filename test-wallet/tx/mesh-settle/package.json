@@ -13,12 +13,13 @@
     "check-status": "tsx check-status.ts"
   },
   "dependencies": {
+    "@emurgo/cardano-serialization-lib-nodejs": "^15.0.3",
     "@meshsdk/core": "latest",
-    "@meshsdk/provider": "latest",
-    "@emurgo/cardano-serialization-lib-nodejs": "^15.0.3"
+    "@meshsdk/provider": "latest"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "bip39": "^3.1.0",
     "tsx": "^4.0.0",
     "typescript": "^5.5.0"
   }

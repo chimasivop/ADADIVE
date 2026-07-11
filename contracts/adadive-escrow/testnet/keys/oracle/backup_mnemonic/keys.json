@@ -1,0 +1,10 @@
+{
+  "note": "Mnemonic-based backup - can be imported into Nami, Eternl, Yoroi, etc. Generates a DIFFERENT address than the funded wallet.",
+  "mnemonic": "bacon ill mistake appear work accident hotel bench ordinary stick hub impulse bullet wrestle egg lava bright quit stuff person detect search trash song",
+  "address": "Derive from mnemonic using Cardano wallet",
+  "privateKeyHex": "18abd9b3d39ddbfcd6df4c8a9e8f76fa6b5a1d676674117cf820c941c5d3f7475bb24d30ac88c7394e48e2280435fdaa473d728e245f15810f73a2044126f379",
+  "publicKeyHex": "127374dc3470086fef7e9d2a17f94f08429a600cab16e031a90f14cb549f1720",
+  "verificationKeyHash": "90026b7d5af240f3f4fed40dd21f65816211c637bcf5c31b40c54235",
+  "derivationPath": "m/1854'/1815'/0'/0/0 (Shelley/CIP-1852)",
+  "originalNote": "This backup uses the mnemonic for reference. The funded wallet uses raw private key: 18abd9b3d39ddbfcd6df..."
+}
