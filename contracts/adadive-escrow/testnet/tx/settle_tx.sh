@@ -8,7 +8,7 @@
 #
 # Prerequisites:
 #   - Reference script UTxO at escrow address
-#   - DealDatum UTxO at escrow address
+#   - DealDatum UTxO at escrow address (with inline datum, post-Alonzo)
 #   - Funded oracle + provider wallets
 # =============================================================================
 
@@ -27,7 +27,24 @@ PREPROD_MAGIC=1
 
 mkdir -p "$TESTNET_DIR/tx"
 
-ESCROW_ADDR=$(cat "$TESTNET_DIR/escrow.addr" 2>/dev/null || echo "addr_test1wqq2tp7w3wnvmxyey60ullmywn9rs5kk53ylg0ech54e74gq955v2")
+# Expected escrow address for Preprod (V3 contract, deployed 2026-07-11)
+# Current: addr_test1wp6ejgmlrgsplddfe4llre3hegafjt0g9qxjxyjscp4dwlgutljm3
+EXPECTED_ESCROW_ADDR="addr_test1wp6ejgmlrgsplddfe4llre3hegafjt0g9qxjxyjscp4dwlgutljm3"
+
+if [ -f "$TESTNET_DIR/escrow.addr" ]; then
+    ESCROW_ADDR=$(cat "$TESTNET_DIR/escrow.addr")
+    if [ "$ESCROW_ADDR" != "$EXPECTED_ESCROW_ADDR" ]; then
+        log_warn "escrow.addr mismatch!"
+        log_warn "  Expected: $EXPECTED_ESCROW_ADDR"
+        log_warn "  Found:    $ESCROW_ADDR"
+        log_warn "Using address from file (may be outdated deploy)."
+    else
+        log_info "Verified escrow.addr matches expected Preprod address."
+    fi
+else
+    log_warn "escrow.addr not found. Using expected address."
+    ESCROW_ADDR="$EXPECTED_ESCROW_ADDR"
+fi
 
 # Settle redeemer (constructor 0)
 SCRIPT_FILE="$TESTNET_DIR/escrow_spend.plutus"
@@ -57,6 +74,45 @@ log_info "Oracle VKH: ${ORACLE_VKH:-NOT FOUND}"
 if [ -z "$PROVIDER_ADDR" ] || [ -z "$ORACLE_VKH" ]; then
     log_error "Missing wallet files in $WALLET_DIR/"
     log_info "Required: provider.skey, oracle.skey"
+    exit 1
+fi
+
+# Find a pure-ADA collateral UTxO (no datum, no tokens) from oracle or provider wallet
+find_collateral_utxo() {
+    local addr="$1"
+    local utxo_data
+    utxo_data=$(cardano-cli query utxo --address "$addr" --testnet-magic $PREPROD_MAGIC 2>&1)
+    echo "$utxo_data" | tail -n +4 | while read -r txhash txix ada value; do
+        # Pure-ADA UTxO: contains only lovelace (no datum, no tokens)
+        # The 4th column ($value) should be "lovelace" only
+        if [ -n "$txhash" ] && [ "$txhash" != "TX" ] && echo "$utxo_data" | grep -q "${txhash}#${txix}.*lovelace$"; then
+            # Double-check: ensure no inline datum or multi-asset
+            local utxo_details
+            utxo_details=$(cardano-cli query utxo --out-file /dev/stdout --tx-in "${txhash}#${txix}" --testnet-magic $PREPROD_MAGIC 2>/dev/null || echo "")
+            if echo "$utxo_details" | grep -q "ada"; then
+                echo "${txhash}#${txix}"
+                return 0
+            fi
+        fi
+    done | head -1
+}
+
+ORACLE_ADDR=$(cat "$WALLET_DIR/oracle/oracle.addr" 2>/dev/null) || ORACLE_ADDR=""
+
+COLLATERAL_UTXO=""
+for wallet_addr in "$ORACLE_ADDR" "$PROVIDER_ADDR"; do
+    if [ -n "$wallet_addr" ]; then
+        COLLATERAL_UTXO=$(find_collateral_utxo "$wallet_addr")
+        if [ -n "$COLLATERAL_UTXO" ]; then
+            log_info "Found collateral UTxO: $COLLATERAL_UTXO (from $wallet_addr)"
+            break
+        fi
+    fi
+done
+
+if [ -z "$COLLATERAL_UTXO" ]; then
+    log_error "No pure-ADA collateral UTxO found in oracle/provider wallets."
+    log_info "Collateral must have only ADA (no datum, no tokens)."
     exit 1
 fi
 
@@ -101,14 +157,15 @@ SETTLE_AMOUNT=$((DEAL_AMOUNT + 500000))  # 10 ADA + 0.5 ADA for fees margin
 log_info "Building SETTLE transaction..."
 log_info "  Redeemer: Settle (constructor 0)"
 log_info "  Output to provider: $SETTLE_AMOUNT lovelace ($((SETTLE_AMOUNT/1000000)) ADA)"
+log_info "  Collateral: $COLLATERAL_UTXO"
 
 cardano-cli transaction build \
     --tx-in "$ESCROW_UTXO" \
     --tx-in-script-file "$SCRIPT_FILE" \
-    --tx-in-datum-file "$TESTNET_DIR/tx/lock_datum.json" \
     --tx-in-redeemer-file "$REDEMER_FILE" \
     --required-signer-hash "$ORACLE_VKH" \
     --required-signer-hash "$PROVIDER_VKH" \
+    --tx-in-collateral "$COLLATERAL_UTXO" \
     --tx-in "$FUNDED_WALLET_UTXO" \
     --tx-out "$PROVIDER_ADDR+$SETTLE_AMOUNT" \
     --change-address "$WALLET_ADDR" \
