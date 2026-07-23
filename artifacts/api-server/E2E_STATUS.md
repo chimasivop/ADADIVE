@@ -1,5 +1,24 @@
 # E2E Test Status
 
+## Deployment Configuration
+
+### Backend API Server
+- **Production URL**: https://workspaceapi-server-production-c05a.up.railway.app
+- **Health Check**: GET /api/healthz returns {"status":"ok"}
+
+### Frontend (cardano-storage)
+- **Production URL**: https://adadive.xyz
+- **API URL Configuration**: Set via `VITE_API_URL` environment variable
+- **Current Backend URL**: `https://workspaceapi-server-production-c05a.up.railway.app`
+- **Files Modified**:
+  - `artifacts/cardano-storage/src/App.tsx` - Added `setBaseUrl()` call to configure API endpoint
+  - `artifacts/cardano-storage/.env.production` - Created with `VITE_API_URL` variable
+
+### Railway Deployment Notes
+The `VITE_API_URL` environment variable must be set in Railway's Variables tab for the cardano-storage service to point to the correct API server.
+
+---
+
 ## P0 Security Fixes - Commit: f0604e0
 
 ### Changes Applied

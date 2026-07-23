@@ -16,6 +16,14 @@ import DealDetail from "@/pages/DealDetail";
 import NewDeal from "@/pages/NewDeal";
 import PinFiles from "@/pages/PinFiles";
 import WaitlistAdmin from "@/pages/WaitlistAdmin";
+import { setBaseUrl } from "@workspace/api-client-react";
+
+// Configure API base URL from environment variable
+// VITE_API_URL should be set to the production API server URL
+const API_URL = import.meta.env.VITE_API_URL as string | undefined;
+if (API_URL) {
+  setBaseUrl(API_URL);
+}
 
 const queryClient = new QueryClient();
 
