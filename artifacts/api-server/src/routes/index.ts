@@ -6,6 +6,7 @@ import statsRouter from "./stats";
 import waitlistRouter from "./waitlist";
 import storageRouter from "./storage";
 import authRouter from "./auth";
+import seedRouter from "./seed";
 import { authMiddleware } from "../middlewares/authMiddleware";
 
 const router: IRouter = Router();
@@ -20,5 +21,6 @@ router.use(dealsRouter);
 router.use(statsRouter);
 router.use(waitlistRouter);
 router.use("/auth", authRouter);
+router.use("/seed", seedRouter);
 
 export default router;
