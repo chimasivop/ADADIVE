@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run migrate && pnpm run start",
     "build": "node ./build.mjs",
-    "migrate": "drizzle-kit push --force --config ../lib/db/drizzle.config.ts",
+    "migrate": "cd ../lib/db && drizzle-kit push --force --config ./drizzle.config.ts",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

@@ -6,6 +6,16 @@
 - **Production URL**: https://workspaceapi-server-production-c05a.up.railway.app
 - **Health Check**: GET /api/healthz returns {"status":"ok"}
 
+### Database (Supabase PostgreSQL)
+- **Connection String**: `postgresql://postgres:***@db.knaigsdfjfeuaucozoba.supabase.co:5432/postgres`
+- **Schema**: Drizzle ORM schema defined in `lib/db/src/schema/`
+- **Tables to create**:
+  - `providers` - Service providers with reputation scores
+  - `deals` - Marketplace deals linked to providers
+  - `activity` - User activity logs
+  - `waitlist` - Waitlist entries for early access
+  - `sessions` - Authentication sessions
+
 ### Frontend (cardano-storage)
 - **Production URL**: https://adadive.xyz
 - **API URL Configuration**: Set via `VITE_API_URL` environment variable
@@ -16,6 +26,49 @@
 
 ### Railway Deployment Notes
 The `VITE_API_URL` environment variable must be set in Railway's Variables tab for the cardano-storage service to point to the correct API server.
+
+---
+
+## Database Migration Status
+
+### Migration Required
+**Status**: ⚠️ Action Required
+
+The Supabase PostgreSQL database is missing the required tables. The Railway backend returns errors like:
+- `table "providers" does not exist`
+- `table "deals" does not exist`
+
+### Migration Steps
+
+1. **Supabase Configuration Required**:
+   - Log into Supabase dashboard: https://supabase.com/dashboard
+   - Navigate to the project: `knaigsdfjfeuaucozoba`
+   - Go to **Settings > Database**
+   - Under **Connection Pooling**, ensure **Connection URI** is accessible
+   - Under **Connection Security**, set **Enforce SSL** as needed
+
+2. **Run Migration via GitHub Actions**:
+   - Navigate to: https://github.com/chimasivop/ADADIVE/actions/workflows/db-migrate.yml
+   - Click **Run workflow**
+   - Enter the database URL: `postgresql://postgres:Dognimus09%23@db.knaigsdfjfeuaucozoba.supabase.co:5432/postgres`
+   - Enable "Force push" to drop and recreate tables
+   - Click **Run workflow**
+
+3. **Or Run Migration via Railway**:
+   - Log into Railway dashboard: https://railway.app
+   - Navigate to the `workspaceapi-server` project
+   - Go to **Variables** tab
+   - Add `SKIP_MIGRATIONS=false` (if not already set)
+   - Click **Deploy** to trigger a new deployment
+
+### Migration Script
+The migration script is defined in `lib/db/drizzle.config.ts` and uses `drizzle-kit push` to sync the schema.
+
+### Verification
+After migration completes, test these endpoints:
+- `GET https://workspaceapi-server-production-c05a.up.railway.app/api/providers` - Should return `[]`
+- `GET https://workspaceapi-server-production-c05a.up.railway.app/api/deals` - Should return `[]`
+- `GET https://workspaceapi-server-production-c05a.up.railway.app/api/stats/network` - Should return JSON with epoch data
 
 ---
 
