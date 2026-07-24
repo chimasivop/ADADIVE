@@ -1,21 +1,27 @@
-"""Retrieval module for ADADIVE AI service - RAG functionality."""
+"""Retrieval module for ADADIVE AI v2 - RAG functionality.
 
-import os
-import hashlib
-import json
+This module provides production-ready retrieval with:
+- ChromaDB vector store for production
+- In-memory fallback for development
+- Configurable embedding providers
+"""
+
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from dataclasses import dataclass
-
-import numpy as np
 
 from ..config import get_settings
+from .chromadb import ChromaRetrieval, Document as ChromaDocument
+
+
+# Backwards compatibility - keep simple implementations
+import hashlib
+import numpy as np
 
 
 @dataclass
-class Document:
+class SimpleDocument:
     """Represents a document for retrieval."""
-
     id: str
     content: str
     metadata: dict[str, Any]
@@ -29,7 +35,6 @@ class Document:
 @dataclass
 class RetrievalResult:
     """Result from a retrieval query."""
-
     content: str
     metadata: dict[str, Any]
     score: float
@@ -123,10 +128,10 @@ class VectorStore:
 
     def __init__(self, embedding_model: SimpleEmbeddingModel):
         self.embedding_model = embedding_model
-        self.documents: list[Document] = []
+        self.documents: list[SimpleDocument] = []
         self.embeddings: list[np.ndarray] = []
 
-    def add_document(self, document: Document) -> None:
+    def add_document(self, document: SimpleDocument) -> None:
         """Add a document to the store."""
         if document.embedding is None:
             document.embedding = self.embedding_model.embed(document.content)
@@ -168,19 +173,22 @@ class KnowledgeBase:
     Knowledge base for ADADIVE documentation.
     
     Loads documents from the knowledge/ directory and provides
-    retrieval functionality for RAG.
+    retrieval functionality for RAG. Uses ChromaDB in production
+    and simple in-memory store for development.
     """
 
     def __init__(self, base_path: Path | None = None):
         settings = get_settings()
         self.base_path = base_path or settings.knowledge_base_path
+        self.use_chroma = settings.use_chroma_vectorstore
         self.embedding_model = SimpleEmbeddingModel(
             dimension=settings.embedding_dimension
         )
         self.vector_store: VectorStore | None = None
+        self.chroma_store: ChromaRetrieval | None = None
         self._initialized = False
 
-    def _load_document(self, file_path: Path) -> Document | None:
+    def _load_document(self, file_path: Path) -> SimpleDocument | None:
         """Load a document from a file."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -189,7 +197,7 @@ class KnowledgeBase:
             # Generate stable ID from file path
             doc_id = hashlib.md5(str(file_path).encode()).hexdigest()[:12]
             
-            return Document(
+            return SimpleDocument(
                 id=doc_id,
                 content=content,
                 metadata={
@@ -201,7 +209,7 @@ class KnowledgeBase:
         except Exception:
             return None
 
-    def _load_directory(self, directory: Path, category: str = "") -> list[Document]:
+    def _load_directory(self, directory: Path, category: str = "") -> list[SimpleDocument]:
         """Recursively load all text files from a directory."""
         documents = []
         
@@ -223,7 +231,7 @@ class KnowledgeBase:
         """Initialize the knowledge base by loading all documents."""
         if self._initialized:
             return
-        
+            
         # Load documents from subdirectories
         documents = []
         
@@ -239,14 +247,30 @@ class KnowledgeBase:
         contracts_dir = self.base_path / "contracts"
         documents.extend(self._load_directory(contracts_dir, "smart_contracts"))
         
-        # Train embedding model
-        if documents:
+        # Initialize ChromaDB if enabled
+        if self.use_chroma:
+            try:
+                self.chroma_store = ChromaRetrieval()
+                import asyncio
+                asyncio.run(self.chroma_store.initialize())
+                
+                chroma_docs = [
+                    ChromaDocument(
+                        id=doc.id,
+                        content=doc.content,
+                        metadata=doc.metadata,
+                    )
+                    for doc in documents
+                ]
+                asyncio.run(self.chroma_store.add_documents(chroma_docs))
+            except Exception as e:
+                print(f"Warning: Could not initialize ChromaDB: {e}")
+                self.use_chroma = False
+        
+        # Fallback to in-memory store
+        if not self.use_chroma and documents:
             self.embedding_model.fit([doc.content for doc in documents])
-            
-            # Create vector store
             self.vector_store = VectorStore(self.embedding_model)
-            
-            # Add all documents
             for doc in documents:
                 self.vector_store.add_document(doc)
         
@@ -274,12 +298,24 @@ class KnowledgeBase:
         if not self._initialized:
             self.initialize()
         
-        if self.vector_store is None:
-            return []
-        
         settings = get_settings()
         top_k = top_k or settings.retrieval_top_k
         threshold = threshold or settings.retrieval_score_threshold
+        
+        # Use ChromaDB if available
+        if self.use_chroma and self.chroma_store:
+            import asyncio
+            filter_meta = {"category": category} if category else None
+            results = asyncio.run(
+                self.chroma_store.search(query, top_k=top_k, filter_metadata=filter_meta)
+            )
+            # Filter by threshold
+            results = [r for r in results if r.score >= threshold]
+            return results
+        
+        # Fallback to in-memory store
+        if self.vector_store is None:
+            return []
         
         results = self.vector_store.search(
             query=query,
@@ -334,3 +370,15 @@ def get_knowledge_base() -> KnowledgeBase:
     if _knowledge_base is None:
         _knowledge_base = KnowledgeBase()
     return _knowledge_base
+
+
+# Re-export for backwards compatibility
+__all__ = [
+    "KnowledgeBase",
+    "VectorStore",
+    "SimpleEmbeddingModel",
+    "SimpleDocument",
+    "RetrievalResult",
+    "get_knowledge_base",
+    "ChromaRetrieval",
+]
