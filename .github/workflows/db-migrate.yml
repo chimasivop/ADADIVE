@@ -30,6 +30,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       
+      - name: Test database connection
+        run: |
+          cd lib/db
+          node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({
+              connectionString: process.env.DATABASE_URL,
+              ssl: true
+            });
+            pool.query('SELECT 1').then(r => { 
+              console.log('Connected:', r.rows); 
+              pool.end(); 
+            }).catch(e => { 
+              console.error('Error:', e.message); 
+              pool.end();
+              process.exit(1);
+            });
+          "
+        env:
+          DATABASE_URL: ${{ inputs.database_url }}
+      
       - name: Push database schema
         run: |
           cd lib/db
