@@ -82,6 +82,44 @@ After updating Railway's DATABASE_URL, test these endpoints:
 
 ---
 
+## Homepage Stats Fix
+
+### Issue
+The homepage (Landing.tsx) was showing hardcoded values that didn't match the Dashboard:
+- Homepage showed: 36 TB, 6 active deals, 19,602 THT locked, 5 providers
+- Dashboard showed: 15.50 TB, 2 active deals, 1,096.4 THT locked, 4 active providers
+
+### Root Cause
+Landing.tsx had hardcoded stats on lines 238, 240, and 296-301 instead of fetching live data from the API.
+
+### Fix Applied
+Updated `artifacts/cardano-storage/src/pages/Landing.tsx` to:
+1. Import `useGetNetworkStats` and `useGetEconomyStats` hooks
+2. Fetch live data using the same API endpoints as the Dashboard
+3. Replace hardcoded values with live data from:
+   - `/api/stats/network` - for storage, deals, providers, THT locked
+   - `/api/stats/economy` - for average price per GB/Epoch
+
+### Files Modified
+- `artifacts/cardano-storage/src/pages/Landing.tsx` - Now uses live API data
+
+### Live Data Values (as of 2026-07-24)
+```json
+{
+  "totalProviders": 5,
+  "activeProviders": 4,
+  "totalStorageTb": 15.5,
+  "activeDeals": 2,
+  "totalAdaLocked": 1096.4,
+  "adaPerGbPerEpoch": 0.00128
+}
+```
+
+### Expected Behavior After Fix
+Both Dashboard and Homepage now display the same live data from the Supabase database.
+
+---
+
 ## P0 Security Fixes - Commit: f0604e0
 
 ### Changes Applied
