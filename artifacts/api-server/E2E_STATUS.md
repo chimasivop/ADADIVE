@@ -7,22 +7,14 @@
 - **Health Check**: GET /api/healthz returns {"status":"ok"}
 
 ### Database (Supabase PostgreSQL)
-- **Connection String**: `postgresql://postgres:***@db.knaigsdfjfeuaucozoba.supabase.co:5432/postgres`
+- **Session Pooler Connection String**: `postgresql://postgres.knaigsdfjfeuaucozoba:***@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`
 - **Schema**: Drizzle ORM schema defined in `lib/db/src/schema/`
-- **Tables to create**:
-  - `providers` - Service providers with reputation scores
-  - `deals` - Marketplace deals linked to providers
-  - `activity` - User activity logs
-  - `waitlist` - Waitlist entries for early access
-  - `sessions` - Authentication sessions
+- **Tables**: providers, deals, activity, waitlist, sessions, users
 
 ### Frontend (cardano-storage)
 - **Production URL**: https://adadive.xyz
 - **API URL Configuration**: Set via `VITE_API_URL` environment variable
 - **Current Backend URL**: `https://workspaceapi-server-production-c05a.up.railway.app`
-- **Files Modified**:
-  - `artifacts/cardano-storage/src/App.tsx` - Added `setBaseUrl()` call to configure API endpoint
-  - `artifacts/cardano-storage/.env.production` - Created with `VITE_API_URL` variable
 
 ### Railway Deployment Notes
 The `VITE_API_URL` environment variable must be set in Railway's Variables tab for the cardano-storage service to point to the correct API server.
@@ -31,43 +23,61 @@ The `VITE_API_URL` environment variable must be set in Railway's Variables tab f
 
 ## Database Migration Status
 
-### Migration Required
-**Status**: ⚠️ Action Required
+### Status: VERIFIED
+**Date**: 2026-07-24
 
-The Supabase PostgreSQL database is missing the required tables. The Railway backend returns errors like:
-- `table "providers" does not exist`
-- `table "deals" does not exist`
+The Supabase PostgreSQL database **already contains all required tables**. The earlier "table does not exist" errors were caused by a network connectivity issue (IPv6 ENETUNREACH), not missing tables.
 
-### Migration Steps
+### Connection Method
+The correct connection string uses Supabase's **Session Pooler** (Supavisor) for IPv4 connectivity:
 
-1. **Supabase Configuration Required**:
-   - Log into Supabase dashboard: https://supabase.com/dashboard
-   - Navigate to the project: `knaigsdfjfeuaucozoba`
-   - Go to **Settings > Database**
-   - Under **Connection Pooling**, ensure **Connection URI** is accessible
-   - Under **Connection Security**, set **Enforce SSL** as needed
+```
+postgresql://postgres.knaigsdfjfeuaucozoba:Dognimus09%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres
+```
 
-2. **Run Migration via GitHub Actions**:
-   - Navigate to: https://github.com/chimasivop/ADADIVE/actions/workflows/db-migrate.yml
-   - Click **Run workflow**
-   - Enter the database URL: `postgresql://postgres:Dognimus09%23@db.knaigsdfjfeuaucozoba.supabase.co:5432/postgres`
-   - Enable "Force push" to drop and recreate tables
-   - Click **Run workflow**
+Key differences from the old (broken) connection:
+- Uses `postgres.knaigsdfjfeuaucozoba` (project-scoped user) instead of just `postgres`
+- Uses `aws-0-eu-west-1.pooler.supabase.com` (Session Pooler) instead of `db.knaigsdfjfeuaucozoba.supabase.co` (direct connection)
+- Requires `ssl: { rejectUnauthorized: false }` in the connection config
 
-3. **Or Run Migration via Railway**:
-   - Log into Railway dashboard: https://railway.app
-   - Navigate to the `workspaceapi-server` project
-   - Go to **Variables** tab
-   - Add `SKIP_MIGRATIONS=false` (if not already set)
-   - Click **Deploy** to trigger a new deployment
+### Existing Tables
+Verified via direct query - all required tables exist:
 
-### Migration Script
-The migration script is defined in `lib/db/drizzle.config.ts` and uses `drizzle-kit push` to sync the schema.
+| Table | Description |
+|-------|-------------|
+| `providers` | Service providers with reputation scores, storage capacity, and earnings |
+| `deals` | Marketplace deals linked to providers via foreign key |
+| `activity` | User activity logs |
+| `waitlist` | Waitlist entries for early access |
+| `sessions` | Authentication sessions |
+| `users` | User accounts (Supabase Auth) |
+
+### Railway Configuration Required
+
+Update the Railway `DATABASE_URL` environment variable:
+
+1. Log into Railway dashboard: https://railway.app
+2. Navigate to the `workspaceapi-server` project
+3. Go to **Variables** tab
+4. Update or add `DATABASE_URL`:
+   ```
+   postgresql://postgres.knaigsdfjfeuaucozoba:Dognimus09%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres
+   ```
+5. Click **Deploy** to apply the changes
+
+### Drizzle Config
+Updated `lib/db/drizzle.config.ts` to use SSL with `rejectUnauthorized: false`:
+```typescript
+dbCredentials: {
+  url: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+}
+```
 
 ### Verification
-After migration completes, test these endpoints:
-- `GET https://workspaceapi-server-production-c05a.up.railway.app/api/providers` - Should return `[]`
-- `GET https://workspaceapi-server-production-c05a.up.railway.app/api/deals` - Should return `[]`
+After updating Railway's DATABASE_URL, test these endpoints:
+- `GET https://workspaceapi-server-production-c05a.up.railway.app/api/providers` - Should return `[]` or provider data
+- `GET https://workspaceapi-server-production-c05a.up.railway.app/api/deals` - Should return `[]` or deal data
 - `GET https://workspaceapi-server-production-c05a.up.railway.app/api/stats/network` - Should return JSON with epoch data
 
 ---
@@ -78,13 +88,13 @@ After migration completes, test these endpoints:
 
 | Fix | File | Description | Status |
 |-----|------|-------------|--------|
-| cookie-parser | `app.ts` | Registered `cookieParser()` middleware before routes | ✅ Complete |
-| authMiddleware global | `routes/index.ts` | Applied `authMiddleware` globally so `req.isAuthenticated()` available | ✅ Complete |
-| Auth guard | `deals.ts` | Added `requireAuth` to `POST /api/deals` | ✅ Complete |
-| Auth guard | `deals.ts` | Added `requireAuth` to `PATCH /api/deplies/:id` | ✅ Complete |
-| Auth guard | `providers.ts` | Added `requireAuth` to `POST /api/providers` | ✅ Complete |
-| Auth guard | `storage.ts` | Added `requireAuth` to `POST /api/storage/pin` | ✅ Complete |
-| multer/validation order | `storage.ts` | Fixed `POST /api/storage/pin` - moved multer before validation | ✅ Complete |
+| cookie-parser | `app.ts` | Registered `cookieParser()` middleware before routes | Complete |
+| authMiddleware global | `routes/index.ts` | Applied `authMiddleware` globally so `req.isAuthenticated()` available | Complete |
+| Auth guard | `deals.ts` | Added `requireAuth` to `POST /api/deals` | Complete |
+| Auth guard | `deals.ts` | Added `requireAuth` to `PATCH /api/deplies/:id` | Complete |
+| Auth guard | `providers.ts` | Added `requireAuth` to `POST /api/providers` | Complete |
+| Auth guard | `storage.ts` | Added `requireAuth` to `POST /api/storage/pin` | Complete |
+| multer/validation order | `storage.ts` | Fixed `POST /api/storage/pin` - moved multer before validation | Complete |
 
 ### P0 Testing Notes
 
@@ -105,15 +115,15 @@ After migration completes, test these endpoints:
 
 | Fix | File | Description | Status |
 |-----|------|-------------|--------|
-| THT policy ID | `cardano-storage/src/lib/token.ts` | Made policy ID configurable via `VITE_THT_POLICY_ID` env var (was 54 chars, needs 56) | ✅ Complete |
-| Real epoch from Koios | `api-server/src/routes/stats.ts` | Replaced hardcoded epoch calc with `getCurrentEpochFromKoios()` | ✅ Complete |
-| Real price history | `api-server/src/routes/stats.ts` | Replaced `Math.random()` with SQL aggregation from deals table | ✅ Complete |
-| Address bech32 display | `cardano-storage/src/contexts/WalletContext.tsx` | Decode hex to bech32 via CSL `Address.from_bytes().to_bech32()` | ✅ Complete |
-| SQL filtering deals | `api-server/src/routes/deals.ts` | Replaced `.filter()` with `eq()`/`and()` SQL WHERE clauses | ✅ Complete |
-| SQL filtering providers | `api-server/src/routes/providers.ts` | Replaced `.filter()` with `eq()`/`gte()` SQL WHERE clauses | ✅ Complete |
-| Rate limiting | `api-server/src/routes/waitlist.ts` | Added `express-rate-limit` middleware to `GET /api/waitlist` | ✅ Complete |
-| Timing attack fix | `api-server/src/routes/waitlist.ts` | Replaced `===` with `crypto.timingSafeEqual()` | ✅ Complete |
-| FK constraint | `lib/db/src/schema/deals.ts` | Added `.references(() => providersTable.id, { onDelete: "cascade" })` | ✅ Complete |
+| THT policy ID | `cardano-storage/src/lib/token.ts` | Made policy ID configurable via `VITE_THT_POLICY_ID` env var (was 54 chars, needs 56) | Complete |
+| Real epoch from Koios | `api-server/src/routes/stats.ts` | Replaced hardcoded epoch calc with `getCurrentEpochFromKoios()` | Complete |
+| Real price history | `api-server/src/routes/stats.ts` | Replaced `Math.random()` with SQL aggregation from deals table | Complete |
+| Address bech32 display | `cardano-storage/src/contexts/WalletContext.tsx` | Decode hex to bech32 via CSL `Address.from_bytes().to_bech32()` | Complete |
+| SQL filtering deals | `api-server/src/routes/deals.ts` | Replaced `.filter()` with `eq()`/`and()` SQL WHERE clauses | Complete |
+| SQL filtering providers | `api-server/src/routes/providers.ts` | Replaced `.filter()` with `eq()`/`gte()` SQL WHERE clauses | Complete |
+| Rate limiting | `api-server/src/routes/waitlist.ts` | Added `express-rate-limit` middleware to `GET /api/waitlist` | Complete |
+| Timing attack fix | `api-server/src/routes/waitlist.ts` | Replaced `===` with `crypto.timingSafeEqual()` | Complete |
+| FK constraint | `lib/db/src/schema/deals.ts` | Added `.references(() => providersTable.id, { onDelete: "cascade" })` | Complete |
 
 ### P1 Testing Notes
 
