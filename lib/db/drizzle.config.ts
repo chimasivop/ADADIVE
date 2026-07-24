@@ -9,7 +9,7 @@ export default defineConfig({
   schema: "./src/schema/index.ts",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL + (process.env.DATABASE_URL.includes('?') ? '&' : '?') + 'sslmode=require',
-    ssl: { rejectUnauthorized: false }
+    url: process.env.DATABASE_URL,
+    ssl: true
   },
 });
