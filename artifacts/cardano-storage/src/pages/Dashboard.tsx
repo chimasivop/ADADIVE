@@ -17,12 +17,24 @@ import {
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Hardcoded target values for the network (matching homepage)
+const TARGET_STATS = {
+  totalStorageTb: 36,
+  activeDeals: 6,
+  totalAdaLocked: 19602,
+  totalProviders: 5,
+  activeProviders: 4,
+  avgReputationScore: 95,
+  adaPerGbPerEpoch: 0.0013,
+};
+
 export default function Dashboard() {
-  const { data: network, isLoading: networkLoading } = useGetNetworkStats({ 
+  // Still fetch live data for charts and activity, but display target values for main stats
+  const { data: network } = useGetNetworkStats({ 
     query: { queryKey: getGetNetworkStatsQueryKey() } 
   });
   
-  const { data: economy, isLoading: economyLoading } = useGetEconomyStats({
+  const { data: economy } = useGetEconomyStats({
     query: { queryKey: getGetEconomyStatsQueryKey() }
   });
 
@@ -62,31 +74,27 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Total Storage"
-          value={network?.totalStorageTb !== undefined ? `${network.totalStorageTb.toFixed(2)} TB` : undefined}
-          subtitle={network?.networkUtilizationPercent !== undefined ? `${network.networkUtilizationPercent.toFixed(1)}% Utilised` : undefined}
+          value={`${TARGET_STATS.totalStorageTb.toFixed(2)} TB`}
+          subtitle="35% Utilised"
           icon={HardDrive}
-          loading={networkLoading}
         />
         <StatCard 
           title="Active Deals"
-          value={network?.activeDeals !== undefined ? String(network.activeDeals) : undefined}
-          subtitle={network?.totalDealsAllTime !== undefined ? `${network.totalDealsAllTime} All Time` : undefined}
+          value={String(TARGET_STATS.activeDeals)}
+          subtitle="10 All Time"
           icon={Database}
-          loading={networkLoading}
         />
         <StatCard 
           title="THT Locked"
-          value={network?.totalAdaLocked !== undefined ? THT.label(network.totalAdaLocked.toLocaleString()) : undefined}
+          value={THT.label(TARGET_STATS.totalAdaLocked.toLocaleString())}
           subtitle="In Active Escrow"
           icon={Coins}
-          loading={networkLoading}
         />
         <StatCard 
           title="Avg Market Price"
-          value={economy?.adaPerGbPerEpoch ? THT.label(economy.adaPerGbPerEpoch.toFixed(4)) : undefined}
+          value={THT.label(TARGET_STATS.adaPerGbPerEpoch.toFixed(4))}
           subtitle="per GB / Epoch"
           icon={Activity}
-          loading={economyLoading}
         />
       </div>
 
@@ -211,17 +219,15 @@ export default function Dashboard() {
             <div className="space-y-4">
               <StatCard 
                 title="Active Providers"
-                value={network?.activeProviders !== undefined ? String(network.activeProviders) : undefined}
-                subtitle={network?.totalProviders !== undefined ? `Out of ${network.totalProviders} total` : undefined}
+                value={String(TARGET_STATS.activeProviders)}
+                subtitle={`Out of ${TARGET_STATS.totalProviders} total`}
                 icon={ServerCog}
-                loading={networkLoading}
               />
               <StatCard 
                 title="Avg Reputation"
-                value={network?.avgReputationScore !== undefined ? `${network.avgReputationScore.toFixed(1)} / 100` : undefined}
+                value={`${TARGET_STATS.avgReputationScore} / 100`}
                 subtitle="Network Wide"
                 icon={Shield}
-                loading={networkLoading}
               />
             </div>
           </div>
