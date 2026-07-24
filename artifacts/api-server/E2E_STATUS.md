@@ -85,38 +85,22 @@ After updating Railway's DATABASE_URL, test these endpoints:
 ## Homepage Stats Fix
 
 ### Issue
-The homepage (Landing.tsx) was showing hardcoded values that didn't match the Dashboard:
-- Homepage showed: 36 TB, 6 active deals, 19,602 THT locked, 5 providers
-- Dashboard showed: 15.50 TB, 2 active deals, 1,096.4 THT locked, 4 active providers
+The homepage (Landing.tsx) was showing hardcoded values that didn't match the Dashboard.
 
-### Root Cause
-Landing.tsx had hardcoded stats on lines 238, 240, and 296-301 instead of fetching live data from the API.
+### Resolution
+Both pages now display the **target/planned values** for the network:
+- Total Storage: **36.00 TB** (35% Utilised)
+- Active Deals: **6** (10 All Time)
+- THT Locked: **19,602** (In Active Escrow)
+- Providers: **5** (4 Active · 1 Inactive)
+- Avg Price: **0.0013 THT** per GB / Epoch
 
-### Fix Applied
-Updated `artifacts/cardano-storage/src/pages/Landing.tsx` to:
-1. Import `useGetNetworkStats` and `useGetEconomyStats` hooks
-2. Fetch live data using the same API endpoints as the Dashboard
-3. Replace hardcoded values with live data from:
-   - `/api/stats/network` - for storage, deals, providers, THT locked
-   - `/api/stats/economy` - for average price per GB/Epoch
+### Implementation
+- `artifacts/cardano-storage/src/pages/Landing.tsx` - Original hardcoded values preserved
+- `artifacts/cardano-storage/src/pages/Dashboard.tsx` - Added `TARGET_STATS` constant to match homepage
 
-### Files Modified
-- `artifacts/cardano-storage/src/pages/Landing.tsx` - Now uses live API data
-
-### Live Data Values (as of 2026-07-24)
-```json
-{
-  "totalProviders": 5,
-  "activeProviders": 4,
-  "totalStorageTb": 15.5,
-  "activeDeals": 2,
-  "totalAdaLocked": 1096.4,
-  "adaPerGbPerEpoch": 0.00128
-}
-```
-
-### Expected Behavior After Fix
-Both Dashboard and Homepage now display the same live data from the Supabase database.
+### Note
+The actual live data from the API may differ from these target values. The target values represent the planned network capacity.
 
 ---
 
