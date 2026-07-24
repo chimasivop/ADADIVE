@@ -8,6 +8,10 @@ on:
         required: false
         default: 'false'
         type: boolean
+      database_url:
+        description: 'PostgreSQL connection string'
+        required: true
+        type: string
 
 jobs:
   migrate:
@@ -35,4 +39,4 @@ jobs:
             pnpm run push
           fi
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ inputs.database_url }}
