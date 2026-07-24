@@ -88,19 +88,22 @@ After updating Railway's DATABASE_URL, test these endpoints:
 The homepage (Landing.tsx) was showing hardcoded values that didn't match the Dashboard.
 
 ### Resolution
-Both pages now display the **target/planned values** for the network:
-- Total Storage: **36.00 TB** (35% Utilised)
-- Active Deals: **6** (10 All Time)
-- THT Locked: **19,602** (In Active Escrow)
-- Providers: **5** (4 Active · 1 Inactive)
-- Avg Price: **0.0013 THT** per GB / Epoch
+Both pages now display **LIVE data** from the API (Supabase database):
+- Total Storage: **15.50 TB** (14.5% Utilised)
+- Active Deals: **2** (4 All Time)
+- THT Locked: **1,096.4**
+- Providers: **4 Active** (5 Total)
+- Avg Reputation: **95.7 / 100**
+- Avg Price: **0.00128 THT** per GB / Epoch
 
 ### Implementation
-- `artifacts/cardano-storage/src/pages/Landing.tsx` - Original hardcoded values preserved
-- `artifacts/cardano-storage/src/pages/Dashboard.tsx` - Added `TARGET_STATS` constant to match homepage
+- `artifacts/cardano-storage/src/pages/Landing.tsx` - Now uses `useGetNetworkStats()` and `useGetEconomyStats()` hooks
+- `artifacts/cardano-storage/src/pages/Dashboard.tsx` - Already uses live data hooks
 
-### Note
-The actual live data from the API may differ from these target values. The target values represent the planned network capacity.
+### API Source
+Both pages call the same endpoints:
+- `/api/stats/network` - Returns network statistics from Supabase `providers` and `deals` tables
+- `/api/stats/economy` - Returns economy statistics from Supabase aggregation queries
 
 ---
 
