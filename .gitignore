@@ -54,3 +54,30 @@ Thumbs.db
 .env.*.local
 adadive_export.sql
 package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.manifest
+*.spec
+
+# uv/venv
+ai/.venv/
+.venv/
+.venv
+
+# uv lock file
+uv.lock
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
