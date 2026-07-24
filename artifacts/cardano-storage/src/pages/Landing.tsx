@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useJoinWaitlist } from "@workspace/api-client-react";
+import { useJoinWaitlist, useGetNetworkStats, useGetEconomyStats } from "@workspace/api-client-react";
+import { THT } from "@/lib/token";
 import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
 
 /* ── Global styles for landing (scoped via class names) ── */
@@ -136,6 +137,28 @@ export default function Landing() {
 
   useEffect(() => { document.title = "ADADIVE — Decentralised Storage on Cardano"; }, []);
 
+  // Fetch live network and economy stats
+  const { data: networkStats } = useGetNetworkStats();
+  const { data: economyStats } = useGetEconomyStats();
+
+  // Helper to format storage values
+  const formatStorage = (tb?: number) => {
+    if (tb === undefined) return "--";
+    return `${tb.toFixed(2)} TB`;
+  };
+
+  // Helper to format THT locked value
+  const formatTHT = (ada?: number) => {
+    if (ada === undefined) return "--";
+    return THT.label(ada.toLocaleString());
+  };
+
+  // Helper to format price
+  const formatPrice = (ada?: number) => {
+    if (ada === undefined) return "--";
+    return `${ada.toFixed(4)} THT`;
+  };
+
   const joinMutation = useJoinWaitlist();
 
   const handleWaitlist = (e: React.FormEvent) => {
@@ -212,7 +235,7 @@ export default function Landing() {
         {/* Live badge */}
         <div className="afu" style={{ display:"inline-flex", alignItems:"center", gap:"10px", border:"1px solid rgba(201,169,110,.2)", borderRadius:"100px", padding:"6px 20px", marginBottom:"40px" }}>
           <span style={{ width:"6px", height:"6px", borderRadius:"50%", background:"#00ffa3", display:"block", animation:"adadivePulse 2s infinite" }} />
-          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".22em", color:T.smoke }}>LIVE ON CARDANO PREPROD · 36.00 TB ONLINE</span>
+          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".22em", color:T.smoke }}>LIVE ON CARDANO PREPROD · {networkStats ? `${networkStats.totalStorageTb.toFixed(2)} TB ONLINE` : "LOADING..."}</span>
         </div>
 
         <h1 className="afu ad1" style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(32px,7vw,88px)", fontWeight:600, lineHeight:1.08, letterSpacing:"-.01em", marginBottom:"6px" }}>
@@ -235,10 +258,16 @@ export default function Landing() {
           <button className="a-btn-ghost" onClick={goToken}>THT TOKEN ↗</button>
         </div>
 
-        {/* Stats row */}
+        {/* Stats row - live data */}
         <div className="afu ad5" style={{ display:"flex", gap:"clamp(20px,5vw,48px)", marginTop:"80px", flexWrap:"wrap", justifyContent:"center" }}>
-          {[["36 TB","Total Storage"],["6","Active Deals"],["19,602","THT Locked"],["5","Providers"],["0.0013 THT","per GB / Epoch"]].map(([v,l]) => (
-            <div key={l} style={{ textAlign:"center" }}>
+          {[
+            [formatStorage(networkStats?.totalStorageTb), "Total Storage"],
+            [String(networkStats?.activeDeals ?? "--"), "Active Deals"],
+            [THT.label(networkStats?.totalAdaLocked?.toLocaleString() ?? "--"), "THT Locked"],
+            [String(networkStats?.activeProviders ?? "--"), "Providers"],
+            [formatPrice(economyStats?.adaPerGbPerEpoch), "per GB / Epoch"],
+          ].map(([v,l]) => (
+            <div key={l as string} style={{ textAlign:"center" }}>
               <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(18px,3vw,28px)", color:T.gold, marginBottom:"4px", fontWeight:500 }}>{v}</div>
               <div style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".15em", color:T.mist }}>{(l as string).toUpperCase()}</div>
             </div>
@@ -294,11 +323,11 @@ export default function Landing() {
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:"16px" }}>
             {[
-              { label:"Total Storage", value:"36.00 TB",   sub:"35% Utilised",         icon:"▣" },
-              { label:"Active Deals",  value:"6",          sub:"10 All Time",           icon:"⬡" },
-              { label:"THT Locked",    value:"19,602.5",   sub:"In Active Escrow",      icon:"◈" },
-              { label:"Avg Price",     value:"0.0013 THT", sub:"per GB / Epoch",        icon:"∿" },
-              { label:"Providers",     value:"5",          sub:"4 Active · 1 Inactive", icon:"◉" },
+              { label:"Total Storage", value: formatStorage(networkStats?.totalStorageTb), sub: networkStats?.networkUtilizationPercent !== undefined ? `${networkStats.networkUtilizationPercent.toFixed(1)}% Utilised` : "Loading...", icon:"▣" },
+              { label:"Active Deals",  value: String(networkStats?.activeDeals ?? "--"), sub: networkStats?.totalDealsAllTime !== undefined ? `${networkStats.totalDealsAllTime} All Time` : "Loading...", icon:"⬡" },
+              { label:"THT Locked",    value: THT.label(networkStats?.totalAdaLocked?.toLocaleString() ?? "--"), sub:"In Active Escrow", icon:"◈" },
+              { label:"Avg Price",     value: formatPrice(economyStats?.adaPerGbPerEpoch), sub:"per GB / Epoch", icon:"∿" },
+              { label:"Providers",     value: String(networkStats?.activeProviders ?? "--"), sub: networkStats?.totalProviders !== undefined ? `${networkStats.totalProviders} Total` : "Loading...", icon:"◉" },
             ].map(s => (
               <div key={s.label} className="a-stat-card" style={{ textAlign:"center" }}>
                 <div style={{ fontSize:"20px", color:T.gold, opacity:.5, marginBottom:"12px" }}>{s.icon}</div>
