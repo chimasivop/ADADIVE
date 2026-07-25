@@ -50,6 +50,7 @@ class AgentResponse:
     message: str
     agent_type: AgentType
     sources: list[dict[str, Any]] = field(default_factory=list)
+    backend_references: list[dict[str, Any]] = field(default_factory=list)
     tool_results: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -62,6 +63,7 @@ class BaseAgent(ABC):
     - Custom system prompt
     - Domain-specific tools
     - Specialized response handling
+    - Dashboard context awareness
     """
 
     def __init__(self, config: AgentConfig):
@@ -88,6 +90,7 @@ class BaseAgent(ABC):
         message: str,
         user_context: UserContext,
         conversation_history: list[Message] | None = None,
+        page_context: str = "unknown",
     ) -> AgentResponse:
         """Main chat interface for the agent."""
         history = conversation_history or []
@@ -98,9 +101,10 @@ class BaseAgent(ABC):
         message: str,
         user_context: UserContext,
         conversation_history: list[Message] | None = None,
+        page_context: str = "unknown",
     ) -> AsyncGenerator[str, None]:
         """Streaming chat interface for the agent."""
-        response = await self.chat(message, user_context, conversation_history)
+        response = await self.chat(message, user_context, conversation_history, page_context)
         # For now, yield the full response
         yield response.message
 
@@ -188,8 +192,11 @@ class SupportAgent(BaseAgent):
             tools=["get_platform_info", "get_platform_stats", "get_escrow_info"],
         ))
 
-    def _build_system_prompt(self) -> str:
-        return self.config.system_prompt
+    def _build_system_prompt(self, page_context: str = "unknown") -> str:
+        prompt = self.config.system_prompt
+        if page_context != "unknown":
+            prompt += f"\n\nNote: The user is currently viewing the {page_context} page. Adapt your response to be most relevant to this context."
+        return prompt
 
     async def _process_request(
         self,
@@ -203,7 +210,7 @@ class SupportAgent(BaseAgent):
         kb = get_knowledge_base()
         context = kb.get_relevant_context(message)
         
-        # Build messages
+        # Build messages with page context awareness
         system_prompt = self._build_system_prompt()
         if context:
             system_prompt += f"\n\nRelevant Knowledge:\n{context}"

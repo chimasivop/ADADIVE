@@ -18,6 +18,7 @@ ADADIVE AI v3 is an intelligent workspace providing:
 ### Core Capabilities
 - **Chat Interface**: Natural language conversations about ADADIVE
 - **Multi-Agent System**: 5 specialized agents for different use cases
+- **Dashboard Context Awareness**: AI automatically adapts responses based on current page (Dashboard, Providers, Deals, Escrow, Storage, Wallet, Admin)
 - **RAG-Powered Responses**: Knowledge-augmented answers from platform documentation
 - **Streaming (SSE)**: Real-time response streaming via Server-Sent Events
 - **User Context**: Authenticated access to personal deal information
@@ -49,6 +50,39 @@ ADADIVE AI v3 is an intelligent workspace providing:
 - Actions require user approval before execution
 - Dangerous operations (e.g., cancel deal) require wallet signature
 - All actions are logged with backend API references
+
+#### Confirmation Workflows
+Every state-changing operation requires explicit user confirmation:
+| Action | Confirmation Level | Wallet Required |
+|--------|-------------------|-----------------|
+| Create Deal | Strong | No |
+| Renew Deal | Strong | No |
+| Cancel Deal | Wallet | Yes |
+| Transfer Funds | Wallet | Yes |
+| Stake Funds | Wallet | Yes |
+| Release Escrow | Wallet | Yes |
+| Dispute Escrow | Wallet | Yes |
+| Register Provider | Strong | Yes |
+| Unregister Provider | Wallet | Yes |
+| Update Settings | Simple | No |
+
+#### Dashboard Context Awareness
+The AI automatically adapts its responses based on the user's current dashboard page:
+- **Dashboard**: General overview and platform health
+- **Providers**: Provider-related information and comparisons
+- **Deals**: Storage deal management and status
+- **Escrow**: Payment and settlement information
+- **Storage**: File management and storage operations
+- **Wallet**: Account balance and transaction history
+- **Admin**: Administrative insights and metrics
+
+To enable context awareness, pass the `page_context` parameter in chat requests:
+```json
+{
+  "message": "What's my status?",
+  "page_context": "deals"
+}
+```
 
 #### Provider Intelligence
 - Uptime tracking and metrics

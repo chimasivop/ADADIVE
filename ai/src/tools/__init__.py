@@ -60,6 +60,7 @@ class ToolResult:
     data: Any = None
     error: str | None = None
     execution_time_ms: float = 0.0
+    source_api: str | None = None  # Backend API endpoint used
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -178,6 +179,7 @@ class PlatformInfoTool(BaseTool):
                         "provider_count": stats.provider_count if stats else 0,
                     },
                 },
+                source_api="GET /api/stats",
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
@@ -270,6 +272,7 @@ class StorageDealsTool(BaseTool):
                     ],
                     "total": len(deals),
                 },
+                source_api="GET /api/deals",
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
@@ -337,6 +340,7 @@ class ProviderInfoTool(BaseTool):
                                 "is_active": provider.is_active,
                             }],
                         },
+                        source_api=f"GET /api/providers/{provider_id}",
                     )
                 return ToolResult(success=False, error="Provider not found")
 
@@ -354,6 +358,7 @@ class ProviderInfoTool(BaseTool):
                         for p in providers
                     ],
                 },
+                source_api="GET /api/providers",
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
@@ -409,6 +414,7 @@ class EscrowContractTool(BaseTool):
                     "info": context,
                     "topic": topic,
                 },
+                source_api="GET /knowledge/escrow",  # Internal knowledge base
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
@@ -468,6 +474,7 @@ class PlatformStatsTool(BaseTool):
                     "average_cost_ada": stats.average_cost_ada,
                     "provider_count": stats.provider_count,
                 },
+                source_api="GET /api/stats",
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
@@ -632,6 +639,7 @@ curl -X GET "https://api.adadive.xyz/v1/deals?client_address=WALLET_ADDRESS" \\
                 "use_case": use_case,
                 "description": f"Code example for {use_case} in {language}",
             },
+            source_api="TOOL: generate_code_example",
         )
 
     def _generate_generic_example(self, language: str, use_case: str) -> str:
@@ -758,6 +766,7 @@ class APIReferenceTool(BaseTool):
                     for path, details in endpoints.items()
                 ],
             },
+            source_api="TOOL: get_api_reference",
         )
 
 

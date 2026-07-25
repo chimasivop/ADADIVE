@@ -33,6 +33,17 @@ class ActionType(str, Enum):
     DISMISS_NOTIFICATION = "dismiss_notification"
     EXPORT_DATA = "export_data"
     CONTACT_SUPPORT = "contact_support"
+    # Additional wallet operations
+    TRANSFER_FUNDS = "transfer_funds"
+    STAKE_FUNDS = "stake_funds"
+    # Provider operations
+    REGISTER_PROVIDER = "register_provider"
+    UNREGISTER_PROVIDER = "unregister_provider"
+    UPDATE_PROVIDER_PRICING = "update_provider_pricing"
+    # Escrow operations
+    RELEASE_ESCROW = "release_escrow"
+    DISPUTE_ESCROW = "dispute_escrow"
+    ACCEPT_ESCROW = "accept_escrow"
 
 
 class ActionConfirmationLevel(str, Enum):
@@ -181,6 +192,133 @@ class ActionRegistry:
                 danger_level="low",
             ),
             self._handle_contact_support,
+        )
+
+        # Transfer Funds (Wallet operation)
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.TRANSFER_FUNDS,
+                name="Transfer Funds",
+                description="Transfer ADA to another wallet address",
+                confirmation_level=ActionConfirmationLevel.WALLET,
+                requires_auth=True,
+                requires_wallet=True,
+                backend_endpoint="/api/wallet/transfer",
+                method="POST",
+                danger_level="critical",
+            ),
+            self._handle_transfer_funds,
+        )
+
+        # Stake Funds
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.STAKE_FUNDS,
+                name="Stake Funds",
+                description="Delegate ADA to a stake pool for staking rewards",
+                confirmation_level=ActionConfirmationLevel.WALLET,
+                requires_auth=True,
+                requires_wallet=True,
+                backend_endpoint="/api/wallet/stake",
+                method="POST",
+                danger_level="medium",
+            ),
+            self._handle_stake_funds,
+        )
+
+        # Register Provider
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.REGISTER_PROVIDER,
+                name="Register as Provider",
+                description="Register as a storage provider on the ADADIVE network",
+                confirmation_level=ActionConfirmationLevel.STRONG,
+                requires_auth=True,
+                requires_wallet=True,
+                backend_endpoint="/api/providers/register",
+                method="POST",
+                danger_level="medium",
+            ),
+            self._handle_register_provider,
+        )
+
+        # Unregister Provider
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.UNREGISTER_PROVIDER,
+                name="Unregister Provider",
+                description="Unregister as a storage provider (existing deals will be maintained)",
+                confirmation_level=ActionConfirmationLevel.WALLET,
+                requires_auth=True,
+                requires_wallet=True,
+                backend_endpoint="/api/providers/{provider_id}/unregister",
+                method="POST",
+                danger_level="high",
+            ),
+            self._handle_unregister_provider,
+        )
+
+        # Update Provider Pricing
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.UPDATE_PROVIDER_PRICING,
+                name="Update Provider Pricing",
+                description="Update your storage provider pricing configuration",
+                confirmation_level=ActionConfirmationLevel.STRONG,
+                requires_auth=True,
+                backend_endpoint="/api/providers/{provider_id}/pricing",
+                method="PATCH",
+                danger_level="medium",
+            ),
+            self._handle_update_provider_pricing,
+        )
+
+        # Release Escrow
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.RELEASE_ESCROW,
+                name="Release Escrow",
+                description="Release escrow funds to the storage provider",
+                confirmation_level=ActionConfirmationLevel.WALLET,
+                requires_auth=True,
+                requires_wallet=True,
+                backend_endpoint="/api/escrow/{escrow_id}/release",
+                method="POST",
+                danger_level="high",
+            ),
+            self._handle_release_escrow,
+        )
+
+        # Dispute Escrow
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.DISPUTE_ESCROW,
+                name="Dispute Escrow",
+                description="File a dispute for an escrow transaction",
+                confirmation_level=ActionConfirmationLevel.WALLET,
+                requires_auth=True,
+                requires_wallet=True,
+                backend_endpoint="/api/escrow/{escrow_id}/dispute",
+                method="POST",
+                danger_level="high",
+            ),
+            self._handle_dispute_escrow,
+        )
+
+        # Accept Escrow
+        self.register(
+            ActionDefinition(
+                action_type=ActionType.ACCEPT_ESCROW,
+                name="Accept Escrow",
+                description="Accept and finalize an escrow transaction",
+                confirmation_level=ActionConfirmationLevel.WALLET,
+                requires_auth=True,
+                requires_wallet=True,
+                backend_endpoint="/api/escrow/{escrow_id}/accept",
+                method="POST",
+                danger_level="medium",
+            ),
+            self._handle_accept_escrow,
         )
 
     def register(
@@ -353,6 +491,79 @@ class ActionRegistry:
             "subject": params.get("subject", "Support Request"),
             "message": "Your support request has been submitted",
             "source_api": "POST /api/support",
+        }
+
+    async def _handle_transfer_funds(self, params: dict, user_context: UserContext) -> dict:
+        """Handle fund transfer."""
+        return {
+            "from_address": user_context.wallet_address,
+            "to_address": params.get("to_address"),
+            "amount": params.get("amount"),
+            "message": "Fund transfer initiated",
+            "source_api": "POST /api/wallet/transfer",
+        }
+
+    async def _handle_stake_funds(self, params: dict, user_context: UserContext) -> dict:
+        """Handle fund staking."""
+        return {
+            "wallet_address": user_context.wallet_address,
+            "pool_id": params.get("pool_id"),
+            "amount": params.get("amount"),
+            "message": "Staking delegation initiated",
+            "source_api": "POST /api/wallet/stake",
+        }
+
+    async def _handle_register_provider(self, params: dict, user_context: UserContext) -> dict:
+        """Handle provider registration."""
+        return {
+            "wallet_address": user_context.wallet_address,
+            "provider_name": params.get("provider_name"),
+            "message": "Provider registration initiated",
+            "source_api": "POST /api/providers/register",
+        }
+
+    async def _handle_unregister_provider(self, params: dict, user_context: UserContext) -> dict:
+        """Handle provider unregistration."""
+        return {
+            "provider_id": params.get("provider_id"),
+            "message": "Provider unregistration initiated",
+            "warning": "Existing deals will be maintained until completion",
+            "source_api": "POST /api/providers/{provider_id}/unregister",
+        }
+
+    async def _handle_update_provider_pricing(self, params: dict, user_context: UserContext) -> dict:
+        """Handle provider pricing update."""
+        return {
+            "provider_id": params.get("provider_id"),
+            "new_pricing": params.get("pricing"),
+            "message": "Provider pricing update initiated",
+            "source_api": "PATCH /api/providers/{provider_id}/pricing",
+        }
+
+    async def _handle_release_escrow(self, params: dict, user_context: UserContext) -> dict:
+        """Handle escrow release."""
+        return {
+            "escrow_id": params.get("escrow_id"),
+            "message": "Escrow release initiated",
+            "warning": "This action is irreversible",
+            "source_api": "POST /api/escrow/{escrow_id}/release",
+        }
+
+    async def _handle_dispute_escrow(self, params: dict, user_context: UserContext) -> dict:
+        """Handle escrow dispute."""
+        return {
+            "escrow_id": params.get("escrow_id"),
+            "reason": params.get("reason"),
+            "message": "Escrow dispute filed",
+            "source_api": "POST /api/escrow/{escrow_id}/dispute",
+        }
+
+    async def _handle_accept_escrow(self, params: dict, user_context: UserContext) -> dict:
+        """Handle escrow acceptance."""
+        return {
+            "escrow_id": params.get("escrow_id"),
+            "message": "Escrow acceptance confirmed",
+            "source_api": "POST /api/escrow/{escrow_id}/accept",
         }
 
 

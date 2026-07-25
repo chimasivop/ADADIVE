@@ -11,6 +11,7 @@ from .chat import (
     ChatRequest,
     ChatResponse,
     Message,
+    DashboardPage,
     get_conversation_manager,
     generate_response,
     generate_streaming_response,
@@ -32,6 +33,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     
     Accepts user messages and returns AI-powered responses.
     Supports both anonymous and authenticated users.
+    Dashboard context is automatically inferred from page_context parameter.
     """
     settings = get_settings()
     
@@ -48,14 +50,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
         anonymous_id=request.anonymous_id,
     )
     
-    # Determine agent type
+    # Determine agent type with page context awareness
     if request.agent_type:
         try:
             agent_type = AgentType(request.agent_type)
         except ValueError:
-            agent_type = determine_agent_type(request.message, user_context)
+            agent_type = determine_agent_type(request.message, user_context, request.page_context)
     else:
-        agent_type = determine_agent_type(request.message, user_context)
+        agent_type = determine_agent_type(request.message, user_context, request.page_context)
     
     # Get conversation manager
     conv_manager = get_conversation_manager()
@@ -73,13 +75,14 @@ async def chat(request: ChatRequest) -> ChatResponse:
     # Add user message to history
     conv_manager.add_message(conv.conversation_id, "user", request.message)
     
-    # Generate response
-    response_text, sources = await generate_response(
+    # Generate response with dashboard context awareness
+    response_text, sources, backend_refs = await generate_response(
         user_message=request.message,
         user_context=user_context,
         agent_type=agent_type,
         enable_rag=enable_rag,
         conversation_history=conv.memory.messages,
+        page_context=request.page_context,
     )
     
     # Add assistant response to history
@@ -102,6 +105,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         conversation_id=conv.conversation_id,
         agent_type=agent_type.value,
         sources=sources,
+        backend_references=backend_refs,
+        page_context=request.page_context.value,
         user_context=user_context_info,
         timestamp=datetime.utcnow().isoformat(),
     )
@@ -113,6 +118,7 @@ async def chat_stream(request: ChatRequest):
     Streaming chat endpoint for AI interactions.
     
     Returns Server-Sent Events (SSE) for real-time response streaming.
+    Dashboard context is automatically inferred from page_context parameter.
     """
     settings = get_settings()
     
@@ -127,14 +133,14 @@ async def chat_stream(request: ChatRequest):
         anonymous_id=request.anonymous_id,
     )
     
-    # Determine agent type
+    # Determine agent type with page context awareness
     if request.agent_type:
         try:
             agent_type = AgentType(request.agent_type)
         except ValueError:
-            agent_type = determine_agent_type(request.message, user_context)
+            agent_type = determine_agent_type(request.message, user_context, request.page_context)
     else:
-        agent_type = determine_agent_type(request.message, user_context)
+        agent_type = determine_agent_type(request.message, user_context, request.page_context)
     
     conv_manager = get_conversation_manager()
     conv = conv_manager.get_or_create(
@@ -160,6 +166,7 @@ async def chat_stream(request: ChatRequest):
                 agent_type=agent_type,
                 enable_rag=enable_rag,
                 conversation_history=conv.memory.messages,
+                page_context=request.page_context,
             ):
                 yield streaming_chat.event_to_bytes(event)
         except Exception as e:
@@ -175,6 +182,7 @@ async def chat_stream(request: ChatRequest):
         headers={
             "X-Conversation-ID": conv.conversation_id,
             "X-Agent-Type": agent_type.value,
+            "X-Page-Context": request.page_context.value,
         },
     )
 

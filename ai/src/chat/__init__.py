@@ -6,11 +6,13 @@ Provides the main chat interface with support for:
 - Conversation memory
 - Tool execution
 - RAG augmentation
+- Dashboard context awareness
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, AsyncGenerator
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +25,19 @@ from ..memory import ConversationMemory, get_memory_store, MemoryMessage
 from ..agents import AgentType, AgentFactory, AgentResponse
 from ..streaming import StreamEvent, StreamEventType, StreamingChat
 from ..tools import get_tool_registry
+
+
+class DashboardPage(str, Enum):
+    """Available dashboard pages for context awareness."""
+    UNKNOWN = "unknown"
+    DASHBOARD = "dashboard"
+    PROVIDERS = "providers"
+    DEALS = "deals"
+    ESCROW = "escrow"
+    STORAGE = "storage"
+    WALLET = "wallet"
+    ADMIN = "admin"
+    SETTINGS = "settings"
 
 
 # Request/Response Models
@@ -38,6 +53,10 @@ class ChatRequest(BaseModel):
     agent_type: str | None = Field(
         default=None,
         description="Agent type to use (support, storage, escrow, provider, developer)"
+    )
+    page_context: DashboardPage = Field(
+        default=DashboardPage.UNKNOWN,
+        description="Current dashboard page context"
     )
     enable_rag: bool | None = Field(
         default=None,
@@ -57,6 +76,14 @@ class ChatResponse(BaseModel):
     sources: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Source documents used for RAG"
+    )
+    backend_references: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Backend API endpoints used to generate this response"
+    )
+    page_context: str = Field(
+        default="unknown",
+        description="Dashboard page context when response was generated"
     )
     user_context: dict[str, Any] | None = Field(
         default=None,
@@ -85,6 +112,7 @@ class ConversationContext:
     user_context: UserContext
     agent_type: AgentType
     memory: ConversationMemory
+    page_context: DashboardPage = DashboardPage.UNKNOWN
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_updated: datetime = field(default_factory=datetime.utcnow)
 
@@ -147,7 +175,8 @@ async def generate_response(
     agent_type: AgentType = AgentType.SUPPORT,
     enable_rag: bool = True,
     conversation_history: list[Message] | None = None,
-) -> tuple[str, list[dict[str, Any]]]:
+    page_context: DashboardPage = DashboardPage.UNKNOWN,
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Generate an AI response using the specified agent.
     
@@ -157,9 +186,10 @@ async def generate_response(
         agent_type: Type of agent to use
         enable_rag: Whether to use RAG
         conversation_history: Previous messages in the conversation
+        page_context: Current dashboard page context
     
     Returns:
-        Tuple of (response_text, sources)
+        Tuple of (response_text, sources, backend_references)
     """
     settings = get_settings()
 
@@ -174,14 +204,15 @@ async def generate_response(
             for msg in conversation_history[-10:]
         ]
 
-    # Generate response using agent
+    # Generate response using agent with page context
     response = await agent.chat(
         message=user_message,
         user_context=user_context,
         conversation_history=history_messages,
+        page_context=page_context,
     )
 
-    return response.message, response.sources
+    return response.message, response.sources, response.backend_references
 
 
 async def generate_streaming_response(
@@ -190,6 +221,7 @@ async def generate_streaming_response(
     agent_type: AgentType = AgentType.SUPPORT,
     enable_rag: bool = True,
     conversation_history: list[Message] | None = None,
+    page_context: DashboardPage = DashboardPage.UNKNOWN,
 ) -> AsyncGenerator[StreamEvent, None]:
     """
     Generate a streaming AI response.
@@ -200,6 +232,7 @@ async def generate_streaming_response(
         agent_type: Type of agent to use
         enable_rag: Whether to use RAG
         conversation_history: Previous messages in the conversation
+        page_context: Current dashboard page context
     
     Yields:
         StreamEvent objects
@@ -220,13 +253,30 @@ async def generate_streaming_response(
             for r in results
         ]
 
+    # Build page context info for the system prompt
+    page_context_info = ""
+    if page_context != DashboardPage.UNKNOWN:
+        page_context_info = f"\n\nCURRENT DASHBOARD PAGE: You are currently on the {page_context.value} page. Adapt your response to be most relevant to this context.\n"
+        if page_context == DashboardPage.PROVIDERS:
+            page_context_info += "The user is browsing storage providers. Focus on provider-related information.\n"
+        elif page_context == DashboardPage.DEALS:
+            page_context_info += "The user is viewing their storage deals. Focus on deal status and management.\n"
+        elif page_context == DashboardPage.ESCROW:
+            page_context_info += "The user is viewing escrow/contract details. Focus on payment and settlement.\n"
+        elif page_context == DashboardPage.STORAGE:
+            page_context_info += "The user is managing storage. Focus on storage operations and file management.\n"
+        elif page_context == DashboardPage.WALLET:
+            page_context_info += "The user is viewing their wallet. Be careful about sensitive information.\n"
+        elif page_context == DashboardPage.ADMIN:
+            page_context_info += "The user is in the admin section. Provide administrative insights.\n"
+
     # Build system prompt
     system_prompt = f"""You are ADADIVE AI, a helpful assistant for the ADADIVE decentralized storage platform.
-
+{page_context_info}
 IMPORTANT RESTRICTIONS:
-- You CANNOT sign transactions or move funds
+- You CANNOT sign transactions or move funds without explicit user confirmation
 - You CANNOT access private keys
-- You CANNOT execute blockchain transactions
+- You CANNOT execute blockchain transactions directly
 
 {context}
 
@@ -273,13 +323,18 @@ Be helpful, accurate, and concise. When uncertain, acknowledge limitations."""
             )
 
 
-def determine_agent_type(message: str, user_context: UserContext) -> AgentType:
+def determine_agent_type(
+    message: str,
+    user_context: UserContext,
+    page_context: DashboardPage = DashboardPage.UNKNOWN,
+) -> AgentType:
     """
-    Determine which agent to use based on message content.
+    Determine which agent to use based on message content and page context.
     
     Args:
         message: User's message
         user_context: User context
+        page_context: Current dashboard page context
         
     Returns:
         AgentType to use
@@ -287,7 +342,7 @@ def determine_agent_type(message: str, user_context: UserContext) -> AgentType:
     settings = get_settings()
     message_lower = message.lower()
 
-    # Check for specific keywords
+    # First check message keywords for explicit intent
     if any(kw in message_lower for kw in ["provider", "hosting", "storage host"]):
         return AgentType.PROVIDER
     elif any(kw in message_lower for kw in ["contract", "escrow", "payment", "settle", "refund"]):
@@ -298,6 +353,20 @@ def determine_agent_type(message: str, user_context: UserContext) -> AgentType:
         return AgentType.DEVELOPER
     elif any(kw in message_lower for kw in ["deal", "my deal", "my storage", "my files"]):
         return AgentType.STORAGE
+    
+    # If no keyword match, use page context as a hint
+    if page_context != DashboardPage.UNKNOWN:
+        page_to_agent = {
+            DashboardPage.PROVIDERS: AgentType.PROVIDER,
+            DashboardPage.DEALS: AgentType.STORAGE,
+            DashboardPage.ESCROW: AgentType.ESCROW,
+            DashboardPage.STORAGE: AgentType.STORAGE,
+            DashboardPage.WALLET: AgentType.SUPPORT,
+            DashboardPage.ADMIN: AgentType.SUPPORT,
+            DashboardPage.DASHBOARD: AgentType.SUPPORT,
+            DashboardPage.SETTINGS: AgentType.SUPPORT,
+        }
+        return page_to_agent.get(page_context, AgentType(settings.default_agent))
     
     # Default to configured default or support
     return AgentType(settings.default_agent)
@@ -357,4 +426,5 @@ __all__ = [
     "generate_streaming_response",
     "determine_agent_type",
     "call_llm",
+    "DashboardPage",
 ]
