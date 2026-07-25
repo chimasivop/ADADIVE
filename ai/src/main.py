@@ -1,18 +1,24 @@
-"""ADADIVE AI Service v2 - Main FastAPI Application."""
+"""ADADIVE AI Service - Main FastAPI Application."""
 
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 
 from .config import get_settings
-from .chat import get_conversation_manager
+from .chat import (
+    ChatRequest,
+    ChatResponse,
+    Message,
+    get_conversation_manager,
+)
+from .auth import get_user_context, AuthStatus
 from .retrieval import get_knowledge_base
 from .integrations import get_backend_client
-from .agents import AgentFactory
 
 
 @asynccontextmanager
@@ -20,19 +26,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup and shutdown."""
     # Startup
     settings = get_settings()
-    print(f"Starting ADADIVE AI Service v2...")
     
     # Initialize knowledge base
     knowledge_base = get_knowledge_base()
     try:
         knowledge_base.initialize()
-        doc_count = len(knowledge_base.vector_store.documents) if knowledge_base.vector_store else 0
-        print(f"Knowledge base initialized with {doc_count} documents")
+        print(f"Knowledge base initialized with {len(knowledge_base.vector_store.documents)} documents")
     except Exception as e:
         print(f"Warning: Could not initialize knowledge base: {e}")
-    
-    # Initialize agents
-    print(f"Agents available: {[a.value for a in AgentFactory.list_agents()]}")
     
     # Test backend API connection (optional)
     backend_client = get_backend_client()
@@ -42,29 +43,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         print(f"Warning: Backend API unavailable: {e}")
     
-    # Start conversation cleanup task
-    cleanup_task = None
-    if settings.conversation_max_age_seconds < 86400:  # Less than 24 hours
-        async def cleanup_loop():
-            import asyncio
-            while True:
-                await asyncio.sleep(settings.conversation_max_age_seconds)
-                conv_manager = get_conversation_manager()
-                removed = conv_manager.cleanup_old()
-                if removed > 0:
-                    print(f"Cleaned up {removed} old conversations")
-        
-        import asyncio
-        cleanup_task = asyncio.create_task(cleanup_loop())
-    
     yield
     
     # Shutdown
-    if cleanup_task:
-        cleanup_task.cancel()
-    
     await backend_client.close()
-    print("ADADIVE AI Service shutdown complete")
 
 
 def create_app() -> FastAPI:
@@ -73,8 +55,8 @@ def create_app() -> FastAPI:
     
     app = FastAPI(
         title="ADADIVE AI Service",
-        description="AI-powered multi-agent chat service for ADADIVE decentralized storage platform v2",
-        version="2.0.0",
+        description="AI-powered chat service for ADADIVE decentralized storage platform",
+        version="0.1.0",
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -106,16 +88,9 @@ async def root() -> dict:
     """Root endpoint."""
     return {
         "service": "ADADIVE AI",
-        "version": "2.0.0",
+        "version": "0.1.0",
         "status": "operational",
         "docs": "/docs",
-        "features": [
-            "Multi-agent support",
-            "Streaming responses",
-            "RAG-powered knowledge base",
-            "Secure tool framework",
-            "Conversation memory",
-        ],
     }
 
 
@@ -130,7 +105,6 @@ async def health_check() -> dict:
         "knowledge_base": "ok" if get_knowledge_base()._initialized else "not_initialized",
         "backend_api": "unknown",
         "llm_provider": settings.llm_provider,
-        "agents": "ok",
     }
     
     # Check backend API

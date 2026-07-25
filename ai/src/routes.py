@@ -1,25 +1,11 @@
-"""API routes for ADADIVE AI v2 service."""
-
-import asyncio
-from datetime import datetime
-from typing import Any
+"""API routes for ADADIVE AI service."""
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
+from typing import Any
 
-from .chat import (
-    ChatRequest,
-    ChatResponse,
-    Message,
-    get_conversation_manager,
-    generate_response,
-    generate_streaming_response,
-    determine_agent_type,
-)
-from .auth import get_user_context, AuthStatus
+from .chat import ChatRequest, ChatResponse, Message
+from .auth import get_user_context
 from .config import get_settings
-from .agents import AgentType, AgentFactory
-from .tools import get_tool_registry
 
 
 router = APIRouter(prefix="/ai", tags=["AI"])
@@ -33,6 +19,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
     Accepts user messages and returns AI-powered responses.
     Supports both anonymous and authenticated users.
     """
+    from .chat import generate_response, get_conversation_manager
+    
     settings = get_settings()
     
     # Validate message length
@@ -48,15 +36,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
         anonymous_id=request.anonymous_id,
     )
     
-    # Determine agent type
-    if request.agent_type:
-        try:
-            agent_type = AgentType(request.agent_type)
-        except ValueError:
-            agent_type = determine_agent_type(request.message, user_context)
-    else:
-        agent_type = determine_agent_type(request.message, user_context)
-    
     # Get conversation manager
     conv_manager = get_conversation_manager()
     
@@ -64,26 +43,26 @@ async def chat(request: ChatRequest) -> ChatResponse:
     conv = conv_manager.get_or_create(
         conversation_id=request.conversation_id,
         user_context=user_context,
-        agent_type=agent_type,
     )
     
     # Determine if RAG is enabled
     enable_rag = request.enable_rag if request.enable_rag is not None else settings.enable_rag
     
     # Add user message to history
-    conv_manager.add_message(conv.conversation_id, "user", request.message)
+    user_message = Message(role="user", content=request.message)
+    conv_manager.add_message(conv.conversation_id, user_message)
     
     # Generate response
     response_text, sources = await generate_response(
         user_message=request.message,
         user_context=user_context,
-        agent_type=agent_type,
         enable_rag=enable_rag,
-        conversation_history=conv.memory.messages,
+        conversation_history=conv.history,
     )
     
     # Add assistant response to history
-    conv_manager.add_message(conv.conversation_id, "assistant", response_text)
+    assistant_message = Message(role="assistant", content=response_text)
+    conv_manager.add_message(conv.conversation_id, assistant_message)
     
     # Build user context info for response
     user_context_info = None
@@ -100,7 +79,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(
         message=response_text,
         conversation_id=conv.conversation_id,
-        agent_type=agent_type.value,
         sources=sources,
         user_context=user_context_info,
         timestamp=datetime.utcnow().isoformat(),
@@ -114,6 +92,10 @@ async def chat_stream(request: ChatRequest):
     
     Returns Server-Sent Events (SSE) for real-time response streaming.
     """
+    from fastapi.responses import StreamingResponse
+    from .chat import generate_response, get_conversation_manager
+    import asyncio
+    
     settings = get_settings()
     
     if len(request.message) > settings.max_message_length:
@@ -127,54 +109,40 @@ async def chat_stream(request: ChatRequest):
         anonymous_id=request.anonymous_id,
     )
     
-    # Determine agent type
-    if request.agent_type:
-        try:
-            agent_type = AgentType(request.agent_type)
-        except ValueError:
-            agent_type = determine_agent_type(request.message, user_context)
-    else:
-        agent_type = determine_agent_type(request.message, user_context)
-    
     conv_manager = get_conversation_manager()
     conv = conv_manager.get_or_create(
         conversation_id=request.conversation_id,
         user_context=user_context,
-        agent_type=agent_type,
     )
     
     enable_rag = request.enable_rag if request.enable_rag is not None else settings.enable_rag
     
     async def event_generator():
         """Generate SSE events for streaming response."""
-        conv_manager.add_message(conv.conversation_id, "user", request.message)
+        user_message = Message(role="user", content=request.message)
+        conv_manager.add_message(conv.conversation_id, user_message)
         
-        streaming_chat = None
-        try:
-            from .streaming import StreamingChat
-            streaming_chat = StreamingChat()
-            
-            async for event in generate_streaming_response(
-                user_message=request.message,
-                user_context=user_context,
-                agent_type=agent_type,
-                enable_rag=enable_rag,
-                conversation_history=conv.memory.messages,
-            ):
-                yield streaming_chat.event_to_bytes(event)
-        except Exception as e:
-            error_event = f"event: error\ndata: {{\"error\": \"{str(e)}\"}}\n\n"
-            yield error_event.encode("utf-8")
+        # Get full response
+        response_text, sources = await generate_response(
+            user_message=request.message,
+            user_context=user_context,
+            enable_rag=enable_rag,
+            conversation_history=conv.history,
+        )
         
-        # Add final response to history
-        # Note: Full response is built client-side from tokens
+        # Stream response in chunks
+        chunk_size = 20
+        for i in range(0, len(response_text), chunk_size):
+            chunk = response_text[i : i + chunk_size]
+            yield f"data: {chunk}\n\n"
+            await asyncio.sleep(0.01)  # Small_message = Message(role="assistant", content=response_text)
+        conv_manager.add_message(conv.conversation_id, assistant_message)
     
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={
             "X-Conversation-ID": conv.conversation_id,
-            "X-Agent-Type": agent_type.value,
         },
     )
 
@@ -183,22 +151,20 @@ async def chat_stream(request: ChatRequest):
 async def get_chat_history(conversation_id: str) -> dict[str, Any]:
     """Get the message history for a conversation."""
     conv_manager = get_conversation_manager()
-    memory = conv_manager._memory_store.get(conversation_id)
     
-    if memory is None:
+    if conversation_id not in conv_manager._conversations:
         raise HTTPException(
             status_code=404,
             detail="Conversation not found",
         )
     
+    conv = conv_manager._conversations[conversation_id]
+    
     return {
-        "conversation_id": memory.conversation_id,
-        "messages": [
-            {"role": m.role, "content": m.content, "timestamp": m.timestamp.isoformat()}
-            for m in memory.messages
-        ],
-        "created_at": memory.created_at.isoformat(),
-        "last_updated": memory.last_updated.isoformat(),
+        "conversation_id": conv.conversation_id,
+        "messages": [{"role": m.role, "content": m.content} for m in conv.history],
+        "created_at": conv.created_at.isoformat(),
+        "last_updated": conv.last_updated.isoformat(),
     }
 
 
@@ -207,7 +173,8 @@ async def delete_chat_history(conversation_id: str) -> dict[str, str]:
     """Delete a conversation history."""
     conv_manager = get_conversation_manager()
     
-    if conv_manager._memory_store.delete(conversation_id):
+    if conversation_id in conv_manager._conversations:
+        del conv_manager._conversations[conversation_id]
         return {"status": "deleted", "conversation_id": conversation_id}
     
     raise HTTPException(
@@ -238,48 +205,28 @@ async def get_sources(query: str, top_k: int = 5) -> dict[str, Any]:
     }
 
 
-@router.get("/agents")
-async def list_agents() -> dict[str, Any]:
-    """List all available AI agents."""
-    return {
-        "agents": AgentFactory.list_agents(),
-    }
-
-
-@router.get("/tools")
-async def list_tools() -> dict[str, Any]:
-    """List all available tools."""
-    registry = get_tool_registry()
-    
-    return {
-        "tools": registry.list_tools(),
-    }
-
-
 @router.get("/config")
 async def get_config() -> dict[str, Any]:
     """Get public configuration for the AI service."""
     settings = get_settings()
     
     return {
-        "version": "2.0.0",
         "llm_provider": settings.llm_provider,
         "openai_model": settings.openai_model if settings.llm_provider == "openai" else None,
         "anthropic_model": settings.anthropic_model if settings.llm_provider == "anthropic" else None,
+        "ollama_model": settings.ollama_model if settings.llm_provider == "ollama" else None,
         "features": {
             "rag_enabled": settings.enable_rag,
             "user_context_enabled": settings.enable_user_context,
             "auth_enabled": settings.auth_enabled,
-            "streaming_enabled": settings.enable_streaming,
         },
-        "agents": [a.value for a in AgentType],
     }
 
 
 @router.post("/auth/validate")
 async def validate_token(token: str) -> dict[str, Any]:
     """Validate a JWT token and return user info."""
-    from .auth import verify_token
+    from .auth import verify_token, AuthStatus
     
     payload = verify_token(token)
     
@@ -297,11 +244,8 @@ async def validate_token(token: str) -> dict[str, Any]:
     }
 
 
-@router.get("/memory/stats")
-async def get_memory_stats() -> dict[str, Any]:
-    """Get conversation memory statistics."""
-    conv_manager = get_conversation_manager()
-    return conv_manager._memory_store.get_stats()
+from datetime import datetime
+from .auth import AuthStatus
 
 
 # Re-export for convenience

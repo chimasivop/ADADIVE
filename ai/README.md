@@ -1,70 +1,42 @@
-# ADADIVE AI Service v2
+# ADADIVE AI Service
 
-An intelligent multi-agent AI assistant for the ADADIVE decentralized storage platform, powered by retrieval-augmented generation (RAG) and streaming responses.
+An intelligent AI assistant for the ADADIVE decentralized storage platform, powered by retrieval-augmented generation (RAG).
 
 ## Overview
 
-ADADIVE AI v2 is a production-ready AI service providing:
-- **Multi-Agent Architecture**: Specialized agents for support, storage, escrow, providers, and developers
-- **RAG-Powered Responses**: Knowledge-augmented answers from platform documentation
-- **Streaming Responses**: Real-time SSE streaming for smoother chat experience
-- **Secure Tool Framework**: AI can call backend APIs without direct database access
-- **Conversation Memory**: Multi-turn chat with persistent context
+The ADADIVE AI service provides a conversational interface for users to:
+- Learn about the ADADIVE platform and how it works
+- Get answers about storage deals, providers, and pricing
+- Understand smart contract mechanics (deal escrow)
+- Query their own storage deal history (with authentication)
+- Get help with platform features and troubleshooting
 
 ## Features
 
 ### Core Capabilities
 - **Chat Interface**: Natural language conversations about ADADIVE
-- **Multi-Agent System**: 5 specialized agents for different use cases
 - **RAG-Powered Responses**: Knowledge-augmented answers from platform documentation
-- **Streaming (SSE)**: Real-time response streaming via Server-Sent Events
 - **User Context**: Authenticated access to personal deal information
-- **Conversation Memory**: Session-based context for multi-turn conversations
-
-### AI Agents
-
-| Agent | Use Case |
-|-------|----------|
-| **Support Agent** | General platform support, troubleshooting, getting started |
-| **Storage Agent** | Storage deals, file management, upload/download |
-| **Escrow Agent** | Smart contracts, payment mechanics, settlement |
-| **Provider Agent** | Storage provider info, selection, comparisons |
-| **Developer Agent** | API documentation, SDK integration, technical guides |
+- **Conversation History**: Session-based context for multi-turn conversations
 
 ### Security Design
 - **No Database Access**: AI is isolated from direct PostgreSQL queries
 - **Backend API Integration**: All user data retrieved through secure API endpoints
 - **No Transaction Signing**: AI cannot move funds or execute blockchain transactions
-- **No Private Key Handling**: AI never accesses wallet credentials
 - **JWT Authentication**: User context only available with valid tokens
 
-### Architecture
+### Architecture Principles
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         ADADIVE AI v2                           │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │ Support  │  │ Storage  │  │  Escrow  │  │ Provider │       │
-│  │  Agent   │  │  Agent   │  │  Agent   │  │  Agent   │       │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
-│       └─────────────┴─────────────┴─────────────┘              │
-│                           │                                    │
-│                    ┌──────┴───────┐                          │
-│                    │  Tool Layer  │                          │
-│                    └──────┬───────┘                          │
-│  ┌──────────┐  ┌─────────┴──────────┐  ┌──────────┐          │
-│  │  Memory  │──│       LLM         │──│  RAG     │          │
-│  │          │  │    (OpenAI/       │  │  Retrieval│          │
-│  └──────────┘  │    Anthropic)     │  └──────────┘          │
-│                └─────────────────┘                          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          │                   │                   │
-    ┌─────┴─────┐     ┌──────┴─────┐     ┌──────┴─────┐
-    │ Backend   │     │ Knowledge  │     │  External  │
-    │   API     │     │   Base     │     │   LLM      │
-    └───────────┘     └────────────┘     └────────────┘
+┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
+│   Client   │────▶│  ADADIVE AI  │────▶│  Backend API    │
+│   (Web)    │◀────│   Service    │◀────│   (Deals/Stats) │
+└─────────────┘     └──────────────┘     └─────────────────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │ Knowledge    │
+                    │ Base (RAG)   │
+                    └──────────────┘
 ```
 
 ## Quick Start
@@ -75,7 +47,7 @@ ADADIVE AI v2 is a production-ready AI service providing:
 
 ### Installation
 
-1. Navigate to the AI service:
+1. Clone the repository and navigate to the AI service:
 
 ```bash
 cd ai
@@ -93,7 +65,7 @@ Or with pip:
 pip install -e .
 ```
 
-3. Create a `.env` file:
+3. Create a `.env` file with your configuration:
 
 ```bash
 cp .env.example .env
@@ -117,6 +89,8 @@ uv run python -m src.main
 
 ### Environment Variables
 
+Create a `.env` file or set environment variables:
+
 ```bash
 # API Settings
 AI_API_HOST=0.0.0.0
@@ -127,7 +101,7 @@ AI_API_DEBUG=true
 AI_ALLOWED_ORIGINS=http://localhost:3000,https://adadive.xyz
 
 # LLM Provider (choose one)
-AI_LLM_PROVIDER=openai  # openai, anthropic
+AI_LLM_PROVIDER=openai  # openai, anthropic, ollama
 
 # OpenAI
 AI_OPENAI_API_KEY=sk-...
@@ -135,29 +109,42 @@ AI_OPENAI_MODEL=gpt-4o-mini
 
 # Anthropic
 AI_ANTHROPIC_API_KEY=sk-ant-...
-AI_ANTHROPIC_MODEL=claude-sonnet-4-20250514
+AI_ANTHROPIC_MODEL=claude-3-haiku-20240307
+
+# Ollama (local)
+AI_OLLAMA_BASE_URL=http://localhost:11434
+AI_OLLAMA_MODEL=llama3.2
 
 # Backend API (ADADIVE Platform)
 AI_BACKEND_API_BASE_URL=http://localhost:3001
 AI_BACKEND_API_TIMEOUT=30
 
-# Retrieval / RAG
-AI_USE_CHROMA_VECTORSTORE=false  # Use ChromaDB for production
-AI_CHROMA_PERSIST_DIR=.chroma_db
-AI_EMBEDDING_PROVIDER=openai
+# Retrieval
 AI_RETRIEVAL_TOP_K=5
 AI_RETRIEVAL_SCORE_THRESHOLD=0.5
 
-# Memory
-AI_CONVERSATION_MAX_HISTORY=20
-AI_CONVERSATION_MAX_AGE_SECONDS=3600
-AI_ENABLE_PERSISTENT_MEMORY=false
-
-# Feature Flags
-AI_ENABLE_RAG=true
-AI_ENABLE_USER_CONTEXT=false
-AI_ENABLE_STREAMING=true
+# Authentication
+AI_AUTH_ENABLED=false
+AI_JWT_SECRET=your-secret-key
 ```
+
+### LLM Provider Setup
+
+#### OpenAI (Recommended)
+1. Get an API key from https://platform.openai.com
+2. Set `AI_LLM_PROVIDER=openai`
+3. Set `AI_OPENAI_API_KEY=sk-...`
+
+#### Anthropic
+1. Get an API key from https://console.anthropic.com
+2. Set `AI_LLM_PROVIDER=anthropic`
+3. Set `AI_ANTHROPIC_API_KEY=sk-ant-...`
+
+#### Ollama (Local)
+1. Install Ollama from https://ollama.ai
+2. Pull a model: `ollama pull llama3.2`
+3. Set `AI_LLM_PROVIDER=ollama`
+4. Ensure Ollama is running: `ollama serve`
 
 ## API Endpoints
 
@@ -171,8 +158,8 @@ Send a message and receive an AI response.
 {
   "message": "How do storage deals work?",
   "token": "optional-jwt-token",
-  "conversation_id": "optional-existing-id",
-  "agent_type": "support",
+  "anonymous_id": "optional-session-id",
+  "conversation_id": "optional-existing-conversation-id",
   "enable_rag": true
 }
 ```
@@ -182,7 +169,6 @@ Send a message and receive an AI response.
 {
   "message": "Storage deals on ADADIVE work by...",
   "conversation_id": "uuid-of-conversation",
-  "agent_type": "support",
   "sources": [
     {
       "content": "...",
@@ -195,36 +181,20 @@ Send a message and receive an AI response.
 }
 ```
 
-#### `POST /api/ai/chat/stream`
-Streaming chat with SSE responses.
+#### `GET /api/ai/chat/history/{conversation_id}`
+Get conversation history.
 
-**Response (SSE events):**
-```
-event: source
-data: {"index": 0, "source": "faqs/general.md", "score": 0.87}
-
-event: token
-data: {"token": "Storage", "done": false}
-
-event: token
-data: {"token": " deals", "done": false}
-
-event: done
-data: {"full_response": "...", "finish_reason": "stop"}
-```
-
-### Agents & Tools
-
-#### `GET /api/ai/agents`
-List all available agents.
-
-#### `GET /api/ai/tools`
-List all available tools.
+#### `DELETE /api/ai/chat/history/{conversation_id}`
+Delete a conversation.
 
 ### Knowledge
 
 #### `GET /api/ai/sources`
 Query the knowledge base.
+
+**Query Parameters:**
+- `query`: Search query
+- `top_k`: Number of results (default: 5)
 
 ### System
 
@@ -234,150 +204,109 @@ Health check endpoint.
 #### `GET /api/ai/config`
 Get public service configuration.
 
+## Integration with ADADIVE
+
+### Frontend Integration
+
+The AI service is designed to work with the ADADIVE frontend:
+
+```typescript
+// Example: Integrating with ADADIVE frontend
+const response = await fetch('https://ai.adadive.xyz/api/ai/chat', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    message: userMessage,
+    token: authToken, // From OIDC login
+  }),
+});
+
+const { message, sources } = await response.json();
+```
+
+### Backend API Integration
+
+The AI service retrieves data from the ADADIVE backend API:
+
+| Endpoint | Data Retrieved |
+|----------|---------------|
+| `GET /api/deals` | User's storage deals |
+| `GET /api/providers` | Storage provider info |
+| `GET /api/stats` | Platform statistics |
+
+Configure the backend URL with `AI_BACKEND_API_BASE_URL`.
+
+### Authentication Flow
+
+1. User logs into ADADIVE (OIDC)
+2. Frontend receives JWT token
+3. Frontend passes token to AI service
+4. AI service validates token and extracts user context
+5. User-specific data (deals) is fetched via backend API
+
 ## Project Structure
 
 ```
 ai/
 ├── pyproject.toml           # Python package configuration
 ├── README.md                # This file
+├── .env.example             # Example environment configuration
 ├── src/
+│   ├── __init__.py          # Package init
 │   ├── main.py              # FastAPI application entry point
 │   ├── routes.py            # API route definitions
 │   ├── chat/                # Chat module
 │   │   └── __init__.py      # Chat logic and conversation management
-│   ├── llm/                 # LLM Provider integration
-│   │   ├── __init__.py
-│   │   ├── base.py          # Base provider interface
-│   │   ├── openai.py        # OpenAI provider
-│   │   ├── anthropic.py      # Anthropic provider
-│   │   ├── factory.py       # Provider factory
-│   │   └── registry.py      # Provider registry
-│   ├── agents/              # AI Agents
-│   │   └── __init__.py      # Agent implementations
-│   ├── memory/              # Conversation Memory
-│   │   └── __init__.py      # Memory store and management
-│   ├── tools/               # Secure Tool Framework
-│   │   └── __init__.py      # Tool definitions and registry
-│   ├── streaming/           # SSE Streaming
-│   │   └── __init__.py      # Streaming utilities
-│   ├── retrieval/           # RAG Retrieval
-│   │   ├── __init__.py      # Knowledge base
-│   │   └── chromadb.py      # ChromaDB integration
+│   ├── prompts/             # Prompt templates
+│   │   └── __init__.py      # System prompts and templates
+│   ├── retrieval/           # RAG retrieval
+│   │   └── __init__.py      # Vector store and knowledge base
 │   ├── auth/                # Authentication
 │   │   └── __init__.py      # JWT validation and user context
 │   ├── config/              # Configuration
 │   │   └── __init__.py      # Settings management
-│   └── integrations/        # Backend integrations
+│   └── integrations/         # Backend integrations
 │       └── __init__.py      # Backend API client
-├── knowledge/                # RAG knowledge base
-│   ├── faqs/
-│   ├── docs/
-│   └── contracts/
-└── tests/                   # Unit and integration tests
-    ├── unit/
-    └── integration/
+├── knowledge/               # RAG knowledge base
+│   ├── faqs/                # FAQ documents
+│   │   ├── general.md
+│   │   └── pricing.md
+│   ├── docs/                # Platform documentation
+│   │   ├── getting-started.md
+│   │   └── providers.md
+│   └── contracts/           # Smart contract docs
+│       └── escrow.md
+└── tests/                  # Unit tests (future)
 ```
 
-## Extending the System
+## Knowledge Base
 
-### Adding a New Agent
+The AI uses a retrieval-augmented approach:
 
-1. Create a new agent class in `src/agents/__init__.py`:
+1. **FAQs**: Common questions about the platform
+2. **Documentation**: Getting started, platform features
+3. **Contracts**: Smart contract mechanics
 
-```python
-class NewAgent(BaseAgent):
-    def __init__(self):
-        super().__init__(AgentConfig(
-            agent_type=AgentType.NEW,
-            name="New Agent",
-            description="A new specialized agent",
-            system_prompt="Your system prompt here...",
-            tools=["get_platform_info"],
-        ))
+### Adding New Knowledge
 
-    def _build_system_prompt(self) -> str:
-        return self.config.system_prompt
+Add `.md` or `.txt` files to the appropriate `knowledge/` subdirectory:
 
-    async def _process_request(self, message, user_context, history):
-        # Implement agent logic
-        pass
+```
+knowledge/
+├── faqs/          # User-facing FAQs
+├── docs/          # Platform documentation
+└── contracts/     # Smart contract docs
 ```
 
-2. Register it in `AgentFactory._create_agent()`.
-
-3. Update `AgentType` enum.
-
-### Adding a New Tool
-
-1. Create a new tool class in `src/tools/__init__.py`:
-
-```python
-class NewTool(BaseTool):
-    @property
-    def name(self) -> str:
-        return "new_tool"
-
-    def _build_definition(self) -> ToolDefinition:
-        return ToolDefinition(
-            name=self.name,
-            description="What the tool does",
-            category=ToolCategory.INFO,
-            permission=ToolPermission.PUBLIC,
-            parameters={...},
-            returns={...},
-        )
-
-    async def execute(self, parameters, user_context) -> ToolResult:
-        # Implement tool logic
-        pass
-```
-
-2. Register it in `get_tool_registry()`.
-
-### Adding a New LLM Provider
-
-1. Create a new provider in `src/llm/`:
-
-```python
-class NewProvider(LLMProvider):
-    @property
-    def provider_name(self) -> str:
-        return "new"
-
-    @property
-    def default_model(self) -> str:
-        return "new-model"
-
-    async def generate(self, messages, options=None):
-        # Implement generate
-        pass
-
-    async def stream(self, messages, options=None):
-        # Implement streaming
-        pass
-
-    async def embed(self, texts):
-        # Implement embeddings
-        pass
-```
-
-2. Register it in `src/llm/registry.py`.
+The knowledge base auto-loads on startup.
 
 ## Development
 
 ### Running Tests
 ```bash
-# All tests
 uv run pytest
-
-# Unit tests only
-uv run pytest tests/unit/
-
-# Integration tests only
-uv run pytest tests/integration/
-
-# With coverage
-uv run pytest --cov=src --cov-report=html
 ```
 
 ### Code Quality
@@ -391,6 +320,13 @@ uv run ruff check .
 # Type check
 uv run mypy src/
 ```
+
+### Adding New Features
+
+1. **New chat capability**: Add to `src/chat/`
+2. **New prompt template**: Add to `src/prompts/`
+3. **New knowledge**: Add to `knowledge/`
+4. **New API endpoint**: Add to `src/routes.py`
 
 ## Deployment
 
@@ -411,40 +347,39 @@ CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "800
 
 | Environment | Variables |
 |------------|-----------|
-| Development | `AI_API_DEBUG=true` |
+| Development | `AI_API_DEBUG=true`, local Ollama |
 | Staging | `AI_API_DEBUG=false`, testnet API |
-| Production | `AI_USE_CHROMA_VECTORSTORE=true`, auth enabled |
+| Production | `AI_API_DEBUG=false`, mainnet API, auth enabled |
 
-## Security
+## Security Considerations
 
 ### What the AI CAN Do
 - Answer questions about ADADIVE
 - Retrieve public documentation
 - Access user-specific data (with authentication) via backend API
 - Provide deal summaries and statistics
-- Call authorized tools for live data
 
 ### What the AI CANNOT Do
 - Sign transactions or move funds
-- Access private keys or wallet credentials
+- Access private keys
 - Query databases directly
 - Execute blockchain transactions
 - Modify user accounts
 
-## Changelog
+### Rate Limiting
+Configure rate limits via environment variables:
+- `AI_RATE_LIMIT_REQUESTS`: Max requests per window (default: 30)
+- `AI_RATE_LIMIT_WINDOW_SECONDS`: Time window (default: 60)
 
-### v2.0.0 (Current)
-- Multi-agent architecture with 5 specialized agents
-- SSE streaming for real-time responses
-- Secure tool framework for backend API calls
-- Conversation memory with auto-cleanup
-- ChromaDB support for production RAG
-- OpenAI and Anthropic providers with streaming
+## Future Enhancements
 
-### v0.1.0 (Previous)
-- Basic RAG-powered chat
-- Simple conversation history
-- OpenAI integration
+- [ ] Streaming responses (SSE)
+- [ ] Multi-language support
+- [ ] Image/File upload support
+- [ ] Web search for current information
+- [ ] Advanced analytics
+- [ ] Provider recommendations
+- [ ] Automated deal management suggestions
 
 ## Contributing
 

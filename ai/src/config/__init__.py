@@ -1,4 +1,4 @@
-"""Configuration module for ADADIVE AI v2 service."""
+"""Configuration module for ADADIVE AI service."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: str | None = None
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_model: str = "claude-3-haiku-20240307"
 
     # Ollama Configuration (for local models)
     ollama_base_url: str = "http://localhost:11434"
@@ -40,11 +40,6 @@ class Settings(BaseSettings):
     embedding_dimension: int = 384
     retrieval_top_k: int = 5
     retrieval_score_threshold: float = 0.5
-
-    # ChromaDB Configuration (for production RAG)
-    use_chroma_vectorstore: bool = False
-    chroma_persist_dir: Path = Path(__file__).parent.parent / ".chroma_db"
-    embedding_provider: str = "openai"  # openai, sentence-transformers
 
     # Backend API Configuration (for accessing live platform data)
     backend_api_base_url: str = "http://localhost:3001"
@@ -61,18 +56,12 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 30
     rate_limit_window_seconds: int = 60
 
-    # Conversation Memory
-    conversation_max_history: int = 20
-    conversation_max_age_seconds: int = 3600  # 1 hour
-    enable_persistent_memory: bool = False
-
     # Feature Flags
     enable_rag: bool = True
     enable_user_context: bool = False  # Enable querying user-specific deal data
-    enable_streaming: bool = True
 
-    # Agent Configuration
-    default_agent: str = "support"
+    class Config:
+        env_file = ".env"
 
 
 @lru_cache
