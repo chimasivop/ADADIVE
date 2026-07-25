@@ -1,7 +1,7 @@
 [project]
 name = "adadive-ai"
-version = "0.2.0"
-description = "ADADIVE AI Service v2 - Multi-agent RAG chat for decentralized storage"
+version = "0.3.0"
+description = "ADADIVE AI Service v3 - Intelligent Workspace for decentralized storage"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

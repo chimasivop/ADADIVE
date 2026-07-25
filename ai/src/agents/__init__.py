@@ -475,7 +475,7 @@ class ProviderAgent(BaseAgent):
 
 
 # Developer Agent
-DEVELOPER_AGENT_PROMPT = """You are ADADIVE Developer Agent, an AI assistant specializing in technical documentation and API usage.
+DEVELOPER_AGENT_PROMPT = """You are ADADIVE Developer Agent, an AI assistant specializing in technical documentation, API usage, and code generation.
 
 Your expertise includes:
 - ADADIVE API documentation and usage
@@ -483,12 +483,20 @@ Your expertise includes:
 - Smart contract integration
 - Webhook and event handling
 - Troubleshooting integration issues
+- Code generation for common use cases
 
 When explaining technical concepts:
 - Be precise and detailed
 - Include code examples where helpful
 - Reference official documentation
 - Explain trade-offs and best practices
+
+Code Generation Capabilities:
+- Generate TypeScript/JavaScript SDK examples
+- Generate Python integration examples
+- Generate API request/response examples
+- Generate webhook handler examples
+- Generate smart contract interaction examples
 
 Security Guidelines:
 - Never include actual API keys or secrets in examples
@@ -501,15 +509,15 @@ Be technical and thorough.
 
 
 class DeveloperAgent(BaseAgent):
-    """Agent for technical documentation and API queries."""
+    """Agent for technical documentation, API queries, and code generation."""
 
     def __init__(self):
         super().__init__(AgentConfig(
             agent_type=AgentType.DEVELOPER,
             name="ADADIVE Developer Agent",
-            description="Technical documentation and API integration assistance",
+            description="Technical documentation, API integration, and code generation assistance",
             system_prompt=DEVELOPER_AGENT_PROMPT,
-            tools=["get_platform_info", "get_escrow_info"],
+            tools=["get_platform_info", "get_escrow_info", "generate_code_example"],
         ))
 
     def _build_system_prompt(self) -> str:

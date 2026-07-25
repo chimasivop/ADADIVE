@@ -32,7 +32,7 @@ class TestRootEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["service"] == "ADADIVE AI"
-        assert data["version"] == "2.0.0"
+        assert data["version"] == "3.0.0"
         assert "features" in data
 
 
@@ -85,7 +85,7 @@ class TestConfigEndpoint:
         response = client.get("/api/ai/config")
         assert response.status_code == 200
         data = response.json()
-        assert data["version"] == "2.0.0"
+        assert data["version"] == "3.0.0"
         assert "llm_provider" in data
         assert "features" in data
 

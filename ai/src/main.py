@@ -1,4 +1,4 @@
-"""ADADIVE AI Service v2 - Main FastAPI Application."""
+"""ADADIVE AI Service v3 - Main FastAPI Application."""
 
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup and shutdown."""
     # Startup
     settings = get_settings()
-    print(f"Starting ADADIVE AI Service v2...")
+    print(f"Starting ADADIVE AI Service v3...")
     
     # Initialize knowledge base
     knowledge_base = get_knowledge_base()
@@ -73,8 +73,8 @@ def create_app() -> FastAPI:
     
     app = FastAPI(
         title="ADADIVE AI Service",
-        description="AI-powered multi-agent chat service for ADADIVE decentralized storage platform v2",
-        version="2.0.0",
+        description="AI-powered intelligent workspace for ADADIVE decentralized storage platform v3",
+        version="3.0.0",
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -106,7 +106,7 @@ async def root() -> dict:
     """Root endpoint."""
     return {
         "service": "ADADIVE AI",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "status": "operational",
         "docs": "/docs",
         "features": [
@@ -115,6 +115,12 @@ async def root() -> dict:
             "RAG-powered knowledge base",
             "Secure tool framework",
             "Conversation memory",
+            "Proactive insights",
+            "Natural language actions",
+            "Provider intelligence",
+            "Network intelligence",
+            "Notification system",
+            "Code generation",
         ],
     }
 

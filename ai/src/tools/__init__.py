@@ -473,6 +473,294 @@ class PlatformStatsTool(BaseTool):
             return ToolResult(success=False, error=str(e))
 
 
+class CodeGenerationTool(BaseTool):
+    """Tool for generating code examples for ADADIVE integration."""
+
+    CODE_TEMPLATES = {
+        "typescript-deal": '''import { ADADIVEClient } from '@adadive/sdk';
+
+// Initialize client
+const client = new ADADIVEClient({
+  apiKey: 'YOUR_API_KEY',
+  network: 'mainnet'
+});
+
+// Create a storage deal
+async function createDeal() {
+  const deal = await client.deals.create({
+    providerId: PROVIDER_ID,
+    storageGb: STORAGE_SIZE,
+    durationEpochs: DURATION_EPOCHS,
+    dataHash: 'YOUR_DATA_HASH'
+  });
+  
+  console.log('Deal created:', deal.id);
+  return deal;
+}
+
+// Get deal status
+async function getDeal(dealId: number) {
+  const deal = await client.deals.get(dealId);
+  console.log('Deal status:', deal.status);
+  return deal;
+}''',
+        "python-deal": '''from adadive import Client
+
+# Initialize client
+client = Client(api_key="YOUR_API_KEY", network="mainnet")
+
+# Create a storage deal
+def create_deal():
+    deal = client.deals.create(
+        provider_id=PROVIDER_ID,
+        storage_gb=STORAGE_SIZE,
+        duration_epochs=DURATION_EPOCHS,
+        data_hash="YOUR_DATA_HASH"
+    )
+    print(f"Deal created: {deal.id}")
+    return deal
+
+# Get deal status
+def get_deal(deal_id: int):
+    deal = client.deals.get(deal_id)
+    print(f"Deal status: {deal.status}")
+    return deal''',
+        "webhook-handler": '''// Webhook handler example (Express.js)
+app.post('/webhooks/adadive', async (req, res) => {
+  const event = req.body;
+  
+  // Verify webhook signature
+  if (!verifySignature(req.headers['x-adadive-signature'], event)) {
+    return res.status(401).send('Invalid signature');
+  }
+  
+  switch (event.type) {
+    case 'deal.completed':
+      console.log('Deal completed:', event.data.dealId);
+      // Handle deal completion
+      break;
+    case 'deal.expiring':
+      console.log('Deal expiring:', event.data.dealId);
+      // Send notification
+      break;
+    case 'payment.received':
+      console.log('Payment received:', event.data.amount);
+      // Update accounting
+      break;
+  }
+  
+  res.status(200).send('OK');
+});''',
+        "api-request": '''# API Request Examples
+
+# Get Platform Stats
+curl -X GET https://api.adadive.xyz/v1/stats \\
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Create Storage Deal
+curl -X POST https://api.adadive.xyz/v1/deals \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "provider_id": PROVIDER_ID,
+    "storage_gb": STORAGE_SIZE,
+    "duration_epochs": DURATION_EPOCHS,
+    "data_hash": "YOUR_DATA_HASH"
+  }'
+
+# Get User Deals
+curl -X GET "https://api.adadive.xyz/v1/deals?client_address=WALLET_ADDRESS" \\
+  -H "Authorization: Bearer YOUR_API_KEY"''',
+    }
+
+    @property
+    def name(self) -> str:
+        return "generate_code_example"
+
+    def _build_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name=self.name,
+            description="Generate code examples for integrating with ADADIVE. Supports TypeScript, Python, webhooks, and API requests.",
+            category=ToolCategory.INFO,
+            permission=ToolPermission.PUBLIC,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "language": {
+                        "type": "string",
+                        "description": "Programming language (typescript, python) or use case (webhook, api-request)",
+                        "enum": ["typescript", "python", "webhook", "api-request"],
+                    },
+                    "use_case": {
+                        "type": "string",
+                        "description": "Specific use case (create-deal, get-deal, list-deals, webhooks, etc.)",
+                    },
+                },
+            },
+            returns={
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string"},
+                    "language": {"type": "string"},
+                    "description": {"type": "string"},
+                },
+            },
+        )
+
+    async def execute(
+        self,
+        parameters: dict[str, Any],
+        user_context: UserContext | None = None,
+    ) -> ToolResult:
+        language = parameters.get("language", "typescript")
+        use_case = parameters.get("use_case", "create-deal")
+        
+        # Build template key
+        template_key = f"{language}-{use_case}" if "-" not in use_case else use_case
+        
+        code = self.CODE_TEMPLATES.get(template_key)
+        
+        if not code:
+            # Generate generic example
+            code = self._generate_generic_example(language, use_case)
+        
+        return ToolResult(
+            success=True,
+            data={
+                "code": code,
+                "language": language,
+                "use_case": use_case,
+                "description": f"Code example for {use_case} in {language}",
+            },
+        )
+
+    def _generate_generic_example(self, language: str, use_case: str) -> str:
+        """Generate a generic example based on language."""
+        if language == "typescript":
+            return f'''// ADADIVE {use_case} example (TypeScript)
+import {{ ADADIVEClient }} from '@adadive/sdk';
+
+const client = new ADADIVEClient({{
+  apiKey: process.env.ADADIVE_API_KEY,
+}});
+
+// {use_case.replace('-', ' ').title()}
+async function {use_case.replace('-', '_')}() {{
+  // Implementation for {use_case}
+}}
+'''
+        elif language == "python":
+            return f'''# ADADIVE {use_case} example (Python)
+from adadive import Client
+
+client = Client(api_key=os.environ.get("ADADIVE_API_KEY"))
+
+# {use_case.replace('-', ' ').title()}
+def {use_case.replace('-', '_')}():
+    # Implementation for {use_case}
+    pass
+'''
+        else:
+            return f"# Code example for {use_case} ({language})\n# Check docs at https://docs.adadive.xyz"
+
+
+class APIReferenceTool(BaseTool):
+    """Tool for generating API reference documentation."""
+
+    API_ENDPOINTS = {
+        "deals": {
+            "GET /api/deals": {
+                "description": "List storage deals",
+                "params": ["client_address", "status", "limit"],
+                "source": "GET /api/deals",
+            },
+            "POST /api/deals": {
+                "description": "Create a new storage deal",
+                "body": ["provider_id", "storage_gb", "duration_epochs", "data_hash"],
+                "source": "POST /api/deals",
+            },
+            "GET /api/deals/{id}": {
+                "description": "Get a specific deal",
+                "source": "GET /api/deals/{id}",
+            },
+        },
+        "providers": {
+            "GET /api/providers": {
+                "description": "List storage providers",
+                "params": ["active"],
+                "source": "GET /api/providers",
+            },
+            "GET /api/providers/{id}": {
+                "description": "Get provider details",
+                "source": "GET /api/providers/{id}",
+            },
+        },
+        "stats": {
+            "GET /api/stats": {
+                "description": "Get platform statistics",
+                "source": "GET /api/stats",
+            },
+        },
+    }
+
+    @property
+    def name(self) -> str:
+        return "get_api_reference"
+
+    def _build_definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name=self.name,
+            description="Get API reference documentation for ADADIVE endpoints.",
+            category=ToolCategory.INFO,
+            permission=ToolPermission.PUBLIC,
+            parameters={
+                "type": "object",
+                "properties": {
+                    "resource": {
+                        "type": "string",
+                        "description": "API resource (deals, providers, stats)",
+                        "enum": ["deals", "providers", "stats"],
+                    },
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method (GET, POST, etc.)",
+                    },
+                },
+            },
+            returns={
+                "type": "object",
+                "properties": {
+                    "endpoints": {"type": "array"},
+                },
+            },
+        )
+
+    async def execute(
+        self,
+        parameters: dict[str, Any],
+        user_context: UserContext | None = None,
+    ) -> ToolResult:
+        resource = parameters.get("resource", "deals")
+        method = parameters.get("method", "GET")
+        
+        endpoints = self.API_ENDPOINTS.get(resource, {})
+        
+        if method:
+            # Filter by method
+            endpoints = {k: v for k, v in endpoints.items() if k.startswith(method)}
+        
+        return ToolResult(
+            success=True,
+            data={
+                "resource": resource,
+                "endpoints": [
+                    {"path": path, **details}
+                    for path, details in endpoints.items()
+                ],
+            },
+        )
+
+
 class ToolRegistry:
     """Registry for all available AI tools."""
 
@@ -525,6 +813,8 @@ def get_tool_registry() -> ToolRegistry:
         _tool_registry.register(ProviderInfoTool())
         _tool_registry.register(EscrowContractTool())
         _tool_registry.register(PlatformStatsTool())
+        _tool_registry.register(CodeGenerationTool())
+        _tool_registry.register(APIReferenceTool())
     return _tool_registry
 
 
@@ -539,6 +829,8 @@ __all__ = [
     "ProviderInfoTool",
     "EscrowContractTool",
     "PlatformStatsTool",
+    "CodeGenerationTool",
+    "APIReferenceTool",
     "ToolRegistry",
     "get_tool_registry",
 ]

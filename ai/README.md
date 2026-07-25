@@ -1,15 +1,17 @@
-# ADADIVE AI Service v2
+# ADADIVE AI Service v3
 
-An intelligent multi-agent AI assistant for the ADADIVE decentralized storage platform, powered by retrieval-augmented generation (RAG) and streaming responses.
+An intelligent AI workspace for the ADADIVE decentralized storage platform, powered by retrieval-augmented generation (RAG), proactive insights, and natural language actions.
 
 ## Overview
 
-ADADIVE AI v2 is a production-ready AI service providing:
+ADADIVE AI v3 is an intelligent workspace providing:
 - **Multi-Agent Architecture**: Specialized agents for support, storage, escrow, providers, and developers
-- **RAG-Powered Responses**: Knowledge-augmented answers from platform documentation
-- **Streaming Responses**: Real-time SSE streaming for smoother chat experience
-- **Secure Tool Framework**: AI can call backend APIs without direct database access
-- **Conversation Memory**: Multi-turn chat with persistent context
+- **Proactive Insights**: Automatic alerts for expiring deals, cost optimization, provider performance
+- **Natural Language Actions**: Execute state-changing operations with explicit confirmation
+- **Provider Intelligence**: Analytics on uptime, utilization, and earnings
+- **Network Intelligence**: Live platform metrics and health monitoring
+- **Code Generation**: SDK examples and API documentation for developers
+- **Notification System**: Surface important events like expiring deals and network alerts
 
 ## Features
 
@@ -20,6 +22,9 @@ ADADIVE AI v2 is a production-ready AI service providing:
 - **Streaming (SSE)**: Real-time response streaming via Server-Sent Events
 - **User Context**: Authenticated access to personal deal information
 - **Conversation Memory**: Session-based context for multi-turn conversations
+- **Proactive Insights**: Automatic alerts and recommendations
+- **Natural Language Actions**: Confirmable operations for state changes
+- **Code Generation**: TypeScript, Python, webhook examples
 
 ### AI Agents
 
@@ -28,8 +33,36 @@ ADADIVE AI v2 is a production-ready AI service providing:
 | **Support Agent** | General platform support, troubleshooting, getting started |
 | **Storage Agent** | Storage deals, file management, upload/download |
 | **Escrow Agent** | Smart contracts, payment mechanics, settlement |
-| **Provider Agent** | Storage provider info, selection, comparisons |
-| **Developer Agent** | API documentation, SDK integration, technical guides |
+| **Provider Agent** | Storage provider info, selection, comparisons, analytics |
+| **Developer Agent** | API documentation, SDK integration, technical guides, code generation |
+
+### New in v3
+
+#### Proactive Insights
+- **Expiring Deals**: Automatic warnings for deals expiring soon
+- **Cost Optimization**: Recommendations for reducing storage costs
+- **Provider Performance**: Analytics for storage providers
+- **Opportunity Alerts**: Suggestions for new providers and deals
+
+#### Natural Language Actions
+- Execute operations like renewing deals with explicit confirmation
+- Actions require user approval before execution
+- Dangerous operations (e.g., cancel deal) require wallet signature
+- All actions are logged with backend API references
+
+#### Provider Intelligence
+- Uptime tracking and metrics
+- Utilization analysis
+- Earnings tracking
+- Performance scoring
+- Recommendations engine
+
+#### Network Intelligence
+- Real-time platform statistics
+- Network health monitoring
+- Storage capacity metrics
+- Deal flow analytics
+- Economic indicators
 
 ### Security Design
 - **No Database Access**: AI is isolated from direct PostgreSQL queries
@@ -37,27 +70,42 @@ ADADIVE AI v2 is a production-ready AI service providing:
 - **No Transaction Signing**: AI cannot move funds or execute blockchain transactions
 - **No Private Key Handling**: AI never accesses wallet credentials
 - **JWT Authentication**: User context only available with valid tokens
+- **Explicit Confirmations**: State-changing actions require user confirmation
+- **API References**: Every response that uses platform data references the backend APIs used
 
 ### Architecture
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         ADADIVE AI v2                           │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │ Support  │  │ Storage  │  │  Escrow  │  │ Provider │       │
-│  │  Agent   │  │  Agent   │  │  Agent   │  │  Agent   │       │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
-│       └─────────────┴─────────────┴─────────────┘              │
-│                           │                                    │
-│                    ┌──────┴───────┐                          │
-│                    │  Tool Layer  │                          │
-│                    └──────┬───────┘                          │
-│  ┌──────────┐  ┌─────────┴──────────┐  ┌──────────┐          │
-│  │  Memory  │──│       LLM         │──│  RAG     │          │
-│  │          │  │    (OpenAI/       │  │  Retrieval│          │
-│  └──────────┘  │    Anthropic)     │  └──────────┘          │
-│                └─────────────────┘                          │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            ADADIVE AI v3                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │ Support  │  │ Storage  │  │  Escrow  │  │ Provider │  │Developer │ │
+│  │  Agent   │  │  Agent   │  │  Agent   │  │  Agent   │  │  Agent   │ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘ │
+│       └─────────────┴─────────────┴─────────────┴─────────────┘         │
+│                              │                                             │
+│                       ┌──────┴───────┐                                    │
+│                       │  Tool Layer  │                                    │
+│                       └──────┬───────┘                                    │
+│  ┌────────────────┐  ┌──────┴───────┐  ┌────────────────┐                  │
+│  │   Insights     │──│    Actions   │──│ Notifications │                  │
+│  │   Engine      │  │  Manager     │  │    System     │                  │
+│  └────────────────┘  └─────────────┘  └────────────────┘                  │
+│  ┌────────────────┐  ┌─────────┴──────────┐  ┌──────────┐                 │
+│  │    Memory      │──│       LLM          │──│   RAG    │                 │
+│  │                │  │   (OpenAI/          │  │Retrieval │                 │
+│  └────────────────┘  │   Anthropic)        │  └──────────┘                 │
+│                       └─────────────────┘                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                    Intelligence Layer                                       │
+│  ┌───────────────────────┐  ┌─────────────────────────────────────────┐  │
+│  │ Provider Intelligence │  │        Network Intelligence              │  │
+│  │  - Uptime Metrics    │  │  - Platform Statistics                  │  │
+│  │  - Utilization       │  │  - Health Monitoring                    │  │
+│  │  - Earnings          │  │  - Storage Capacity                     │  │
+│  │  - Performance Score │  │  - Deal Flow Metrics                   │  │
+│  └───────────────────────┘  └─────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
                               │
           ┌───────────────────┼───────────────────┐
           │                   │                   │
@@ -267,8 +315,20 @@ ai/
 │   │   └── __init__.py      # JWT validation and user context
 │   ├── config/              # Configuration
 │   │   └── __init__.py      # Settings management
-│   └── integrations/        # Backend integrations
-│       └── __init__.py      # Backend API client
+│   ├── integrations/        # Backend integrations
+│   │   └── __init__.py      # Backend API client
+│   ├── workspace/           # v3: Workspace management
+│   │   └── __init__.py      # Session and user context
+│   ├── insights/            # v3: Proactive insights
+│   │   └── __init__.py      # Insight generators
+│   ├── actions/             # v3: Natural language actions
+│   │   └── __init__.py      # Action registry and confirmation
+│   ├── notifications/       # v3: Notification system
+│   │   └── __init__.py      # Notification management
+│   ├── provider_intelligence/ # v3: Provider analytics
+│   │   └── __init__.py      # Provider metrics and scoring
+│   └── network_intelligence/ # v3: Network metrics
+│       └── __init__.py      # Network health and stats
 ├── knowledge/                # RAG knowledge base
 │   ├── faqs/
 │   ├── docs/
@@ -423,17 +483,30 @@ CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "800
 - Access user-specific data (with authentication) via backend API
 - Provide deal summaries and statistics
 - Call authorized tools for live data
+- Generate proactive insights and recommendations
+- Execute state-changing actions (with user confirmation)
+- Generate code examples and API documentation
 
 ### What the AI CANNOT Do
-- Sign transactions or move funds
+- Sign transactions or move funds without user confirmation
 - Access private keys or wallet credentials
 - Query databases directly
 - Execute blockchain transactions
-- Modify user accounts
+- Modify user accounts without authorization
 
 ## Changelog
 
-### v2.0.0 (Current)
+### v3.0.0 (Current)
+- **Intelligent Workspace**: Full workspace integration with user context
+- **Proactive Insights**: Automatic alerts for expiring deals, cost optimization
+- **Natural Language Actions**: Execute operations with explicit user confirmation
+- **Provider Intelligence**: Uptime tracking, utilization, earnings analytics
+- **Network Intelligence**: Real-time platform metrics and health monitoring
+- **Notification System**: Surface important events and alerts
+- **Enhanced Developer Agent**: Code generation for TypeScript, Python, webhooks
+- **API Reference Tool**: On-demand API documentation
+
+### v2.0.0 (Previous)
 - Multi-agent architecture with 5 specialized agents
 - SSE streaming for real-time responses
 - Secure tool framework for backend API calls

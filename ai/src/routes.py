@@ -262,7 +262,7 @@ async def get_config() -> dict[str, Any]:
     settings = get_settings()
     
     return {
-        "version": "2.0.0",
+        "version": "3.0.0",
         "llm_provider": settings.llm_provider,
         "openai_model": settings.openai_model if settings.llm_provider == "openai" else None,
         "anthropic_model": settings.anthropic_model if settings.llm_provider == "anthropic" else None,
