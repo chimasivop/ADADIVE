@@ -1,13 +1,18 @@
 import { useState, useRef, useCallback } from "react";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 import { useListProviders, getListProvidersQueryKey } from "@workspace/api-client-react";
 import { THT } from "@/lib/token";
 import { useWallet } from "@/contexts/WalletContext";
-import { buildAndSubmitTx } from "@/lib/cardanoTx";
+import { useSignableWallet } from "@/hooks/useSignableWallet";
+import { useBackendSession } from "@/hooks/useBackendSession";
+import { explorerTxUrl, NETWORK_LABEL } from "@/lib/chain";
+import { initializeEscrow, solToLamports } from "@/lib/escrowService";
 
 const STORAGE_LAYERS = [
   { id: "ipfs",    label: "IPFS + Filecoin",  icon: "◈", desc: "Content-addressed, distributed" },
   { id: "arweave", label: "Arweave",           icon: "◉", desc: "Permanent, pay-once storage" },
-  { id: "custom",  label: "Cardano Native",    icon: "◆", desc: "On-chain metadata anchoring" },
+  { id: "custom",  label: "Solana Native",     icon: "◆", desc: "On-chain metadata anchoring" },
 ];
 
 const STEPS = ["upload", "configure", "confirm", "done"] as const;
@@ -56,11 +61,26 @@ interface DealResult {
   file: { cid: string; gatewayUrl: string; ipfsUrl: string; size: number };
   metadataCid: string;
   metadataUrl: string;
+  /**
+   * The backend's deal package. The field still carries its original name, and
+   * still carries the on-chain description of the pin; the anchor transaction is
+   * now a Solana initialize rather than a CIP-1337 metadata attachment, so
+   * `escrow` is what the client reads from it.
+   */
   cardanoMetadata: unknown;
+  escrow?: {
+    dealId: string;
+    provider: string;
+    oracle: string;
+    amountLamports: string;
+  };
 }
 
 export default function PinFiles() {
   const { connected: walletConnected, connecting, connect, disconnect, displayAddress, thtBalance, adaBalance } = useWallet();
+  const { connection }                      = useConnection();
+  const signableWallet                      = useSignableWallet();
+  const { ensureSession }                   = useBackendSession();
   const [files, setFiles]                   = useState<QueuedFile[]>([]);
   const [dragging, setDragging]             = useState(false);
   const [layer, setLayer]                   = useState("ipfs");
@@ -111,6 +131,15 @@ export default function PinFiles() {
     setProgress(progs);
     setPhase(phases);
 
+    // The initialize transaction signs as the depositor, so a connection without
+    // a signable wallet cannot proceed. Checked once, up front, rather than
+    // failing per file.
+    if (!signableWallet || !displayAddress) {
+      setPinning(false);
+      setPinError("Connect a Solana wallet before pinning — the escrow is initialized from it.");
+      return;
+    }
+
     let anyFailed = false;
 
     for (const f of files) {
@@ -140,18 +169,71 @@ export default function PinFiles() {
         const deal = await response.json() as DealResult;
         setLbl("IPFS pinned ✓ — building tx…"); setP(60);
 
-        // ── Phase 2: Cardano tx ───────────────────────────
-        let cardanoPct = 60;
-        const txResult = await buildAndSubmitTx(
-          deal.cardanoMetadata as Record<string, unknown>,
-          deal.file.cid,
-          (msg) => {
-            setLbl(msg);
-            cardanoPct = Math.min(95, cardanoPct + 9);
-            setP(cardanoPct);
-          }
+        // ── Phase 2: initialize the on-chain escrow ───────
+        // The old code attached CIP-1337 metadata to a self-transfer. The
+        // equivalent on Solana is a real escrow: the depositor locks the deal
+        // amount into a PDA owned by the program, naming the provider and the
+        // oracle. The provider and oracle come from the backend's deal package
+        // when it supplies them; otherwise the connected wallet's own key is the
+        // stand-in provider, matching the prototype's local-validator walkthrough.
+        const escrow = deal.escrow;
+        const oracleKey = new PublicKey(
+          import.meta.env.VITE_ORACLE_PUBKEY ?? displayAddress
         );
+        const providerKey = escrow?.provider
+          ? new PublicKey(escrow.provider)
+          : new PublicKey(displayAddress);
+        const dealId = escrow?.dealId ?? deal.file.cid;
+        const amountLamports = escrow?.amountLamports
+          ? BigInt(escrow.amountLamports)
+          : solToLamports(parseFloat(totalCost));
 
+        let txPct = 60;
+        const initResult = await initializeEscrow({
+          connection,
+          depositor: signableWallet,
+          provider: providerKey,
+          oracle: oracleKey,
+          amountLamports,
+          dealId,
+          onProgress: (msg) => {
+            setLbl(msg);
+            txPct = Math.min(95, txPct + 9);
+            setP(txPct);
+          },
+        });
+
+        // Register the deal with the oracle backend so the settle flow can find
+        // it. This signs nothing and submits no transaction — it is one
+        // authenticated POST, and a deal the backend does not know about cannot
+        // be settled through it.
+        try {
+          const token = await ensureSession();
+          const dealPda = initResult.dealPda.toBase58();
+          await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT ?? "/backend"}/deals`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              dealId,
+              dealPda,
+              depositor: displayAddress,
+              provider: providerKey.toBase58(),
+              oracle: oracleKey.toBase58(),
+              cid: deal.file.cid,
+              amountLamports: amountLamports.toString(),
+            }),
+          });
+        } catch (registerErr) {
+          // Registration failing does not undo the on-chain initialize; report it
+          // on the file's own card rather than aborting the whole batch.
+          const msg = registerErr instanceof Error ? registerErr.message : String(registerErr);
+          setLbl(`Anchored ✓ — backend registration failed: ${msg}`);
+        }
+
+        const txSignature = initResult.signature;
         setP(100); setLbl("Anchored ✓");
         setPinned((prev) => [
           ...prev,
@@ -161,8 +243,8 @@ export default function PinFiles() {
             realCid:     deal.file.cid,
             gatewayUrl:  deal.file.gatewayUrl,
             metadataCid: deal.metadataCid,
-            txHash:      txResult.txHash,
-            explorerUrl: txResult.explorerUrl,
+            txHash:      txSignature,
+            explorerUrl: explorerTxUrl(txSignature),
           },
         ]);
       } catch (err) {
@@ -199,7 +281,7 @@ export default function PinFiles() {
             PIN FILES
           </p>
           <p style={{ fontSize: "12px", color: g.dim, letterSpacing: "0.1em", marginTop: "3px", fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif" }}>
-            Anchor data to the Cardano network
+            Anchor data to the Solana network
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -210,8 +292,8 @@ export default function PinFiles() {
                 <span style={{ color: "hsl(var(--muted-foreground))", fontSize: "10px" }}>{displayAddress}</span>
               </div>
               <div style={{ fontSize: "10px", color: g.dim, display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "2px" }}>
-                <span><span style={{ color: g.accent }}>{thtBalance != null ? thtBalance.toLocaleString() : "—"}</span> THT</span>
-                <span>₳ {adaBalance != null ? adaBalance.toFixed(2) : "—"}</span>
+                <span><span style={{ color: g.accent }}>{thtBalance != null ? thtBalance.toFixed(4) : "—"}</span> SOL</span>
+                <span>◎ {adaBalance != null ? adaBalance.toFixed(2) : "—"}</span>
               </div>
             </div>
           )}
@@ -227,7 +309,7 @@ export default function PinFiles() {
               transition: "all 0.2s", fontFamily: g.mono, whiteSpace: "nowrap",
             }}
           >
-            {connecting ? "CONNECTING..." : walletConnected ? "● CONNECTED" : "CONNECT ETERNL"}
+            {connecting ? "CONNECTING..." : walletConnected ? "● CONNECTED" : "CONNECT PHANTOM"}
           </button>
         </div>
       </div>
@@ -272,7 +354,7 @@ export default function PinFiles() {
           </div>
           <div style={{ fontSize: "13px", color: g.dim, marginBottom: "40px", fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
             {pinned.filter(p => !p.failed && p.txHash).length > 0
-              ? `${pinned.filter(p => !p.failed).length} of ${pinned.length} file${pinned.length !== 1 ? "s" : ""} anchored to Cardano Preprod`
+              ? `${pinned.filter(p => !p.failed).length} of ${pinned.length} file${pinned.length !== 1 ? "s" : ""} anchored to Solana Devnet`
               : `${pinned.filter(p => !p.failed).length} of ${pinned.length} file${pinned.length !== 1 ? "s" : ""} pinned to IPFS`}
           </div>
 
@@ -320,9 +402,9 @@ export default function PinFiles() {
                   )}
                 </div>
 
-                {/* Cardano tx */}
+                {/* Solana tx */}
                 <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "10px" }}>
-                  <span style={{ fontSize: "9px", color: g.dim, opacity: 0.7, flexShrink: 0, letterSpacing: "0.06em" }}>CARDANO TX</span>
+                  <span style={{ fontSize: "9px", color: g.dim, opacity: 0.7, flexShrink: 0, letterSpacing: "0.06em" }}>SOLANA TX</span>
                   {f.txHash ? (
                     <a href={f.explorerUrl} target="_blank" rel="noopener noreferrer"
                       title={f.txHash}
@@ -348,7 +430,7 @@ export default function PinFiles() {
                       fontFamily: "'Cinzel', serif", fontSize: "7px", letterSpacing: "0.16em",
                       padding: "4px 10px", border: "1px solid rgba(0,212,255,0.3)", borderRadius: "2px",
                       color: "#00d4ff", textDecoration: "none", whiteSpace: "nowrap",
-                    }}>VIEW ON CARDANOSCAN ↗</a>
+                    }}>VIEW ON EXPLORER ↗</a>
                   )}
                 </div>
               </div>
@@ -545,14 +627,14 @@ export default function PinFiles() {
               {pinning
                 ? (() => {
                     const lbl = Object.values(phase).find(Boolean) ?? "";
-                    if (lbl.toLowerCase().includes("signature") || lbl.toLowerCase().includes("eternl")) return "AWAITING WALLET SIGNATURE…";
-                    if (lbl.toLowerCase().includes("submitting") || lbl.toLowerCase().includes("cardano")) return "SUBMITTING TO CHAIN…";
+                    if (lbl.toLowerCase().includes("signature") || lbl.toLowerCase().includes("wallet")) return "AWAITING WALLET SIGNATURE…";
+                    if (lbl.toLowerCase().includes("submitting") || lbl.toLowerCase().includes("chain")) return "SUBMITTING TO CHAIN…";
                     if (lbl.toLowerCase().includes("building") || lbl.toLowerCase().includes("tx")) return "BUILDING TRANSACTION…";
                     return "PINNING TO IPFS…";
                   })()
                 : !walletConnected ? "CONNECT & PIN"
                 : files.length === 0 ? "SELECT FILES FIRST"
-                : "SIGN & PIN TO CARDANO"}
+                : "SIGN & PIN TO SOLANA"}
             </button>
 
             {!walletConnected && files.length > 0 && (
@@ -566,7 +648,7 @@ export default function PinFiles() {
 
       <div className="flex justify-between mt-10 pt-4" style={{ borderTop: "1px solid hsl(var(--primary)/0.08)" }}>
         <span style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.12em" }}>ADADIVE by THETA</span>
-        <span style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.12em" }}>PREPROD TESTNET</span>
+        <span style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.12em" }}>{NETWORK_LABEL}</span>
       </div>
     </div>
   );

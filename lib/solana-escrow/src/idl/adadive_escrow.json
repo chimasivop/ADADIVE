@@ -1,0 +1,726 @@
+{
+  "address": "B6kX44TWx7p75rEXaJmQ5jQJ3L9wGhZqaQ8xEK2j1cGp",
+  "metadata": {
+    "name": "adadive_escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "ADADIVE deal escrow prototype (Solana/Anchor)"
+  },
+  "instructions": [
+    {
+      "name": "cancel",
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "docs": [
+            "Must equal `deal.depositor`; receives the refunded lamports via `close`."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "provider",
+          "docs": [
+            "Must equal `deal.provider`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "deal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal.depositor",
+                "account": "Deal"
+              },
+              {
+                "kind": "account",
+                "path": "deal.deal_id",
+                "account": "Deal"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "provider"
+        },
+        {
+          "name": "oracle"
+        },
+        {
+          "name": "deal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "depositor"
+              },
+              {
+                "kind": "arg",
+                "path": "deal_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "deal_id",
+          "type": "string"
+        },
+        {
+          "name": "start_time",
+          "type": "i64"
+        },
+        {
+          "name": "deadline",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_config",
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "instruction. Distinct from `treasury` on purpose — see `PlatformConfig`."
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_basis_points",
+          "type": "u16"
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "refund",
+      "discriminator": [
+        2,
+        96,
+        183,
+        251,
+        63,
+        208,
+        46,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Either the deal's oracle, or the depositor once the deadline has passed."
+          ],
+          "signer": true
+        },
+        {
+          "name": "depositor",
+          "writable": true
+        },
+        {
+          "name": "deal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal.depositor",
+                "account": "Deal"
+              },
+              {
+                "kind": "account",
+                "path": "deal.deal_id",
+                "account": "Deal"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle",
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "oracle",
+          "docs": [
+            "Must equal `deal.oracle`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "provider",
+          "docs": [
+            "Must equal `deal.provider`. Receives `amount - fee`, plus the rent",
+            "released when the `Deal` account is closed."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "deal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal.depositor",
+                "account": "Deal"
+              },
+              {
+                "kind": "account",
+                "path": "deal.deal_id",
+                "account": "Deal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "docs": [
+            "Fee policy. Read-only here; only `update_config` may change it."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "transfer_authority",
+      "discriminator": [
+        48,
+        169,
+        76,
+        72,
+        229,
+        180,
+        55,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Must equal `config.authority`; the outgoing admin must consent."
+          ],
+          "signer": true
+        },
+        {
+          "name": "new_authority",
+          "docs": [
+            "key need not be a signer at this point — if it is a multisig, control",
+            "simply shifts to whatever that account's signing policy is."
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_config",
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Must equal `config.authority`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_basis_points",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "treasury",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Deal",
+      "discriminator": [
+        125,
+        223,
+        160,
+        234,
+        71,
+        162,
+        182,
+        219
+      ]
+    },
+    {
+      "name": "PlatformConfig",
+      "discriminator": [
+        160,
+        78,
+        128,
+        0,
+        248,
+        83,
+        230,
+        160
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAmount",
+      "msg": "Escrow amount must be greater than zero"
+    },
+    {
+      "code": 6001,
+      "name": "RolesNotDistinct",
+      "msg": "Depositor, provider and oracle must be distinct keys"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidDeadline",
+      "msg": "Deadline must be strictly after the start time"
+    },
+    {
+      "code": 6003,
+      "name": "EmptyDealId",
+      "msg": "Deal identifier must be non-empty"
+    },
+    {
+      "code": 6004,
+      "name": "SettleDeadlinePassed",
+      "msg": "Settlement deadline has passed; the deal can no longer be settled"
+    },
+    {
+      "code": 6005,
+      "name": "RefundNotAuthorized",
+      "msg": "Refund authority must be the oracle, or the depositor after the deadline"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidFeeBasisPoints",
+      "msg": "Fee basis points must not exceed 10000 (100%)"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidConfigAuthority",
+      "msg": "Platform config authority must be a non-default public key"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidConfigTreasury",
+      "msg": "Platform config treasury must be a non-default public key"
+    },
+    {
+      "code": 6009,
+      "name": "ConfigAuthorityMismatch",
+      "msg": "Only the platform config authority may update the config"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidTreasuryAccount",
+      "msg": "Treasury must not be the escrow account or the platform config account"
+    }
+  ],
+  "types": [
+    {
+      "name": "Deal",
+      "docs": [
+        "The escrowed deal. Stored at a PDA seeded by",
+        "`[DEAL_SEED, depositor, deal_id]`.",
+        "",
+        "The escrowed lamports live in this account itself, so every terminal",
+        "action is expressed as \"authorize, then close the account to the payee\".",
+        "That keeps the payout destination structurally impossible to redirect:",
+        "unlike a UTxO validator that must inspect the transaction's outputs, the",
+        "program decides the recipient."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "depositor",
+            "docs": [
+              "Client who funded the deal; receives funds on refund/cancel."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "provider",
+            "docs": [
+              "Provider who receives payment on successful settlement."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle",
+            "docs": [
+              "Trusted arbiter that attests proof-of-storage off-chain."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount escrowed for the provider, in lamports."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "deal_id",
+            "docs": [
+              "Off-chain storage deal identifier (mirrors Cardano's `data_hash` role)."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "start_time",
+            "docs": [
+              "Unix timestamp (seconds) when the deal became active."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "deadline",
+            "docs": [
+              "Unix timestamp (seconds) by which the provider must settle.",
+              "At or before this instant only `settle` is time-valid; strictly after",
+              "it, the depositor may reclaim."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump for `[DEAL_SEED, depositor, deal_id]`."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlatformConfig",
+      "docs": [
+        "Program-wide configuration. Singleton PDA at `[PLATFORM_CONFIG_SEED]`.",
+        "",
+        "Split out from `Deal` because the fee is a platform-level policy that must",
+        "be changeable without redeploying: it lives in one account that `settle`",
+        "reads, and `update_config` rewrites. The admin key that may rewrite it is",
+        "`authority`, held deliberately separate from `treasury` so that the",
+        "spending destination and the control key can be rotated independently."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fee_basis_points",
+            "docs": [
+              "Fee charged on settlement, in basis points of the escrowed amount",
+              "(250 = 2.5%). Applied as `amount * fee_basis_points / 10_000` so the",
+              "math stays in integers."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Destination of the settle fee. Not a signer: it only ever receives",
+              "lamports, and is referenced by address in `settle`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Admin key authorized to call `update_config` and `transfer_authority`.",
+              "A single wallet today; pointing it at a multisig later is a call to",
+              "`transfer_authority`, not a program change, because this field is the",
+              "only thing the signer check reads."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump for `[PLATFORM_CONFIG_SEED]`."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "DEAL_SEED",
+      "type": "bytes",
+      "value": "[100, 101, 97, 108]"
+    },
+    {
+      "name": "FEE_BASIS_POINTS_DENOMINATOR",
+      "docs": [
+        "Basis-point denominator: `fee_basis_points` is a fraction of 10,000, so",
+        "250 bp = 2.5%. Basis points keep the split in integer arithmetic, with no",
+        "floating point and no rounding drift between off-chain and on-chain."
+      ],
+      "type": "u64",
+      "value": "10000"
+    },
+    {
+      "name": "MAX_FEE_BASIS_POINTS",
+      "docs": [
+        "Upper bound on the settle fee: 10,000 bp = 100% of the escrowed amount."
+      ],
+      "type": "u64",
+      "value": "10000"
+    },
+    {
+      "name": "PLATFORM_CONFIG_SEED",
+      "docs": [
+        "Seed of the singleton `PlatformConfig` PDA."
+      ],
+      "type": "bytes",
+      "value": "[112, 108, 97, 116, 102, 111, 114, 109, 95, 99, 111, 110, 102, 105, 103]"
+    }
+  ]
+}

@@ -54,3 +54,11 @@ Thumbs.db
 .env.*.local
 adadive_export.sql
 package-lock.json
+
+# Solana test validator ledger, funded localnet keypairs and Rust build output.
+/keys/
+/.anchor/
+/target/
+programs/**/target/
+artifacts/oracle-backend/.setup-bundle/
+/test-ledger/

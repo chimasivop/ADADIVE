@@ -139,7 +139,7 @@ export default function Providers() {
                           <div>
                             <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))" }}>PRICE</p>
                             <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--primary))", fontWeight: 500 }}>
-                              ₳ {provider.pricePerGbPerEpoch.toFixed(5)}
+                              ◎ {provider.pricePerGbPerEpoch.toFixed(5)}
                             </p>
                             <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", color: "hsl(var(--muted-foreground))" }}>per GB/epoch</p>
                           </div>

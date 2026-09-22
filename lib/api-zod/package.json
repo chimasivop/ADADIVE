@@ -10,7 +10,17 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/chai": "^4.3.0",
     "@types/express": "^5.0.6",
-    "@types/node": "catalog:"
+    "@types/mocha": "^9.1.0",
+    "@types/node": "catalog:",
+    "chai": "^4.5.0",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.0.0",
+    "typescript": "~5.9.3",
+    "@solana/web3.js": "catalog:"
+  },
+  "scripts": {
+    "test": "ts-mocha -p tsconfig.test.json -t 30000 'tests/*.test.ts'"
   }
 }

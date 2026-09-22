@@ -59,7 +59,7 @@ export default function DealDetail() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard title="Storage" value={`${deal.storageGb} GB`} subtitle="Allocated" icon={HardDrive} />
             <StatCard title="Duration" value={`${deal.durationEpochs}`} subtitle="Epochs" icon={Clock} />
-            <StatCard title="Total Cost" value={`₳ ${deal.totalCostAda.toFixed(2)}`} subtitle="ADA locked" icon={Coins} />
+            <StatCard title="Total Cost" value={`◎ ${deal.totalCostAda.toFixed(2)}`} subtitle="SOL locked" icon={Coins} />
             <StatCard
               title="Provider"
               value={deal.providerName}

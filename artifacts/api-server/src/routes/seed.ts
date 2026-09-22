@@ -61,7 +61,7 @@ router.post("/seed", async (req: Request, res: Response) => {
       {
         providerId: 1,
         providerName: "ProStorage Alpha",
-        clientAddress: "addr1qxtz8jnhv4f5us5q9a3d4e6r7t8y9u0i1o2p3q4r5s6t7u8v9w0x1y2z",
+        clientAddress: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         storageGb: 50,
         durationEpochs: 5,
         totalCostAda: 1250,
@@ -73,7 +73,7 @@ router.post("/seed", async (req: Request, res: Response) => {
       {
         providerId: 2,
         providerName: "DataChain Beta",
-        clientAddress: "addr1yzx9876543210qweasdzxcrtyfvbguhnmjkioplkmn",
+        clientAddress: "3yZe7d9Qrbk9AqNB2ELbQZEEHUxDWpWQaUgDHKQEb1hJ",
         storageGb: 100,
         durationEpochs: 10,
         totalCostAda: 3600,
@@ -85,7 +85,7 @@ router.post("/seed", async (req: Request, res: Response) => {
       {
         providerId: 3,
         providerName: "SecureVault Gamma",
-        clientAddress: "addr1abc654321qweasdzxcrtyfvbguhnmjkioplkmn",
+        clientAddress: "7v91jFhP3S3LkxEBmCAA6aGWHVwBqZRFkJk7VRabRWnQ",
         storageGb: 25,
         durationEpochs: 3,
         totalCostAda: 240,

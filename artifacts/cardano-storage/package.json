@@ -42,6 +42,11 @@
     "@replit/vite-plugin-cartographer": "catalog:",
     "@replit/vite-plugin-dev-banner": "catalog:",
     "@replit/vite-plugin-runtime-error-modal": "catalog:",
+    "@solana/wallet-adapter-base": "catalog:",
+    "@solana/wallet-adapter-phantom": "catalog:",
+    "@solana/wallet-adapter-react": "catalog:",
+    "@solana/wallet-adapter-react-ui": "catalog:",
+    "@solana/wallet-adapter-solflare": "catalog:",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
@@ -77,6 +82,8 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "cbor-x": "^1.6.4"
+    "@solana/web3.js": "catalog:",
+    "@workspace/solana-escrow": "workspace:*",
+    "buffer": "catalog:"
   }
 }

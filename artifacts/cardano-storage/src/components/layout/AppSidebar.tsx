@@ -277,8 +277,8 @@ export function AppSidebar() {
             )}
 
             {[
-              ["THT", thtBalance != null ? thtBalance.toLocaleString() : "—", accent],
-              ["ADA", adaBalance != null ? `₳ ${adaBalance.toFixed(2)}` : "—", dim],
+              ["SOL", thtBalance != null ? thtBalance.toFixed(4) : "—", accent],
+              ["BAL", adaBalance != null ? `◎ ${adaBalance.toFixed(4)}` : "—", dim],
             ].map(([label, val, col]) => (
               <div key={label as string} style={{ display: "flex", justifyContent: "space-between" }}>
                 <span
@@ -359,7 +359,7 @@ export function AppSidebar() {
               {connecting ? (
                 <><Loader2 className="size-3 animate-spin" /> CONNECTING...</>
               ) : (
-                <><Wallet className="size-3" /> CONNECT ETERNL</>
+                <><Wallet className="size-3" /> CONNECT PHANTOM</>
               )}
             </button>
             <p
@@ -372,7 +372,7 @@ export function AppSidebar() {
                 opacity: 0.6,
               }}
             >
-              Requires Eternl browser extension
+              Requires Phantom or Solflare extension
             </p>
           </>
         )}

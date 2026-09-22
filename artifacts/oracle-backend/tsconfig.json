@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2020"],
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "types": ["mocha", "node"],
+    "paths": {
+      "@workspace/solana-escrow": ["../../lib/solana-escrow/src/index.ts"]
+    }
+  },
+  "ts-node": {
+    // The shared client library lives in a package whose `package.json` says
+    // `"type": "module"` because it is also bundled by Vite for the browser.
+    // ts-node 10 reads that field and refuses to `require()` those `.ts` files
+    // as CommonJS, which is what this backend's `module: "commonjs"` output
+    // needs. Pin them to CJS for ts-node so `test`, `dev` and `migrate` can
+    // import the shared library. This is a ts-node-only setting; `tsc` ignores
+    // it and the esbuild bundle (`build.mjs`) is unaffected.
+    "moduleTypes": {
+      "../../lib/solana-escrow/**/*": "cjs"
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,20 @@
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[programs.localnet]
+adadive_escrow = "B6kX44TWx7p75rEXaJmQ5jQJ3L9wGhZqaQ8xEK2j1cGp"
+
+[scripts]
+# `anchor test` runs the program suite. The Phase 2 client-flow suite has its
+# own script because it also drives the client library under `app/`, and it
+# needs a fresh validator of its own: it owns the singleton `PlatformConfig`
+# (the config authority is a per-suite keypair), so it cannot share a ledger
+# with the program suite, which creates and rotates that same config.
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/adadive_escrow.ts"
+test-phase2 = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/phase2_client_flow.ts"
+# Runs both suites, each against its own fresh ledger. They cannot share one:
+# each suite's config authority is a per-suite keypair and `PlatformConfig` is a
+# singleton, so the second suite to run would find the config already created by
+# the first. `anchor test` resets the ledger between invocations.
+test-all = "bash scripts/test-all.sh"

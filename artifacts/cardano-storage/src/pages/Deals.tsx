@@ -160,7 +160,7 @@ export default function Deals() {
                         </div>
                         <div className="text-right">
                           <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))" }}>TOTAL COST</p>
-                          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--primary))", fontWeight: 500 }}>₳ {deal.totalCostAda.toFixed(2)}</p>
+                          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "12px", color: "hsl(var(--primary))", fontWeight: 500 }}>◎ {deal.totalCostAda.toFixed(2)}</p>
                         </div>
                         <div className="text-right">
                           <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "9px", letterSpacing: "0.18em", color: "hsl(var(--muted-foreground))" }}>CREATED</p>

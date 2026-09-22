@@ -1,20 +1,9 @@
 import { Router, type IRouter } from "express";
-import axios from "axios";
 import { sql, desc } from "drizzle-orm";
 import { db, providersTable, dealsTable, activityTable } from "@workspace/db";
+import { getCurrentEpoch } from "../lib/storage";
 
 const router: IRouter = Router();
-
-const KOIOS_BASE_URL = process.env.KOIOS_URL ?? "https://preprod.koios.rest/api/v1";
-
-async function getCurrentEpochFromKoios(): Promise<number | null> {
-  try {
-    const res = await axios.get(`${KOIOS_BASE_URL}/tip`, { timeout: 5000 });
-    return res.data[0]?.epoch_no ?? null;
-  } catch {
-    return null;
-  }
-}
 
 router.get("/stats/network", async (_req, res): Promise<void> => {
   const [providerStats] = await db
@@ -35,8 +24,8 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
     })
     .from(dealsTable);
 
-  // Get real epoch from Koios
-  const currentEpoch = await getCurrentEpochFromKoios();
+  // Get the live epoch from the Solana cluster.
+  const currentEpoch = await getCurrentEpoch();
 
   const totalStorageTb = providerStats.totalStorageTb ?? 0;
   const usedStorageTb = providerStats.usedStorageTb ?? 0;
@@ -53,7 +42,7 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
     totalAdaLocked: Number((providerStats.totalAdaLocked ?? 0).toFixed(2)),
     avgReputationScore: Number((providerStats.avgReputationScore ?? 0).toFixed(1)),
     currentEpoch,
-    currentEpochSource: currentEpoch !== null ? "koios" : "unavailable",
+    currentEpochSource: currentEpoch !== null ? "solana" : "unavailable",
     networkUtilizationPercent: Number(networkUtilizationPercent.toFixed(1)),
   });
 });
@@ -98,8 +87,8 @@ router.get("/stats/economy", async (_req, res): Promise<void> => {
     .orderBy(desc(sql`date(created_at)`))
     .limit(20);
 
-  // Get real epoch from Koios
-  const currentEpoch = await getCurrentEpochFromKoios();
+  // Get the live epoch from the Solana cluster.
+  const currentEpoch = await getCurrentEpoch();
 
   // Transform to epoch-based history or use as-is for daily history
   const priceHistory = priceHistoryRaw.length > 0

@@ -1,5 +1,6 @@
 import axios from "axios";
 import FormData from "form-data";
+import { Connection, PublicKey } from "@solana/web3.js";
 
 function config() {
   return {
@@ -9,10 +10,25 @@ function config() {
       baseUrl:   "https://api.pinata.cloud",
       gateway:   "https://gateway.pinata.cloud/ipfs",
     },
-    koios: {
-      baseUrl: process.env.KOIOS_URL ?? "https://preprod.koios.rest/api/v1",
+    solana: {
+      // Was the Koios Cardano REST base URL. The chain reads below now go over
+      // JSON-RPC instead; the field it feeds (`getNetworkTip` / `getAddressInfo`)
+      // keeps its name so the routes and the generated clients do not change.
+      rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
     },
   };
+}
+
+let cachedConnection: Connection | null = null;
+let cachedRpcUrl: string | null = null;
+
+function solanaConnection(): Connection {
+  const { solana } = config();
+  if (!cachedConnection || cachedRpcUrl !== solana.rpcUrl) {
+    cachedConnection = new Connection(solana.rpcUrl, "confirmed");
+    cachedRpcUrl = solana.rpcUrl;
+  }
+  return cachedConnection;
 }
 
 function assertPinataConfig() {
@@ -37,7 +53,7 @@ export async function pinFileToIPFS(
   fd.append("file", fileBuffer, { filename: fileName, contentType: mimeType });
   fd.append("pinataMetadata", JSON.stringify({
     name: fileName,
-    keyvalues: { protocol: "ADADIVE", network: "Cardano", timestamp: new Date().toISOString(), ...metadata },
+    keyvalues: { protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString(), ...metadata },
   }));
   fd.append("pinataOptions", JSON.stringify({ cidVersion: 1 }));
 
@@ -69,7 +85,7 @@ export async function pinJSONToIPFS(jsonData: object, name = "ADADIVE Metadata")
     pinataContent: jsonData,
     pinataMetadata: {
       name,
-      keyvalues: { protocol: "ADADIVE", network: "Cardano", timestamp: new Date().toISOString() },
+      keyvalues: { protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString() },
     },
   }, {
     headers: {
@@ -100,32 +116,87 @@ export async function checkPinStatus(cid: string) {
   return { pinned, status: pinned ? "pinned" : "not_found", details: pins[0] ?? null };
 }
 
-// ─── Koios / Cardano ─────────────────────────────────────────────────────────
+// ─── Solana RPC ──────────────────────────────────────────────────────────────
+//
+// These two functions were the Koios (Cardano REST) readers. They keep their
+// names and their response shapes — `GET /network/status` and `GET /wallet/:address`
+// are consumed by the generated client and by the UI, so the *fields* stay
+// exactly as they were. Only the source of the numbers changed:
+//
+//   tip        → `getEpochInfo()` (slot / absolute slot / epoch)
+//   address    → `getBalance()` + `getSignaturesForAddress()` for a tx count
+//
+// `balanceADA` / `balanceLovelace` keep their misnomers deliberately: renaming
+// them would mean a database column change, an OpenAPI change and a codegen run
+// for a display-only value. `balanceADA` now carries SOL. See
+// `SOLANA_MIGRATION.md`.
 
 export async function getNetworkTip() {
-  const c   = config();
-  const res = await axios.get(`${c.koios.baseUrl}/tip`);
-  const tip = res.data[0] as { block_no: number; epoch_no: number; block_hash: string };
-  return { success: true, ...tip };
+  const info = await solanaConnection().getEpochInfo();
+  return {
+    success: true,
+    // Field names preserved from the Koios response. `block_no` is the current
+    // slot and `epoch_no` the Solana epoch; `block_hash` has no Solana analogue
+    // at this endpoint, so the genesis hash stands in as a stable network id.
+    block_no: info.absoluteSlot,
+    epoch_no: info.epoch,
+    block_hash: await genesisHash(),
+  };
+}
+
+let genesisHashPromise: Promise<string> | null = null;
+
+/** The genesis hash is constant per cluster, so resolve it at most once. */
+function genesisHash(): Promise<string> {
+  if (!genesisHashPromise) {
+    genesisHashPromise = solanaConnection()
+      .getGenesisHash()
+      // The field is informational; a transient RPC failure should not fail the
+      // whole tip read.
+      .catch(() => "");
+  }
+  return genesisHashPromise;
+}
+
+/**
+ * The current Solana epoch, or `null` if the cluster cannot be reached.
+ *
+ * Replaces the Koios `/tip` epoch read in `routes/stats.ts`. Returns `null`
+ * rather than throwing so a stats response degrades to "unavailable" instead of
+ * failing, which is how the endpoint behaved when Koios was down.
+ */
+export async function getCurrentEpoch(): Promise<number | null> {
+  try {
+    const info = await solanaConnection().getEpochInfo();
+    return info.epoch;
+  } catch {
+    return null;
+  }
 }
 
 export async function getAddressInfo(address: string) {
-  const c   = config();
-  const res = await axios.post(
-    `${c.koios.baseUrl}/address_info`,
-    { _addresses: [address] },
-    { headers: { "Content-Type": "application/json" } },
-  );
-  const info = res.data[0] as { balance?: string; stake_address?: string; utxo_set?: unknown[] };
-  if (!info) throw new Error("Address not found on network");
-  const balanceLovelace = parseInt(info.balance ?? "0");
+  let publicKey: PublicKey;
+  try {
+    publicKey = new PublicKey(address);
+  } catch {
+    throw new Error("Address is not a valid Solana public key");
+  }
+
+  const connection = solanaConnection();
+  const lamports = await connection.getBalance(publicKey, "confirmed");
+
+  // A bounded page of signatures is enough to report "has this account been
+  // used" without paging an unbounded history on a public endpoint.
+  const signatures = await connection.getSignaturesForAddress(publicKey, { limit: 1000 });
+
   return {
     success:        true,
-    address,
-    balanceADA:     balanceLovelace / 1_000_000,
-    balanceLovelace,
-    stakeAddress:   info.stake_address,
-    utxoCount:      info.utxo_set?.length ?? 0,
+    address:        publicKey.toBase58(),
+    balanceADA:     lamports / 1_000_000_000,
+    balanceLovelace: lamports,
+    // No stake-address concept on a Solana wallet account.
+    stakeAddress:   null as string | null,
+    utxoCount:      signatures.length,
   };
 }
 
@@ -139,7 +210,10 @@ export function buildDealMetadata(params: {
   const sl = params.storageLayer ?? "ipfs";
   return {
     "1337": {
-      protocol: "ADADIVE", version: "1.0", network: "Cardano", storageLayer: sl,
+      // The label numbers and the JSON shape are unchanged — the client still
+      // receives a `cardanoMetadata` object — but `network` now names the chain
+      // the escrow actually settles on.
+      protocol: "ADADIVE", version: "1.0", network: "Solana", storageLayer: sl,
       deal: {
         cid:           params.cid,
         fileName:      params.fileName.slice(0, 64),
@@ -204,11 +278,24 @@ export async function createStorageDeal(
     fileName,
     fileSize:         ipfsResult.size,
     mimeType,
-    providerAddress:  dealParams.providerAddress  ?? "addr1_provider",
-    userAddress:      dealParams.userAddress      ?? "addr1_user",
+    providerAddress:  dealParams.providerAddress  ?? "11111111111111111111111111111111",
+    userAddress:      dealParams.userAddress      ?? "11111111111111111111111111111111",
     durationEpochs:   dealParams.durationEpochs   ?? 10,
     pricePerEpochTHT: dealParams.pricePerEpochTHT ?? 0.0013,
   });
+
+  // The escrow parameters the browser needs to call `initialize` on-chain. The
+  // backend cannot pick the provider or oracle for the user, so these are echoes
+  // of what was supplied plus a deal id derived from the CID — the client
+  // prefers them but falls back to its own connected wallet when they are blank.
+  const escrow = {
+    dealId:        ipfsResult.cid,
+    provider:      dealParams.providerAddress ?? "",
+    oracle:        process.env.ORACLE_PUBKEY ?? "",
+    amountLamports: String(
+      BigInt(Math.max(0, Math.floor((dealParams.durationEpochs ?? 10) * (dealParams.pricePerEpochTHT ?? 0.0013) * 1_000_000_000)))
+    ),
+  };
 
   return {
     success: true,
@@ -223,6 +310,7 @@ export async function createStorageDeal(
     metadataCid: metadataResult.cid,
     metadataUrl: metadataResult.gatewayUrl,
     cardanoMetadata,
+    escrow,
     deal: {
       status:         "ready_to_sign",
       provider:       dealParams.providerAddress,
