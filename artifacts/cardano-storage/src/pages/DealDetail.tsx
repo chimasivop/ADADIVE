@@ -6,6 +6,9 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Database, ArrowLeft, HardDrive, Coins, Clock, Hash } from "lucide-react";
 import { format } from "date-fns";
+import { useWallet } from "@/contexts/WalletContext";
+import { useBackendSession } from "@/hooks/useBackendSession";
+import { DealStatusCard } from "@/components/DealStatusCard";
 
 const statusColors: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   active: "default",
@@ -17,6 +20,9 @@ const statusColors: Record<string, "default" | "secondary" | "outline" | "destru
 export default function DealDetail() {
   const { id } = useParams<{ id: string }>();
   const dealId = parseInt(id, 10);
+
+  const { address } = useWallet();
+  const { api, ensureSession } = useBackendSession();
 
   const { data: deal, isLoading } = useGetDeal(dealId, {
     query: { queryKey: getGetDealQueryKey(dealId), enabled: !!dealId }
@@ -135,6 +141,25 @@ export default function DealDetail() {
                   <p className="font-mono text-sm text-muted-foreground italic">Pending on-chain confirmation</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Oracle-backed lifecycle: pin verification, the challenge window and
+              settlement. Keyed by the deal's data hash, which is the deal id the
+              oracle backend was given at registration. */}
+          <Card className="bg-card/50 border-primary/20">
+            <CardHeader>
+              <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
+                Settlement Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DealStatusCard
+                api={api}
+                dealId={deal.dataHash}
+                wallet={address}
+                ensureSession={ensureSession}
+              />
             </CardContent>
           </Card>
         </>

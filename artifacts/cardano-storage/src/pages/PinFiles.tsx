@@ -2,12 +2,12 @@ import { useState, useRef, useCallback } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { useListProviders, getListProvidersQueryKey } from "@workspace/api-client-react";
-import { THT } from "@/lib/token";
 import { useWallet } from "@/contexts/WalletContext";
-import { useSignableWallet } from "@/hooks/useSignableWallet";
+import { useSignableWallet } from "@/hooks/useBackendAdapters";
 import { useBackendSession } from "@/hooks/useBackendSession";
 import { explorerTxUrl, NETWORK_LABEL } from "@/lib/chain";
 import { initializeEscrow, solToLamports } from "@/lib/escrowService";
+import { DealStatusCard } from "@/components/DealStatusCard";
 
 const STORAGE_LAYERS = [
   { id: "ipfs",    label: "IPFS + Filecoin",  icon: "◈", desc: "Content-addressed, distributed" },
@@ -41,6 +41,10 @@ interface PinnedFile extends QueuedFile {
   metadataCid?: string;
   txHash?: string;
   explorerUrl?: string;
+  /** The oracle backend's deal identifier, for the status card. */
+  dealId?: string;
+  /** True once the backend accepted the deal; without it there is nothing to poll. */
+  registered?: boolean;
   failed?: boolean;
   failReason?: string;
 }
@@ -80,7 +84,7 @@ export default function PinFiles() {
   const { connected: walletConnected, connecting, connect, disconnect, displayAddress, thtBalance, adaBalance } = useWallet();
   const { connection }                      = useConnection();
   const signableWallet                      = useSignableWallet();
-  const { ensureSession }                   = useBackendSession();
+  const { ensureSession, api }              = useBackendSession();
   const [files, setFiles]                   = useState<QueuedFile[]>([]);
   const [dragging, setDragging]             = useState(false);
   const [layer, setLayer]                   = useState("ipfs");
@@ -207,28 +211,25 @@ export default function PinFiles() {
         // it. This signs nothing and submits no transaction — it is one
         // authenticated POST, and a deal the backend does not know about cannot
         // be settled through it.
+        //
+        // `registerDeal` throws `BackendError` on any non-2xx, so a rejected
+        // registration is reported rather than silently treated as success.
+        // The on-chain initialize has already happened, so this failure does not
+        // undo it; it is surfaced on the file's own card.
+        let registered = false;
         try {
           const token = await ensureSession();
-          const dealPda = initResult.dealPda.toBase58();
-          await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT ?? "/backend"}/deals`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              dealId,
-              dealPda,
-              depositor: displayAddress,
-              provider: providerKey.toBase58(),
-              oracle: oracleKey.toBase58(),
-              cid: deal.file.cid,
-              amountLamports: amountLamports.toString(),
-            }),
+          await api.registerDeal(token, {
+            dealId,
+            dealPda: initResult.dealPda.toBase58(),
+            depositor: displayAddress,
+            provider: providerKey.toBase58(),
+            oracle: oracleKey.toBase58(),
+            cid: deal.file.cid,
+            amountLamports: amountLamports.toString(),
           });
+          registered = true;
         } catch (registerErr) {
-          // Registration failing does not undo the on-chain initialize; report it
-          // on the file's own card rather than aborting the whole batch.
           const msg = registerErr instanceof Error ? registerErr.message : String(registerErr);
           setLbl(`Anchored ✓ — backend registration failed: ${msg}`);
         }
@@ -245,6 +246,8 @@ export default function PinFiles() {
             metadataCid: deal.metadataCid,
             txHash:      txSignature,
             explorerUrl: explorerTxUrl(txSignature),
+            dealId,
+            registered,
           },
         ]);
       } catch (err) {
@@ -433,6 +436,20 @@ export default function PinFiles() {
                     }}>VIEW ON EXPLORER ↗</a>
                   )}
                 </div>
+
+                {/* Oracle-backed settle/dispute status. Only shown once the
+                    backend knows the deal — polling a deal it never accepted
+                    would just 404. */}
+                {f.registered && f.dealId && (
+                  <div style={{ marginTop: "12px" }}>
+                    <DealStatusCard
+                      api={api}
+                      dealId={f.dealId}
+                      wallet={displayAddress}
+                      ensureSession={ensureSession}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -572,7 +589,7 @@ export default function PinFiles() {
                           {sel && <span style={{ fontSize: "10px", color: "hsl(var(--primary))" }}>▶</span>}
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                          <span style={{ fontSize: "9px", color: g.dim }}>{p.pricePerGbPerEpoch.toFixed(5)} THT/GB</span>
+                          <span style={{ fontSize: "9px", color: g.dim }}>{p.pricePerGbPerEpoch.toFixed(5)} SOL/GB</span>
                           <span style={{ fontSize: "9px", color: g.dim }}>{p.region}</span>
                           <span style={{ fontSize: "9px", color: g.dim }}>{p.uptimePercent != null ? `${p.uptimePercent.toFixed(1)}%` : "—"}</span>
                         </div>
@@ -593,8 +610,8 @@ export default function PinFiles() {
                     ["Total size",  formatBytes(totalSize)],
                     ["Provider",    selectedProvider?.name ?? "—"],
                     ["Layer",       STORAGE_LAYERS.find((l) => l.id === layer)?.label ?? "—"],
-                    ["Est. cost",   `${estimatedCost} ${THT.symbol}`],
-                    ["Network fee", `0.175000 ${THT.symbol}`],
+                    ["Est. cost",   `${estimatedCost} SOL`],
+                    ["Network fee", `0.175000 SOL`],
                   ] as [string, string][]).map(([k, v]) => (
                     <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                       <span style={{ fontSize: "10px", color: g.dim, letterSpacing: "0.05em", flexShrink: 0 }}>{k}</span>
@@ -603,7 +620,7 @@ export default function PinFiles() {
                   ))}
                   <div style={{ borderTop: "1px solid hsl(var(--primary)/0.12)", paddingTop: "8px", display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontFamily: "'Cinzel', serif", fontSize: "10px", letterSpacing: "0.15em", color: "hsl(var(--foreground))" }}>TOTAL</span>
-                    <span style={{ fontFamily: "'Cinzel', serif", fontSize: "14px", color: "hsl(var(--primary))", fontWeight: 700 }}>{totalCost} {THT.symbol}</span>
+                    <span style={{ fontFamily: "'Cinzel', serif", fontSize: "14px", color: "hsl(var(--primary))", fontWeight: 700 }}>{totalCost} SOL</span>
                   </div>
                 </div>
               </div>

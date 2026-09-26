@@ -28,16 +28,15 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
 
 import {
   BackendApi,
   BackendError,
   encodeBase58,
-  type MessageSigner,
   type SessionState,
 } from "@workspace/solana-escrow";
 import { BACKEND_ENDPOINT } from "@/lib/backend/endpoint";
+import { useMessageSigner } from "./useBackendAdapters";
 
 export type SessionStatus = "signed_out" | "authenticating" | "authenticated" | "error";
 
@@ -56,25 +55,6 @@ export interface BackendSession {
    */
   ensureSession: () => Promise<string>;
   signOut: () => void;
-}
-
-/**
- * Bridge the wallet adapter to the narrow `MessageSigner` the client needs.
- *
- * Returns `null` when the connected wallet cannot sign messages. Phantom and
- * Solflare both can; the check exists so the UI can explain the gap instead of
- * throwing "signMessage is not a function" deep inside a click handler.
- */
-export function useMessageSigner(): MessageSigner | null {
-  const { publicKey, signMessage } = useWallet();
-
-  return useMemo(() => {
-    if (!publicKey || !signMessage) return null;
-    return {
-      publicKey,
-      signMessage: (message: Uint8Array) => signMessage(message),
-    };
-  }, [publicKey, signMessage]);
 }
 
 export function useBackendSession(options: { api?: BackendApi } = {}): BackendSession {

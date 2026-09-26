@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Database, Loader2 } from "lucide-react";
-import { THT } from "@/lib/token";
 
 export default function NewDeal() {
   const [, navigate] = useLocation();
@@ -91,7 +90,7 @@ export default function NewDeal() {
                 <SelectContent>
                   {providers?.map((p) => (
                     <SelectItem key={p.id} value={String(p.id)} className="font-mono">
-                      {p.name} — {p.pricePerGbPerEpoch.toFixed(5)} THT/GB/epoch — {p.region}
+                      {p.name} — {p.pricePerGbPerEpoch.toFixed(5)} SOL/GB/epoch — {p.region}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -103,7 +102,7 @@ export default function NewDeal() {
               <Input
                 value={clientAddress}
                 onChange={(e) => setClientAddress(e.target.value)}
-                placeholder="addr1..."
+                placeholder="base58 public key…"
                 className="font-mono bg-background/50 border-primary/20 text-sm"
               />
             </div>
@@ -146,9 +145,9 @@ export default function NewDeal() {
             {estimatedCost && (
               <div className="p-4 bg-background/50 rounded border border-primary/30">
                 <p className="font-mono text-xs text-muted-foreground uppercase mb-1">Estimated Total Cost</p>
-                <p className="font-mono text-2xl font-bold text-primary">{THT.label(estimatedCost)}</p>
+                <p className="font-mono text-2xl font-bold text-primary">{estimatedCost} SOL</p>
                 <p className="font-mono text-xs text-muted-foreground mt-1">
-                  {storageGb} GB × {durationEpochs} epochs × {selectedProvider?.pricePerGbPerEpoch.toFixed(6)} THT/GB/epoch
+                  {storageGb} GB × {durationEpochs} epochs × {selectedProvider?.pricePerGbPerEpoch.toFixed(6)} SOL/GB/epoch
                 </p>
               </div>
             )}
