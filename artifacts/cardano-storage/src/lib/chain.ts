@@ -53,10 +53,8 @@ export function explorerAddressUrl(address: string): string {
 }
 
 /** Display label for the network, matching the old footer's placement. */
-export const NETWORK_LABEL = `${SOLANA_CLUSTER.toUpperCase()} TESTNET`.replace(
-  /LOCALNET/,
-  "LOCALNET"
-);
+export const NETWORK_LABEL =
+  SOLANA_CLUSTER === "mainnet-beta" ? "MAINNET" : SOLANA_CLUSTER.toUpperCase();
 
 /** How often balances are refreshed, in milliseconds. */
 export const BALANCE_POLL_MS = 4000;

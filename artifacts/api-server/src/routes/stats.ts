@@ -13,7 +13,7 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
       totalStorageTb: sql<number>`sum(total_storage_gb) / 1024.0`,
       usedStorageTb: sql<number>`sum(used_storage_gb) / 1024.0`,
       avgReputationScore: sql<number>`avg(reputation_score)`,
-      totalAdaLocked: sql<number>`coalesce(sum(total_ada_earned), 0)`,
+      totalSolLocked: sql<number>`coalesce(sum(total_sol_earned), 0)`,
     })
     .from(providersTable);
 
@@ -39,7 +39,7 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
     usedStorageTb: Number(usedStorageTb.toFixed(2)),
     activeDeals: dealStats.activeDeals,
     totalDealsAllTime: dealStats.totalDealsAllTime,
-    totalAdaLocked: Number((providerStats.totalAdaLocked ?? 0).toFixed(2)),
+    totalSolLocked: Number((providerStats.totalSolLocked ?? 0).toFixed(2)),
     avgReputationScore: Number((providerStats.avgReputationScore ?? 0).toFixed(1)),
     currentEpoch,
     currentEpochSource: currentEpoch !== null ? "solana" : "unavailable",
@@ -51,7 +51,7 @@ router.get("/stats/economy", async (_req, res): Promise<void> => {
   const [priceStats] = await db
     .select({
       avgPrice: sql<number>`avg(price_per_gb_per_epoch)`,
-      totalAdaEarned: sql<number>`coalesce(sum(total_ada_earned), 0)`,
+      totalSolEarned: sql<number>`coalesce(sum(total_sol_earned), 0)`,
     })
     .from(providersTable);
 
@@ -59,8 +59,8 @@ router.get("/stats/economy", async (_req, res): Promise<void> => {
     .select({
       avgDealSizeGb: sql<number>`avg(storage_gb)`,
       avgDealDurationEpochs: sql<number>`avg(duration_epochs)`,
-      totalAdaEarnedAllTime: sql<number>`coalesce(sum(total_cost_ada), 0)`,
-      dailyAdaVolume: sql<number>`coalesce(sum(total_cost_ada) filter (where created_at > now() - interval '24 hours'), 0)`,
+      totalSolEarnedAllTime: sql<number>`coalesce(sum(total_cost_sol), 0)`,
+      dailySolVolume: sql<number>`coalesce(sum(total_cost_sol) filter (where created_at > now() - interval '24 hours'), 0)`,
     })
     .from(dealsTable);
 
@@ -78,7 +78,7 @@ router.get("/stats/economy", async (_req, res): Promise<void> => {
   const priceHistoryRaw = await db
     .select({
       createdDate: sql<string>`date(created_at)`,
-      avgPrice: sql<number>`avg(total_cost_ada / nullif(storage_gb * duration_epochs, 0))`,
+      avgPrice: sql<number>`avg(total_cost_sol / nullif(storage_gb * duration_epochs, 0))`,
       dealsCount: sql<number>`count(*)::int`,
     })
     .from(dealsTable)
@@ -94,17 +94,17 @@ router.get("/stats/economy", async (_req, res): Promise<void> => {
   const priceHistory = priceHistoryRaw.length > 0
     ? priceHistoryRaw.map((p, i) => ({
         date: p.createdDate,
-        priceAda: Number((p.avgPrice ?? priceStats.avgPrice ?? 0.0012).toFixed(6)),
+        priceSol: Number((p.avgPrice ?? priceStats.avgPrice ?? 0.0012).toFixed(6)),
         dealsCount: p.dealsCount,
       }))
-    : [{ date: "no_data", priceAda: 0, dealsCount: 0, placeholder: true }];
+    : [{ date: "no_data", priceSol: 0, dealsCount: 0, placeholder: true }];
 
   res.json({
-    adaPerGbPerEpoch: Number(Number(priceStats.avgPrice ?? 0).toFixed(6)),
+    solPerGbPerEpoch: Number(Number(priceStats.avgPrice ?? 0).toFixed(6)),
     avgDealSizeGb: Number(Number(dealAgg.avgDealSizeGb ?? 0).toFixed(1)),
     avgDealDurationEpochs: Number(Number(dealAgg.avgDealDurationEpochs ?? 0).toFixed(0)),
-    totalAdaEarnedAllTime: Number(Number(dealAgg.totalAdaEarnedAllTime ?? 0).toFixed(2)),
-    dailyAdaVolume: Number(Number(dealAgg.dailyAdaVolume ?? 0).toFixed(2)),
+    totalSolEarnedAllTime: Number(Number(dealAgg.totalSolEarnedAllTime ?? 0).toFixed(2)),
+    dailySolVolume: Number(Number(dealAgg.dailySolVolume ?? 0).toFixed(2)),
     currentEpoch,
     priceHistory,
     storageByRegion: regionStats.map((r) => ({

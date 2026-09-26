@@ -81,7 +81,7 @@ interface DealResult {
 }
 
 export default function PinFiles() {
-  const { connected: walletConnected, connecting, connect, disconnect, displayAddress, thtBalance, adaBalance } = useWallet();
+  const { connected: walletConnected, connecting, connect, disconnect, address, displayAddress, solBalance } = useWallet();
   const { connection }                      = useConnection();
   const signableWallet                      = useSignableWallet();
   const { ensureSession, api }              = useBackendSession();
@@ -138,7 +138,7 @@ export default function PinFiles() {
     // The initialize transaction signs as the depositor, so a connection without
     // a signable wallet cannot proceed. Checked once, up front, rather than
     // failing per file.
-    if (!signableWallet || !displayAddress) {
+    if (!signableWallet || !address) {
       setPinning(false);
       setPinError("Connect a Solana wallet before pinning — the escrow is initialized from it.");
       return;
@@ -157,7 +157,7 @@ export default function PinFiles() {
         const formData = new FormData();
         formData.append("file", f.file);
         formData.append("providerAddress", selectedProvider?.nodeId ?? "");
-        formData.append("userAddress", displayAddress ?? "");
+        formData.append("userAddress", address ?? "");
         formData.append("durationEpochs", "10");
         formData.append("pricePerEpochTHT", String(selectedProvider?.pricePerGbPerEpoch ?? 0.0013));
 
@@ -182,11 +182,11 @@ export default function PinFiles() {
         // stand-in provider, matching the prototype's local-validator walkthrough.
         const escrow = deal.escrow;
         const oracleKey = new PublicKey(
-          import.meta.env.VITE_ORACLE_PUBKEY ?? displayAddress
+          import.meta.env.VITE_ORACLE_PUBKEY ?? address
         );
         const providerKey = escrow?.provider
           ? new PublicKey(escrow.provider)
-          : new PublicKey(displayAddress);
+          : new PublicKey(address);
         const dealId = escrow?.dealId ?? deal.file.cid;
         const amountLamports = escrow?.amountLamports
           ? BigInt(escrow.amountLamports)
@@ -222,7 +222,7 @@ export default function PinFiles() {
           await api.registerDeal(token, {
             dealId,
             dealPda: initResult.dealPda.toBase58(),
-            depositor: displayAddress,
+            depositor: address,
             provider: providerKey.toBase58(),
             oracle: oracleKey.toBase58(),
             cid: deal.file.cid,
@@ -295,8 +295,7 @@ export default function PinFiles() {
                 <span style={{ color: "hsl(var(--muted-foreground))", fontSize: "10px" }}>{displayAddress}</span>
               </div>
               <div style={{ fontSize: "10px", color: g.dim, display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "2px" }}>
-                <span><span style={{ color: g.accent }}>{thtBalance != null ? thtBalance.toFixed(4) : "—"}</span> SOL</span>
-                <span>◎ {adaBalance != null ? adaBalance.toFixed(2) : "—"}</span>
+                <span><span style={{ color: g.accent }}>{solBalance != null ? solBalance.toFixed(4) : "—"}</span> SOL</span>
               </div>
             </div>
           )}
@@ -445,8 +444,10 @@ export default function PinFiles() {
                     <DealStatusCard
                       api={api}
                       dealId={f.dealId}
-                      wallet={displayAddress}
+                      wallet={address}
                       ensureSession={ensureSession}
+                      connection={connection}
+                      signer={signableWallet}
                     />
                   </div>
                 )}

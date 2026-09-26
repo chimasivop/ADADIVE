@@ -257,9 +257,9 @@ export default function Landing() {
           {[
             [formatStorage(networkStats?.totalStorageTb), "Total Storage"],
             [String(networkStats?.activeDeals ?? "--"), "Active Deals"],
-            [THT.label(networkStats?.totalAdaLocked?.toLocaleString() ?? "--"), "THT Locked"],
+            [THT.label(networkStats?.totalSolLocked?.toLocaleString() ?? "--"), "THT Locked"],
             [String(networkStats?.activeProviders ?? "--"), "Providers"],
-            [formatPrice(economyStats?.adaPerGbPerEpoch), "per GB / Epoch"],
+            [formatPrice(economyStats?.solPerGbPerEpoch), "per GB / Epoch"],
           ].map(([v,l]) => (
             <div key={l as string} style={{ textAlign:"center" }}>
               <div style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(18px,3vw,28px)", color:T.gold, marginBottom:"4px", fontWeight:500 }}>{v}</div>
@@ -319,8 +319,8 @@ export default function Landing() {
             {[
               { label:"Total Storage", value: formatStorage(networkStats?.totalStorageTb), sub: networkStats?.networkUtilizationPercent !== undefined ? `${networkStats.networkUtilizationPercent.toFixed(1)}% Utilised` : "Loading...", icon:"▣" },
               { label:"Active Deals",  value: String(networkStats?.activeDeals ?? "--"), sub: networkStats?.totalDealsAllTime !== undefined ? `${networkStats.totalDealsAllTime} All Time` : "Loading...", icon:"⬡" },
-              { label:"THT Locked",    value: THT.label(networkStats?.totalAdaLocked?.toLocaleString() ?? "--"), sub:"In Active Escrow", icon:"◈" },
-              { label:"Avg Price",     value: formatPrice(economyStats?.adaPerGbPerEpoch), sub:"per GB / Epoch", icon:"∿" },
+              { label:"THT Locked",    value: THT.label(networkStats?.totalSolLocked?.toLocaleString() ?? "--"), sub:"In Active Escrow", icon:"◈" },
+              { label:"Avg Price",     value: formatPrice(economyStats?.solPerGbPerEpoch), sub:"per GB / Epoch", icon:"∿" },
               { label:"Providers",     value: String(networkStats?.activeProviders ?? "--"), sub: networkStats?.totalProviders !== undefined ? `${networkStats.totalProviders} Total` : "Loading...", icon:"◉" },
             ].map(s => (
               <div key={s.label} className="a-stat-card" style={{ textAlign:"center" }}>

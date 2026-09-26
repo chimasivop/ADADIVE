@@ -37,7 +37,7 @@ const mist   = "#4a5a7a";
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { connected, connecting, connect, disconnect, displayAddress, thtBalance, adaBalance, error } = useWallet();
+  const { connected, connecting, connect, disconnect, displayAddress, solBalance, error } = useWallet();
   const { isDark, toggleTheme } = useTheme();
 
   const accent = isDark ? gold : goldDk;
@@ -277,8 +277,7 @@ export function AppSidebar() {
             )}
 
             {[
-              ["SOL", thtBalance != null ? thtBalance.toFixed(4) : "—", accent],
-              ["BAL", adaBalance != null ? `◎ ${adaBalance.toFixed(4)}` : "—", dim],
+              ["SOL", solBalance != null ? solBalance.toFixed(4) : "—", accent],
             ].map(([label, val, col]) => (
               <div key={label as string} style={{ display: "flex", justifyContent: "space-between" }}>
                 <span

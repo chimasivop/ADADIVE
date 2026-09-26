@@ -8,7 +8,8 @@ const router: IRouter = Router();
 
 router.get("/deals", async (req: Request, res: Response): Promise<void> => {
   try {
-    const status = req.query.status as string | undefined;
+    type DealStatus = (typeof dealsTable.status.enumValues)[number];
+    const status = req.query.status as DealStatus | "all" | undefined;
     const providerIdParam = req.query.providerId as string | undefined;
     const providerId = providerIdParam ? parseInt(providerIdParam) : undefined;
 
@@ -52,7 +53,7 @@ router.post(
         return;
       }
 
-      const totalCostAda = body.storageGb * body.durationEpochs * provider.pricePerGbPerEpoch;
+      const totalCostSol = body.storageGb * body.durationEpochs * provider.pricePerGbPerEpoch;
 
       const [deal] = await db
         .insert(dealsTable)
@@ -62,7 +63,7 @@ router.post(
           clientAddress: body.clientAddress,
           storageGb: body.storageGb,
           durationEpochs: body.durationEpochs,
-          totalCostAda,
+          totalCostSol,
           dataHash: body.dataHash,
           status: "pending",
         })
@@ -149,7 +150,7 @@ router.patch(
           type: "deal_completed",
           description: `Deal #${updated.id} completed successfully`,
           relatedId: updated.id,
-          metadata: { totalCostAda: updated.totalCostAda },
+          metadata: { totalCostSol: updated.totalCostSol },
         });
       }
 

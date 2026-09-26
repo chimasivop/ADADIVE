@@ -80,7 +80,7 @@ export default function ProviderDetail() {
             />
             <StatCard
               title="SOL Earned"
-              value={`◎ ${(provider.totalAdaEarned ?? 0).toLocaleString()}`}
+              value={`◎ ${(provider.totalSolEarned ?? 0).toLocaleString()}`}
               subtitle="Total lifetime"
               icon={Coins}
             />
@@ -169,7 +169,7 @@ export default function ProviderDetail() {
                             <p className="font-mono text-xs text-muted-foreground">{deal.durationEpochs} epochs</p>
                           </div>
                           <div>
-                            <p className="font-mono text-sm text-primary">◎ {deal.totalCostAda.toFixed(2)}</p>
+                            <p className="font-mono text-sm text-primary">◎ {deal.totalCostSol.toFixed(2)}</p>
                           </div>
                           <Badge
                             variant={deal.status === "active" ? "default" : deal.status === "completed" ? "secondary" : "outline"}

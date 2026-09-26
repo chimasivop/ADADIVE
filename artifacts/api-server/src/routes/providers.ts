@@ -8,7 +8,8 @@ const router: IRouter = Router();
 
 router.get("/providers", async (req: Request, res: Response): Promise<void> => {
   try {
-    const status = req.query.status as string | undefined;
+    type ProviderStatus = (typeof providersTable.status.enumValues)[number];
+    const status = req.query.status as ProviderStatus | "all" | undefined;
     const minReputationParam = req.query.minReputation as string | undefined;
     const minReputation = minReputationParam ? parseInt(minReputationParam) : undefined;
 

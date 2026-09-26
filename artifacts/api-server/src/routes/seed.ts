@@ -26,7 +26,7 @@ router.post("/seed", async (req: Request, res: Response) => {
         region: "us-east",
         uptimePercent: 99.5,
         activeDeals: 12,
-        totalAdaEarned: 5000,
+        totalSolEarned: 5000,
       },
       {
         name: "DataChain Beta",
@@ -39,7 +39,7 @@ router.post("/seed", async (req: Request, res: Response) => {
         region: "eu-west",
         uptimePercent: 98.2,
         activeDeals: 25,
-        totalAdaEarned: 12000,
+        totalSolEarned: 12000,
       },
       {
         name: "SecureVault Gamma",
@@ -52,7 +52,7 @@ router.post("/seed", async (req: Request, res: Response) => {
         region: "asia-pacific",
         uptimePercent: 97.8,
         activeDeals: 8,
-        totalAdaEarned: 3500,
+        totalSolEarned: 3500,
       },
     ]);
 
@@ -64,7 +64,7 @@ router.post("/seed", async (req: Request, res: Response) => {
         clientAddress: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
         storageGb: 50,
         durationEpochs: 5,
-        totalCostAda: 1250,
+        totalCostSol: 1250,
         status: "active",
         dataHash: "abc123def456",
         startEpoch: 450,
@@ -76,7 +76,7 @@ router.post("/seed", async (req: Request, res: Response) => {
         clientAddress: "3yZe7d9Qrbk9AqNB2ELbQZEEHUxDWpWQaUgDHKQEb1hJ",
         storageGb: 100,
         durationEpochs: 10,
-        totalCostAda: 3600,
+        totalCostSol: 3600,
         status: "active",
         dataHash: "def456ghi789",
         startEpoch: 448,
@@ -88,7 +88,7 @@ router.post("/seed", async (req: Request, res: Response) => {
         clientAddress: "7v91jFhP3S3LkxEBmCAA6aGWHVwBqZRFkJk7VRabRWnQ",
         storageGb: 25,
         durationEpochs: 3,
-        totalCostAda: 240,
+        totalCostSol: 240,
         status: "completed",
         dataHash: "ghi789jkl012",
         startEpoch: 440,
@@ -101,16 +101,19 @@ router.post("/seed", async (req: Request, res: Response) => {
       {
         type: "deal_created",
         description: "New storage deal created",
+        relatedId: 1,
         metadata: { dealId: 1, providerId: 1 },
       },
       {
         type: "deal_activated",
         description: "Storage deal activated",
+        relatedId: 2,
         metadata: { dealId: 2, providerId: 2 },
       },
       {
         type: "provider_joined",
         description: "New provider joined network",
+        relatedId: 3,
         metadata: { providerId: 3 },
       },
     ]);

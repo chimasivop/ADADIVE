@@ -1,5 +1,6 @@
 import { useGetDeal, getGetDealQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
@@ -7,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Database, ArrowLeft, HardDrive, Coins, Clock, Hash } from "lucide-react";
 import { format } from "date-fns";
 import { useWallet } from "@/contexts/WalletContext";
+import { useSignableWallet } from "@/hooks/useBackendAdapters";
 import { useBackendSession } from "@/hooks/useBackendSession";
 import { DealStatusCard } from "@/components/DealStatusCard";
 
@@ -22,6 +24,8 @@ export default function DealDetail() {
   const dealId = parseInt(id, 10);
 
   const { address } = useWallet();
+  const { connection } = useConnection();
+  const signableWallet = useSignableWallet();
   const { api, ensureSession } = useBackendSession();
 
   const { data: deal, isLoading } = useGetDeal(dealId, {
@@ -65,7 +69,7 @@ export default function DealDetail() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard title="Storage" value={`${deal.storageGb} GB`} subtitle="Allocated" icon={HardDrive} />
             <StatCard title="Duration" value={`${deal.durationEpochs}`} subtitle="Epochs" icon={Clock} />
-            <StatCard title="Total Cost" value={`◎ ${deal.totalCostAda.toFixed(2)}`} subtitle="SOL locked" icon={Coins} />
+            <StatCard title="Total Cost" value={`◎ ${deal.totalCostSol.toFixed(2)}`} subtitle="SOL locked" icon={Coins} />
             <StatCard
               title="Provider"
               value={deal.providerName}
@@ -159,6 +163,8 @@ export default function DealDetail() {
                 dealId={deal.dataHash}
                 wallet={address}
                 ensureSession={ensureSession}
+                connection={connection}
+                signer={signableWallet}
               />
             </CardContent>
           </Card>

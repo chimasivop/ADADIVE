@@ -18,10 +18,8 @@ import { BALANCE_POLL_MS } from "@/lib/chain";
  * Wallet state for the app.
  *
  * This replaces the Cardano CIP-30 context that drove `window.cardano.eternl`.
- * The *surface is deliberately identical* — the same field names
- * (`connected`/`connecting`/`address`/`thtBalance`/`adaBalance`/`error`), the
- * same `connect`/`disconnect`/`displayAddress` — so no consumer's JSX had to
- * change. What changed is underneath:
+ * The connect/disconnect surface is the same shape it always was; what changed
+ * is underneath:
  *
  *   | before (Cardano)                              | after (Solana)                       |
  *   | --------------------------------------------- | ------------------------------------ |
@@ -29,12 +27,10 @@ import { BALANCE_POLL_MS } from "@/lib/chain";
  *   | `getUsedAddresses()` → hex → bech32 `addr1…`  | `publicKey.toBase58()`               |
  *   | `getBalance()` CBOR → ADA + THT               | `connection.getBalance()` → lamports |
  *
- * The balance field names are retained rather than renamed (see
- * `SOLANA_MIGRATION.md`): `thtBalance` now carries the wallet's SOL balance and
- * `adaBalance` a display-rounded copy of the same number, because the on-chain
- * escrow moves a single native asset. Renaming them would have rippled through
- * the database schema, the OpenAPI spec and the generated clients for no
- * functional gain.
+ * The two Cardano-era balance fields (`thtBalance`, `adaBalance`) are gone.
+ * They both held the wallet's SOL balance because the escrow moves a single
+ * native asset, and keeping two names for one number invited a consumer to
+ * treat them as different values. There is now one field, `solBalance`.
  */
 
 interface WalletState {
@@ -42,10 +38,8 @@ interface WalletState {
   connecting: boolean;
   /** Base58 Solana public key. Was a bech32 `addr1…` Cardano address. */
   address: string | null;
-  /** SOL balance, display-rounded. Was the lovelace-derived ADA balance. */
-  adaBalance: number | null;
-  /** SOL balance. Was the THT native-token balance. */
-  thtBalance: number | null;
+  /** SOL balance. Was the lovelace-derived ADA balance and the THT balance. */
+  solBalance: number | null;
   error: string | null;
 }
 
@@ -166,8 +160,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     connected: adapterConnected,
     connecting: adapterConnecting,
     address: publicKey ? publicKey.toBase58() : null,
-    adaBalance: solBalance,
-    thtBalance: solBalance,
+    solBalance,
     error,
     connect,
     disconnect,
