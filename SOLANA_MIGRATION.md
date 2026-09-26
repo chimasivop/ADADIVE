@@ -4,9 +4,10 @@ Phase 5 replaces ADADIVE's Cardano blockchain integration with the Solana
 integration proven in `ADADIVE-solana` (Phases 1–4). The escrow program, fee
 model, oracle verification and auth flow are **reused**, not rebuilt.
 
-Two things did change for the user, and are called out at the end: the labels
-now name Solana instead of Cardano, and the database columns were renamed from
-`ADA` to `SOL` in place. See "Copy status" and "Renaming the ADA columns".
+Three things did change for the user, and are called out at the end: the labels
+now name Solana instead of Cardano, the THT/THETA token copy and its pages are
+gone entirely, and the database columns were renamed from `ADA` to `SOL` in
+place. See "Copy status" and "Renaming the ADA columns".
 
 ## What the swap is, module by module
 
@@ -124,16 +125,18 @@ The migration is complete enough that the brief's "do not change Cardano text"
 constraint no longer applies; the UI now says what the app actually does —
 `CONNECT PHANTOM`, `SOLANA TX`, `SOL`/`BAL`, `◎`, and `explorer.solana.com`.
 
-Two things are worth a reviewer's eye:
+ADADIVE ships no token, Cardano or Solana, for the foreseeable future, so the
+product is presented as a storage marketplace with no token positioning. Both
+`THT` (the token) and `THETA` (its branding) are gone from the UI: there is no
+user-visible `THT`/`THETA` copy left anywhere. `pages/TokenPage.tsx` and
+`lib/token.ts` were deleted outright, along with their `App.tsx` import and
+`/token` route, the landing-page teaser and nav/footer buttons, the "powered by
+THT" sidebar divider, and the "by THETA" taglines on `Landing.tsx`,
+`AppSidebar.tsx`, `PinFiles.tsx` and `WaitlistAdmin.tsx`. The CSS the token
+pages left behind (`.a-token-card`, `@keyframes adadiveFloat`,
+`@keyframes adadiveRotate`) was removed with them.
 
-- **THT is still all over the marketing pages.** `Landing.tsx` and
-  `TokenPage.tsx` describe a "THT Token", a "THT allocation bonus", and
-  "powered by THT", and `lib/token.ts` still models a Cardano policy ID. None of
-  it reflects Solana. Whether the product keeps a separate token on Solana or
-  drops the concept is a product decision, not a migration one, so it was left
-  alone rather than guessed at. This is the largest remaining Cardano-shaped
-  surface.
-- **Names that still say Cardano** (all wire-format, all carrying SOL values):
-  `pricePerEpochTHT`, `totalCostTHT`, `cardanoMetadata`, and the
-  `cardano-storage` package name. Renaming these means changing the OpenAPI
-  spec and regenerating the clients.
+One thing is worth a reviewer's eye — **names that still say Cardano** (all
+wire-format, all carrying SOL values): `pricePerEpochTHT`, `totalCostTHT`,
+`cardanoMetadata`, and the `cardano-storage` package name. Renaming these means
+changing the OpenAPI spec and regenerating the clients.
