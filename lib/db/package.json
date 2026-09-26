@@ -9,6 +9,7 @@
   },
   "scripts": {
     "migrate": "node ./migrate.mjs",
+    "check:ada-columns": "node ./scripts/check-ada-columns.mjs",
     "push": "pnpm run migrate && drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "pnpm run migrate && drizzle-kit push --force --config ./drizzle.config.ts"
   },
