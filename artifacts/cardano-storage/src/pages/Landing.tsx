@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useJoinWaitlist, useGetNetworkStats, useGetEconomyStats } from "@workspace/api-client-react";
-import { THT } from "@/lib/token";
 import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
 
 /* ── Global styles for landing (scoped via class names) ── */
@@ -15,8 +14,6 @@ const G = `
 
   @keyframes adadiveFadeUp   { from { opacity:0; transform:translateY(32px); } to { opacity:1; transform:translateY(0); } }
   @keyframes adadiveFadeIn   { from { opacity:0; } to { opacity:1; } }
-  @keyframes adadiveFloat    { 0%,100% { transform:translateY(0px) rotate(0deg); } 50% { transform:translateY(-14px) rotate(1deg); } }
-  @keyframes adadiveRotate   { to { transform: rotate(360deg); } }
   @keyframes adadiveShimmer  { 0%,100% { opacity:.5; } 50% { opacity:1; } }
   @keyframes adadiveScanH    { 0% { top:-4px; } 100% { top:100%; } }
   @keyframes adadivePulse    { 0%,100% { transform:scale(1); opacity:.7; } 50% { transform:scale(1.12); opacity:1; } }
@@ -52,14 +49,6 @@ const G = `
     transition: border-color .25s, transform .25s;
   }
   .a-feature-card:hover { border-color: rgba(201,169,110,.28); transform: translateY(-4px); }
-
-  .a-token-card {
-    background: rgba(201,169,110,.03);
-    border: 1px solid rgba(201,169,110,.12);
-    border-radius:6px; padding:28px;
-    transition: all .25s;
-  }
-  .a-token-card:hover { border-color: rgba(201,169,110,.3); box-shadow: 0 4px 32px rgba(201,169,110,.07); }
 
   .a-btn-primary {
     font-family:'Cinzel',serif; font-size:11px; letter-spacing:.3em;
@@ -128,14 +117,13 @@ const Logo = ({ size = 36 }: { size?: number }) => (
 export default function Landing() {
   const [, setLocation] = useLocation();
   const goApp   = () => setLocation("/app");
-  const goToken = () => setLocation("/token");
   const whitepaperUrl = `${import.meta.env.BASE_URL}ADADIVE-Whitepaper-v1.0.pdf`;
 
   const [email, setEmail]       = useState("");
   const [subState, setSubState] = useState<"idle" | "loading" | "done" | "duplicate">("idle");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  useEffect(() => { document.title = "ADADIVE — Decentralised Storage on Cardano"; }, []);
+  useEffect(() => { document.title = "ADADIVE — Decentralised Storage on Solana"; }, []);
 
   // Fetch live network and economy stats
   const { data: networkStats } = useGetNetworkStats();
@@ -150,7 +138,7 @@ export default function Landing() {
   // Helper to format price
   const formatPrice = (ada?: number) => {
     if (ada === undefined) return "--";
-    return `${ada.toFixed(4)} THT`;
+    return `${ada.toFixed(4)} SOL`;
   };
 
   const joinMutation = useJoinWaitlist();
@@ -188,16 +176,12 @@ export default function Landing() {
       <nav style={{ position:"sticky", top:0, zIndex:50, backdropFilter:"blur(14px)", background:"rgba(5,7,15,.85)", borderBottom:"1px solid rgba(201,169,110,.09)", height:"60px", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 clamp(16px,4vw,48px)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
           <Logo size={32} />
-          <div>
-            <div style={{ fontFamily:"'Cinzel',serif", fontSize:"13px", letterSpacing:".35em", color:T.gold, lineHeight:1.1 }}>ADADIVE</div>
-            <div style={{ fontFamily:"'DM Mono',monospace", fontSize:"8px", letterSpacing:".2em", color:T.smoke, opacity:.6 }}>by THETA · powered by THT</div>
-          </div>
+          <div style={{ fontFamily:"'Cinzel',serif", fontSize:"13px", letterSpacing:".35em", color:T.gold, lineHeight:1.1 }}>ADADIVE</div>
         </div>
 
         {/* Desktop nav */}
         <div className="a-nav-desktop" style={{ gap:"28px", alignItems:"center" }}>
           {["Protocol","Providers","Deals"].map(n => <button key={n} className="a-nav-link" onClick={goApp}>{n}</button>)}
-          <button className="a-nav-link" onClick={goToken} style={{ color:T.gold, opacity:.85 }}>THT Token</button>
           <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link">Whitepaper</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ color:"#5865F2" }}>Discord</a>
           <button className="a-btn-primary" style={{ padding:"8px 22px", fontSize:"10px" }} onClick={goApp}>Launch App</button>
@@ -217,7 +201,6 @@ export default function Landing() {
       {mobileMenuOpen && (
         <div style={{ position:"fixed", top:"60px", left:0, right:0, zIndex:49, background:"rgba(5,7,15,.97)", borderBottom:"1px solid rgba(201,169,110,.12)", padding:"20px 24px", display:"flex", flexDirection:"column", gap:"18px" }}>
           {["Protocol","Providers","Deals"].map(n => <button key={n} className="a-nav-link" onClick={() => { goApp(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px" }}>{n}</button>)}
-          <button className="a-nav-link" onClick={() => { goToken(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px", color:T.gold }}>THT Token</button>
           <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize:"12px" }}>Whitepaper ↗</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ fontSize:"12px", color:"#5865F2" }}>Discord Server ↗</a>
           <button className="a-btn-primary" style={{ padding:"10px 20px", fontSize:"10px", width:"fit-content" }} onClick={() => { goApp(); setMobileMenuOpen(false); }}>Launch App</button>
@@ -229,7 +212,7 @@ export default function Landing() {
         {/* Live badge */}
         <div className="afu" style={{ display:"inline-flex", alignItems:"center", gap:"10px", border:"1px solid rgba(201,169,110,.2)", borderRadius:"100px", padding:"6px 20px", marginBottom:"40px" }}>
           <span style={{ width:"6px", height:"6px", borderRadius:"50%", background:"#00ffa3", display:"block", animation:"adadivePulse 2s infinite" }} />
-          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".22em", color:T.smoke }}>LIVE ON CARDANO PREPROD · {networkStats ? `${networkStats.totalStorageTb.toFixed(2)} TB ONLINE` : "LOADING..."}</span>
+          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".22em", color:T.smoke }}>LIVE ON SOLANA · {networkStats ? `${networkStats.totalStorageTb.toFixed(2)} TB ONLINE` : "LOADING..."}</span>
         </div>
 
         <h1 className="afu ad1" style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(32px,7vw,88px)", fontWeight:600, lineHeight:1.08, letterSpacing:"-.01em", marginBottom:"6px" }}>
@@ -242,14 +225,13 @@ export default function Landing() {
         </h1>
 
         <p className="afu ad3" style={{ fontStyle:"italic", fontWeight:300, fontSize:"clamp(16px,2.2vw,22px)", color:T.smoke, maxWidth:"520px", lineHeight:1.75, marginBottom:"16px" }}>
-          A peer-to-peer storage marketplace where providers earn <em style={{ color:T.gold }}>THT</em> and users pay in the same token — all settled on Cardano.
+          A peer-to-peer storage marketplace where providers earn <em style={{ color:T.gold }}>SOL</em> and users pay in the same token — all settled on Solana.
         </p>
 
         <div className="afu ad3" style={{ marginBottom:"48px" }}><Ornament /></div>
 
         <div className="afu ad4" style={{ display:"flex", gap:"16px", flexWrap:"wrap", justifyContent:"center" }}>
           <button className="a-btn-primary" onClick={goApp}>EXPLORE NETWORK</button>
-          <button className="a-btn-ghost" onClick={goToken}>THT TOKEN ↗</button>
         </div>
 
         {/* Stats row - live data */}
@@ -257,7 +239,7 @@ export default function Landing() {
           {[
             [formatStorage(networkStats?.totalStorageTb), "Total Storage"],
             [String(networkStats?.activeDeals ?? "--"), "Active Deals"],
-            [THT.label(networkStats?.totalSolLocked?.toLocaleString() ?? "--"), "THT Locked"],
+            [`◎ ${networkStats?.totalSolLocked?.toLocaleString() ?? "--"}`, "SOL Locked"],
             [String(networkStats?.activeProviders ?? "--"), "Providers"],
             [formatPrice(economyStats?.solPerGbPerEpoch), "per GB / Epoch"],
           ].map(([v,l]) => (
@@ -291,10 +273,10 @@ export default function Landing() {
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))", gap:"20px" }}>
           {[
-            { n:"01", icon:"◈", title:"Providers Register", body:"Storage providers stake THT and register their capacity on-chain. Staking signals commitment and earns reputation over epochs." },
-            { n:"02", icon:"◉", title:"Users Create Deals",  body:"Users browse providers, select storage capacity and duration, then lock THT into escrow. The deal is anchored to the Cardano ledger." },
-            { n:"03", icon:"◆", title:"Data is Pinned",      body:"Files are content-addressed and pinned. The CID is recorded in Cardano metadata, creating a permanent, verifiable proof of storage." },
-            { n:"04", icon:"✦", title:"THT is Released",     body:"On successful epoch proofs, escrowed THT flows to the provider. Failed proofs trigger slashing — keeping providers honest." },
+            { n:"01", icon:"◈", title:"Providers Register", body:"Storage providers stake SOL and register their capacity on-chain. Staking signals commitment and earns reputation over epochs." },
+            { n:"02", icon:"◉", title:"Users Create Deals",  body:"Users browse providers, select storage capacity and duration, then lock SOL into escrow. The deal is anchored to the Solana ledger." },
+            { n:"03", icon:"◆", title:"Data is Pinned",      body:"Files are content-addressed and pinned. The CID is recorded on-chain, creating a permanent, verifiable proof of storage." },
+            { n:"04", icon:"✦", title:"Payment is Released", body:"On successful epoch proofs, escrowed SOL flows to the provider. Failed proofs trigger slashing — keeping providers honest." },
           ].map(c => (
             <div key={c.n} className="a-feature-card">
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"20px" }}>
@@ -319,7 +301,7 @@ export default function Landing() {
             {[
               { label:"Total Storage", value: formatStorage(networkStats?.totalStorageTb), sub: networkStats?.networkUtilizationPercent !== undefined ? `${networkStats.networkUtilizationPercent.toFixed(1)}% Utilised` : "Loading...", icon:"▣" },
               { label:"Active Deals",  value: String(networkStats?.activeDeals ?? "--"), sub: networkStats?.totalDealsAllTime !== undefined ? `${networkStats.totalDealsAllTime} All Time` : "Loading...", icon:"⬡" },
-              { label:"THT Locked",    value: THT.label(networkStats?.totalSolLocked?.toLocaleString() ?? "--"), sub:"In Active Escrow", icon:"◈" },
+              { label:"SOL Locked",    value: `◎ ${networkStats?.totalSolLocked?.toLocaleString() ?? "--"}`, sub:"In Active Escrow", icon:"◈" },
               { label:"Avg Price",     value: formatPrice(economyStats?.solPerGbPerEpoch), sub:"per GB / Epoch", icon:"∿" },
               { label:"Providers",     value: String(networkStats?.activeProviders ?? "--"), sub: networkStats?.totalProviders !== undefined ? `${networkStats.totalProviders} Total` : "Loading...", icon:"◉" },
             ].map(s => (
@@ -332,24 +314,6 @@ export default function Landing() {
             ))}
           </div>
         </div>
-      </section>
-
-      {/* ─── THT TEASER ─── */}
-      <section style={{ position:"relative", zIndex:10, padding:"100px clamp(16px,4vw,48px)", maxWidth:"900px", margin:"0 auto", textAlign:"center" }}>
-        <SectionLabel>Native Token</SectionLabel>
-        <div style={{ display:"flex", justifyContent:"center", marginBottom:"24px" }}>
-          <div style={{ position:"relative", animation:"adadiveFloat 6s ease-in-out infinite" }}>
-            <Logo size={88} />
-            <div style={{ position:"absolute", inset:"-14px", borderRadius:"50%", border:"1px solid rgba(201,169,110,.15)", animation:"adadiveRotate 20s linear infinite" }} />
-            <div style={{ position:"absolute", inset:"-26px", borderRadius:"50%", border:"1px solid rgba(201,169,110,.06)", animation:"adadiveRotate 35s linear infinite reverse" }} />
-          </div>
-        </div>
-        <h2 style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(24px,4vw,44px)", color:T.gold, marginBottom:"8px", letterSpacing:".04em" }}>THT Token</h2>
-        <p style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".2em", color:T.mist, marginBottom:"24px" }}>THETA · NATIVE CARDANO TOKEN</p>
-        <p style={{ fontStyle:"italic", fontSize:"18px", color:T.smoke, lineHeight:1.8, maxWidth:"520px", margin:"0 auto 40px", fontWeight:300 }}>
-          THT is the lifeblood of the ADADIVE economy — used to pay for storage, reward providers, and govern the protocol.
-        </p>
-        <button className="a-btn-primary" onClick={goToken}>EXPLORE THT TOKEN →</button>
       </section>
 
       {/* ─── COMMUNITY — Waitlist + Discord ─── */}
@@ -368,7 +332,7 @@ export default function Landing() {
               <div style={{ fontFamily:"'Cinzel',serif", fontSize:"11px", letterSpacing:".35em", color:T.gold, marginBottom:"8px", opacity:.8 }}>WAITLIST</div>
               <h3 style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(18px,3vw,24px)", color:T.snow, marginBottom:"12px" }}>Early Access</h3>
               <p style={{ fontSize:"14px", color:T.smoke, lineHeight:1.7, fontWeight:300, marginBottom:"28px" }}>
-                Reserve your spot before public launch. Early members receive priority onboarding and a THT allocation bonus.
+                Reserve your spot before public launch. Early members receive priority onboarding.
               </p>
 
               {subState === "done" ? (
@@ -463,8 +427,8 @@ export default function Landing() {
 
       {/* ─── CTA BAND ─── */}
       <section style={{ position:"relative", zIndex:10, padding:"80px clamp(16px,4vw,48px)", background:`linear-gradient(135deg,rgba(201,169,110,.06) 0%,rgba(201,169,110,.02) 100%)`, borderTop:"1px solid rgba(201,169,110,.1)", textAlign:"center" }}>
-        <h2 style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(22px,4vw,40px)", color:T.snow, marginBottom:"16px", letterSpacing:".03em" }}>Ready to Store on Cardano?</h2>
-        <p style={{ fontStyle:"italic", fontSize:"17px", color:T.smoke, marginBottom:"40px", fontWeight:300 }}>Connect your Eternl wallet and create your first deal in minutes.</p>
+        <h2 style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(22px,4vw,40px)", color:T.snow, marginBottom:"16px", letterSpacing:".03em" }}>Ready to Store on Solana?</h2>
+        <p style={{ fontStyle:"italic", fontSize:"17px", color:T.smoke, marginBottom:"40px", fontWeight:300 }}>Connect your Solana wallet and create your first deal in minutes.</p>
         <div style={{ display:"flex", gap:"16px", justifyContent:"center", flexWrap:"wrap" }}>
           <button className="a-btn-primary" onClick={goApp}>OPEN APP →</button>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-btn-ghost" style={{ display:"inline-flex", alignItems:"center", gap:"8px", textDecoration:"none" }}>
@@ -479,13 +443,11 @@ export default function Landing() {
         <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
           <Logo size={22} />
           <span style={{ fontFamily:"'Cinzel',serif", fontSize:"11px", letterSpacing:".3em", color:T.gold, opacity:.6 }}>ADADIVE</span>
-          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", color:T.mist }}>by THETA · powered by THT</span>
         </div>
         <div style={{ display:"flex", gap:"20px", flexWrap:"wrap" }}>
           {["Protocol","Providers","Deals","Pin Files"].map(l => (
             <button key={l} className="a-nav-link" onClick={goApp}>{l}</button>
           ))}
-          <button className="a-nav-link" onClick={goToken}>THT Token</button>
           <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link">Whitepaper</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ color:"#5865F2" }}>Discord</a>
         </div>

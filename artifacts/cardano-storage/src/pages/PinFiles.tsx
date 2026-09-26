@@ -665,7 +665,7 @@ export default function PinFiles() {
       )}
 
       <div className="flex justify-between mt-10 pt-4" style={{ borderTop: "1px solid hsl(var(--primary)/0.08)" }}>
-        <span style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.12em" }}>ADADIVE by THETA</span>
+        <span style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.12em" }}>ADADIVE</span>
         <span style={{ fontSize: "9px", color: g.dim, letterSpacing: "0.12em" }}>{NETWORK_LABEL}</span>
       </div>
     </div>

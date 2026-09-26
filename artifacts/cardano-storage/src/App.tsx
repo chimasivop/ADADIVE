@@ -12,7 +12,6 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RPC_ENDPOINT } from "@/lib/chain";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
-import TokenPage from "@/pages/TokenPage";
 import Dashboard from "@/pages/Dashboard";
 import Providers from "@/pages/Providers";
 import ProviderDetail from "@/pages/ProviderDetail";
@@ -54,7 +53,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/"      component={Landing}   />
-      <Route path="/token" component={TokenPage} />
       {/* All other routes go through the app shell */}
       <Route component={AppRouter} />
     </Switch>
