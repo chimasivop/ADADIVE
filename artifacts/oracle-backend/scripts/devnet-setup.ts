@@ -18,7 +18,7 @@
  * gitignored. The oracle keypair is what the backend signs settles with, so it
  * must match `DEV_ORACLE_KEYPAIR_PATH`.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import {
@@ -54,6 +54,22 @@ function keypairFromFile(path: string): Keypair {
   return Keypair.fromSecretKey(
     Uint8Array.from(JSON.parse(readFileSync(path, "utf8")) as number[])
   );
+}
+
+/**
+ * Reuse the role keypair already on disk when there is one.
+ *
+ * Generating fresh keys on every run made restarts unstable: the oracle's
+ * public key is baked into each deal's escrow account at creation, so a new
+ * oracle key orphans every deal created before the restart. Reusing keeps a
+ * running localnet self-consistent. The keys are throwaway and localnet-only,
+ * so this is about stability, not about protecting anything valuable.
+ */
+function loadOrGenerate(path: string): { keypair: Keypair; reused: boolean } {
+  if (existsSync(path)) {
+    return { keypair: keypairFromFile(path), reused: true };
+  }
+  return { keypair: Keypair.generate(), reused: false };
 }
 
 async function exists(connection: Connection, address: PublicKey): Promise<boolean> {
@@ -107,26 +123,33 @@ async function main() {
   }
 
   mkdirSync(keysDir, { recursive: true });
-  const roles: Array<[string, Keypair]> = [
-    ["depositor", Keypair.generate()],
-    ["provider", Keypair.generate()],
-    ["oracle", Keypair.generate()],
-  ];
+  const roleNames = ["depositor", "provider", "oracle"] as const;
+  const roles: Array<[string, Keypair, boolean]> = roleNames.map((name) => {
+    const path = resolve(keysDir, `${name}.json`);
+    const { keypair, reused } = loadOrGenerate(path);
+    return [name, keypair, reused];
+  });
 
-  for (const [name, keypair] of roles) {
+  for (const [name, keypair, reused] of roles) {
     const path = resolve(keysDir, `${name}.json`);
     writeFileSync(path, JSON.stringify(Array.from(keypair.secretKey)));
-    const sig = await connection.requestAirdrop(
-      keypair.publicKey,
-      10 * LAMPORTS_PER_SOL
+    const balance = await connection.getBalance(keypair.publicKey, "confirmed");
+    if (!reused || balance === 0) {
+      const sig = await connection.requestAirdrop(
+        keypair.publicKey,
+        10 * LAMPORTS_PER_SOL
+      );
+      const latest = await connection.getLatestBlockhash();
+      await connection.confirmTransaction(
+        { signature: sig, ...latest },
+        "confirmed"
+      );
+    }
+    console.log(
+      `${name.padEnd(9)} ${keypair.publicKey.toBase58()}  -> ${path}${reused ? " (reused)" : ""}`
     );
-    const latest = await connection.getLatestBlockhash();
-    await connection.confirmTransaction(
-      { signature: sig, ...latest },
-      "confirmed"
-    );
-    console.log(`${name.padEnd(9)} ${keypair.publicKey.toBase58()}  -> ${path}`);
   }
+
 
   // Fund the treasury so the fee arriving there is observable as a balance.
   const treasuryTx = await connection.requestAirdrop(TREASURY, LAMPORTS_PER_SOL);

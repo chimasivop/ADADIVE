@@ -66,3 +66,6 @@ package-lock.json
 programs/**/target/
 artifacts/oracle-backend/.setup-bundle/
 /test-ledger/
+
+# Local dev stack run dir (pids/logs from scripts/dev-up.sh)
+/.dev-run/
