@@ -5,10 +5,15 @@ import { Connection, PublicKey } from "@solana/web3.js";
 function config() {
   return {
     pinata: {
-      apiKey:    process.env.PINATA_API_KEY    ?? "",
-      apiSecret: process.env.PINATA_API_SECRET ?? "",
-      baseUrl:   "https://api.pinata.cloud",
-      gateway:   "https://gateway.pinata.cloud/ipfs",
+      // Pinata's V3 Files API authenticates with the JWT only — the legacy
+      // `pinata_api_key`/`pinata_secret_api_key` pair is not accepted (it gets a
+      // 401). `PINATA_API_KEY`/`PINATA_API_SECRET` are still read by deployment
+      // tooling but are no longer used to sign requests here.
+      jwt:       process.env.PINATA_JWT ?? "",
+      // Uploads and management live on different V3 hosts/paths.
+      uploadUrl: "https://uploads.pinata.cloud/v3/files",
+      apiUrl:    "https://api.pinata.cloud/v3/files/public",
+      gateway:   process.env.PINATA_GATEWAY ?? "https://gateway.pinata.cloud/ipfs",
     },
     solana: {
       // Was the Koios Cardano REST base URL. The chain reads below now go over
@@ -33,11 +38,33 @@ function solanaConnection(): Connection {
 
 function assertPinataConfig() {
   const c = config();
-  const missing: string[] = [];
-  if (!c.pinata.apiKey)    missing.push("PINATA_API_KEY");
-  if (!c.pinata.apiSecret) missing.push("PINATA_API_SECRET");
-  if (missing.length) throw new Error(`Missing env vars: ${missing.join(", ")}`);
+  if (!c.pinata.jwt) throw new Error("Missing env vars: PINATA_JWT");
   return c;
+}
+
+/** Pinata V3 requests authenticate with the account JWT in a bearer header. */
+function pinataHeaders(extra: Record<string, string> = {}) {
+  return { Authorization: `Bearer ${config().pinata.jwt}`, ...extra };
+}
+
+/**
+ * Pull a human-readable error out of a Pinata V3 error body.
+ *
+ * V3 answers with `{"error": {"reason": "...", "details": "..."}}`; surfacing
+ * `reason` is what turns an opaque 500 into "Unsupported CID version".
+ */
+function pinataError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as
+      | { error?: { reason?: string; details?: string } | string; message?: string }
+      | undefined;
+    const e = data?.error;
+    if (typeof e === "string") return e;
+    if (e?.reason) return e.reason;
+    if (data?.message) return data.message;
+    if (err.response) return `Pinata request failed with HTTP ${err.response.status}`;
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 // ─── IPFS / Pinata ───────────────────────────────────────────────────────────
@@ -50,30 +77,34 @@ export async function pinFileToIPFS(
 ) {
   const c  = assertPinataConfig();
   const fd = new FormData();
+  // V3 expects the file plus a required `network` field; metadata is a flat
+  // `keyvalues` object (not the legacy `pinataMetadata` wrapper).
   fd.append("file", fileBuffer, { filename: fileName, contentType: mimeType });
-  fd.append("pinataMetadata", JSON.stringify({
-    name: fileName,
-    keyvalues: { protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString(), ...metadata },
+  fd.append("network", "public");
+  fd.append("name", fileName);
+  fd.append("keyvalues", JSON.stringify({
+    protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString(), ...metadata,
   }));
-  fd.append("pinataOptions", JSON.stringify({ cidVersion: 1 }));
 
-  const res = await axios.post(`${c.pinata.baseUrl}/pinning/pinFileToIPFS`, fd, {
-    maxBodyLength: Infinity,
-    headers: {
-      ...fd.getHeaders(),
-      pinata_api_key:        c.pinata.apiKey,
-      pinata_secret_api_key: c.pinata.apiSecret,
-    },
-  });
+  let data: PinataV3File;
+  try {
+    const res = await axios.post(c.pinata.uploadUrl, fd, {
+      maxBodyLength: Infinity,
+      headers: { ...fd.getHeaders(), ...pinataHeaders() },
+    });
+    data = res.data?.data as PinataV3File;
+  } catch (err) {
+    throw new Error(`Pinata upload failed: ${pinataError(err)}`);
+  }
 
-  const cid = res.data.IpfsHash as string;
+  const cid = data.cid;
   return {
     success:    true,
     cid,
     ipfsUrl:    `ipfs://${cid}`,
     gatewayUrl: `${c.pinata.gateway}/${cid}`,
-    size:       res.data.PinSize   as number,
-    timestamp:  res.data.Timestamp as string,
+    size:       data.size,
+    timestamp:  data.created_at,
     fileName,
     mimeType,
   };
@@ -81,20 +112,27 @@ export async function pinFileToIPFS(
 
 export async function pinJSONToIPFS(jsonData: object, name = "ADADIVE Metadata") {
   const c = assertPinataConfig();
-  const res = await axios.post(`${c.pinata.baseUrl}/pinning/pinJSONToIPFS`, {
-    pinataContent: jsonData,
-    pinataMetadata: {
-      name,
-      keyvalues: { protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString() },
-    },
-  }, {
-    headers: {
-      "Content-Type":        "application/json",
-      pinata_api_key:        c.pinata.apiKey,
-      pinata_secret_api_key: c.pinata.apiSecret,
-    },
-  });
-  const cid = res.data.IpfsHash as string;
+  // V3 has no JSON endpoint; a JSON document is uploaded as a file with a
+  // JSON content type, which produces the same v1 CID the legacy call did.
+  const body = Buffer.from(JSON.stringify(jsonData), "utf8");
+  const fd = new FormData();
+  fd.append("file", body, { filename: `${name}.json`, contentType: "application/json" });
+  fd.append("network", "public");
+  fd.append("name", name);
+  fd.append("keyvalues", JSON.stringify({ protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString() }));
+
+  let data: PinataV3File;
+  try {
+    const res = await axios.post(c.pinata.uploadUrl, fd, {
+      maxBodyLength: Infinity,
+      headers: { ...fd.getHeaders(), ...pinataHeaders() },
+    });
+    data = res.data?.data as PinataV3File;
+  } catch (err) {
+    throw new Error(`Pinata metadata upload failed: ${pinataError(err)}`);
+  }
+
+  const cid = data.cid;
   return {
     success:    true,
     cid,
@@ -103,17 +141,35 @@ export async function pinJSONToIPFS(jsonData: object, name = "ADADIVE Metadata")
   };
 }
 
+interface PinataV3File {
+  id: string;
+  name: string;
+  cid: string;
+  size: number;
+  mime_type: string;
+  created_at: string;
+}
+
 export async function checkPinStatus(cid: string) {
-  const c   = assertPinataConfig();
-  const res = await axios.get(`${c.pinata.baseUrl}/pinning/pinList?hashContains=${cid}`, {
-    headers: {
-      pinata_api_key:        c.pinata.apiKey,
-      pinata_secret_api_key: c.pinata.apiSecret,
-    },
-  });
-  const pins   = res.data.rows as Array<{ date_unpinned: string | null }>;
-  const pinned = pins.length > 0 && pins[0].date_unpinned === null;
-  return { pinned, status: pinned ? "pinned" : "not_found", details: pins[0] ?? null };
+  const c = assertPinataConfig();
+  let data: { files?: PinataV3File[] };
+  try {
+    const res = await axios.get(c.pinata.apiUrl, {
+      // V3 filters via a `cid` query param (the legacy `hashContains` is gone).
+      params: { cid },
+      headers: pinataHeaders(),
+    });
+    data = res.data?.data;
+  } catch (err) {
+    throw new Error(`Pinata pin lookup failed: ${pinataError(err)}`);
+  }
+
+  // V3's `cid` filter is a contains-match, so confirm an exact hash rather than
+  // trusting the first row. A V3 file record only exists while it is stored, so
+  // a match means the pin is present.
+  const match = (data.files ?? []).find((f) => f.cid === cid);
+  const pinned = Boolean(match);
+  return { pinned, status: pinned ? "pinned" : "not_found", details: match ?? null };
 }
 
 // ─── Solana RPC ──────────────────────────────────────────────────────────────

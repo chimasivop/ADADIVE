@@ -12,8 +12,8 @@ const upload = multer({
 });
 
 function requirePinata(res: Response): boolean {
-  if (!process.env.PINATA_API_KEY || !process.env.PINATA_API_SECRET) {
-    res.status(503).json({ error: "PINATA_API_KEY and PINATA_API_SECRET are not configured" });
+  if (!process.env.PINATA_JWT) {
+    res.status(503).json({ error: "PINATA_JWT is not configured" });
     return false;
   }
   return true;
