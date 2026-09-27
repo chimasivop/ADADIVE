@@ -56,7 +56,11 @@ adadive_export.sql
 package-lock.json
 
 # Solana test validator ledger, funded localnet keypairs and Rust build output.
-/keys/
+# `**/keys/` rather than `/keys/`: the setup script writes to `keys/` relative to
+# the current directory, so running it from a nested package drops funded
+# keypairs into e.g. `artifacts/oracle-backend/keys/`. Those are private keys and
+# must never be committable, wherever the script happened to be run from.
+**/keys/
 /.anchor/
 /target/
 programs/**/target/
