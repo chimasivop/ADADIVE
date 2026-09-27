@@ -115,6 +115,35 @@ export interface DisputeResult {
 }
 
 /**
+ * What `POST /api/storage/pin` answers with: the pinned file, its metadata pin,
+ * and the escrow parameters the browser needs to initialize on-chain.
+ *
+ * `cardanoMetadata` keeps its historical name — the pin description it carries
+ * is still built the same way; only the chain it anchors to changed.
+ */
+export interface PinFileResult {
+  success: boolean;
+  file: {
+    name: string;
+    mimeType: string;
+    size: number;
+    cid: string;
+    ipfsUrl: string;
+    gatewayUrl: string;
+  };
+  metadataCid: string;
+  metadataUrl: string;
+  cardanoMetadata: unknown;
+  escrow?: {
+    dealId: string;
+    provider: string;
+    oracle: string;
+    amountLamports: string;
+  };
+  deal?: Record<string, unknown>;
+}
+
+/**
  * A non-2xx backend response, preserving what the backend said.
  *
  * `status` and `code` are kept separate from `message` so a caller can branch on
@@ -222,6 +251,66 @@ export class BackendApi {
     }
   ): Promise<{ deal: BackendDeal }> {
     return this.#request("POST", "/deals", params, token);
+  }
+
+  /**
+   * Pin a file and build the deal package, authenticated by a wallet session.
+   *
+   * This talks to the **api-server** (`/api/storage/pin`), not the oracle — the
+   * relative `backendBaseUrl` is a *different* base than `DEFAULT_BACKEND_BASE_URL`.
+   * It lives here anyway so the browser has one place that attaches the
+   * `Authorization` header; a bare `fetch` at the call site is exactly how the
+   * route ended up 401-ing, because it bypassed the session entirely.
+   *
+   * `FormData` is passed through untouched: the browser sets the multipart
+   * boundary, and `content-type` must not be set by hand.
+   */
+  async pinFile(
+    token: string,
+    formData: FormData,
+    opts: { baseUrl?: string } = {}
+  ): Promise<PinFileResult> {
+    const base = (opts.baseUrl ?? this.baseUrl).replace(/\/+$/, "");
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${base}/storage/pin`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+        body: formData,
+      });
+    } catch (err) {
+      throw new BackendError(
+        0,
+        `could not reach the pin service at ${base}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+
+    let payload: unknown = null;
+    const text = await response.text();
+    if (text.length > 0) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        throw new BackendError(
+          response.status,
+          `pin service returned a non-JSON response (HTTP ${response.status})`
+        );
+      }
+    }
+
+    if (!response.ok) {
+      const record = (payload ?? {}) as Record<string, unknown>;
+      const detail = typeof record.detail === "string" ? ` — ${record.detail}` : "";
+      const message =
+        typeof record.error === "string"
+          ? `${record.error}${detail}`
+          : `pin request failed (HTTP ${response.status})`;
+      throw new BackendError(response.status, message);
+    }
+
+    return payload as PinFileResult;
   }
 
   /**

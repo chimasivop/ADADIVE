@@ -199,6 +199,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/solana-escrow':
+        specifier: workspace:*
+        version: link:../../lib/solana-escrow
       axios:
         specifier: ^1.16.1
         version: 1.18.0

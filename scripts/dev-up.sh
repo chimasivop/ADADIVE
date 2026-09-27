@@ -63,6 +63,15 @@ ALLOWED_ORIGIN="${ALLOWED_ORIGIN:-http://localhost:${FRONTEND_PORT},http://127.0
 # valid anywhere but this machine.
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-localdev-admin-password}"
 
+# The session-signing key the oracle and api-server must share. Wallet-signed
+# sessions are HS256 tokens the oracle mints and the api-server verifies, so
+# without a common value the api-server fails closed and Pin Files 401s. The
+# oracle's default is a per-process ephemeral key — precisely the wrong thing
+# here — so a fixed dev value is set instead, stable across restarts so a
+# session outlives one. Override with SESSION_SECRET in `.env` or the
+# environment. The value below is not a secret; it is a local dev placeholder.
+SESSION_SECRET="${SESSION_SECRET:-localdev-session-signing-secret-not-for-production}"
+
 if [[ -f "$ROOT/.env" ]]; then
   echo "==> Loading $ROOT/.env"
   set -a
@@ -301,6 +310,8 @@ cmd_up() {
     SOLANA_RPC_URL="$RPC" \
     ORACLE_SECRET_SOURCE=local-dev \
     DEV_ORACLE_KEYPAIR_PATH="$ROOT/keys/oracle.json" \
+    SESSION_SECRET_SOURCE=env \
+    SESSION_SECRET="$SESSION_SECRET" \
     AUTH_REQUIRED=true \
     PINATA_JWT="${PINATA_JWT:-}" \
     node --enable-source-maps "$ROOT/artifacts/oracle-backend/dist/index.mjs"
@@ -312,6 +323,7 @@ cmd_up() {
     SOLANA_RPC_URL="$RPC" \
     ORACLE_PUBKEY="$ORACLE_PUBKEY" \
     ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    SESSION_SECRET="$SESSION_SECRET" \
     ALLOWED_ORIGIN="$ALLOWED_ORIGIN" \
     PINATA_JWT="${PINATA_JWT:-}" \
     PINATA_GATEWAY="${PINATA_GATEWAY:-}" \

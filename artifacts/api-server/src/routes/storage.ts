@@ -1,8 +1,8 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { validate, schemas } from "@workspace/api-zod";
 import * as storage from "../lib/storage.js";
-import { requireAuth } from "../middlewares/authMiddleware";
+import { requireWalletOrOidcAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
@@ -22,7 +22,7 @@ function requirePinata(res: Response): boolean {
 // ── POST /storage/pin — upload file → Pinata IPFS → deal package ─────────────
 router.post(
   "/storage/pin",
-  requireAuth,
+  requireWalletOrOidcAuth,
   upload.single("file"),
   validate(schemas.pinFile),
   async (req: Request, res: Response): Promise<void> => {

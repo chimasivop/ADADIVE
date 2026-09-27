@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./solana": "./src/solana/index.ts",
     "./backend": "./src/backend/api.ts",
+    "./backend/base58": "./src/backend/base58.ts",
+    "./backend/session": "./src/backend/sessionToken.ts",
     "./format": "./src/format.ts"
   },
   "dependencies": {

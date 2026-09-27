@@ -14,7 +14,9 @@
     "sourceMap": true,
     "types": ["mocha", "node"],
     "paths": {
-      "@workspace/solana-escrow": ["../../lib/solana-escrow/src/index.ts"]
+      "@workspace/solana-escrow": ["../../lib/solana-escrow/src/index.ts"],
+      "@workspace/solana-escrow/backend/base58": ["../../lib/solana-escrow/src/backend/base58.ts"],
+      "@workspace/solana-escrow/backend/session": ["../../lib/solana-escrow/src/backend/sessionToken.ts"]
     }
   },
   "ts-node": {

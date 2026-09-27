@@ -5,6 +5,7 @@ import { useListProviders, getListProvidersQueryKey } from "@workspace/api-clien
 import { useWallet } from "@/contexts/WalletContext";
 import { useSignableWallet } from "@/hooks/useBackendAdapters";
 import { useBackendSession } from "@/hooks/useBackendSession";
+import { API_ENDPOINT } from "@/lib/backend/endpoint";
 import { explorerTxUrl, NETWORK_LABEL } from "@/lib/chain";
 import { initializeEscrow, solToLamports } from "@/lib/escrowService";
 import { DealStatusCard } from "@/components/DealStatusCard";
@@ -80,6 +81,11 @@ interface DealResult {
   };
 }
 
+// The pin response shape lives in the shared client (`PinFileResult`), which is
+// also the code that sends the request. This component used to redeclare it and
+// parse the response by hand; keeping one definition is what stops the two from
+// drifting.
+
 export default function PinFiles() {
   const { connected: walletConnected, connecting, connect, disconnect, address, displayAddress, solBalance } = useWallet();
   const { connection }                      = useConnection();
@@ -144,6 +150,21 @@ export default function PinFiles() {
       return;
     }
 
+    // Sign in once for the whole batch. The token covers every file's pin and
+    // its deal registration, and `ensureSession` collapses concurrent callers
+    // onto one signature — so the wallet is prompted once, not once per file.
+    // It also rejects a wallet that cannot sign messages, so no separate
+    // capability check is needed here.
+    let token: string;
+    try {
+      setPhase(Object.fromEntries(files.map((f) => [f.id, "Authorising wallet…"])));
+      token = await ensureSession();
+    } catch (authErr) {
+      setPinning(false);
+      setPinError(authErr instanceof Error ? authErr.message : String(authErr));
+      return;
+    }
+
     let anyFailed = false;
 
     for (const f of files) {
@@ -151,8 +172,7 @@ export default function PinFiles() {
       const setLbl = (lbl: string) => setPhase((p) => ({ ...p, [f.id]: lbl }));
 
       try {
-        // ── Phase 1: IPFS pin ─────────────────────────────
-        setLbl("Pinning to IPFS…"); setP(15);
+        setLbl("Pinning to IPFS…"); setP(25);
 
         const formData = new FormData();
         formData.append("file", f.file);
@@ -162,15 +182,10 @@ export default function PinFiles() {
         formData.append("pricePerEpochTHT", String(selectedProvider?.pricePerGbPerEpoch ?? 0.0013));
 
         setP(35);
-        const response = await fetch("/api/storage/pin", { method: "POST", body: formData });
-        setP(55);
-
-        if (!response.ok) {
-          const err = await response.json() as { error?: string };
-          throw new Error(err.error ?? `HTTP ${response.status}`);
-        }
-
-        const deal = await response.json() as DealResult;
+        // `api.pinFile` attaches the wallet-session bearer token; the api-server
+        // is reached through the `/api` proxy, a different base than the
+        // oracle's `/backend`.
+        const deal = await api.pinFile(token, formData, { baseUrl: API_ENDPOINT });
         setLbl("IPFS pinned ✓ — building tx…"); setP(60);
 
         // ── Phase 2: initialize the on-chain escrow ───────
@@ -218,7 +233,6 @@ export default function PinFiles() {
         // undo it; it is surfaced on the file's own card.
         let registered = false;
         try {
-          const token = await ensureSession();
           await api.registerDeal(token, {
             dealId,
             dealPda: initResult.dealPda.toBase58(),

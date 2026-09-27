@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, dealsTable, providersTable, activityTable } from "@workspace/db";
 import { validate, schemas } from "@workspace/api-zod";
-import { requireAuth } from "../middlewares/authMiddleware";
+import { requireWalletOrOidcAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -37,7 +37,7 @@ router.get("/deals", async (req: Request, res: Response): Promise<void> => {
 
 router.post(
   "/deals",
-  requireAuth,
+  requireWalletOrOidcAuth,
   validate(schemas.createDeal),
   async (req: Request, res: Response): Promise<void> => {
     try {
@@ -114,7 +114,7 @@ router.get(
 
 router.patch(
   "/deals/:id",
-  requireAuth,
+  requireWalletOrOidcAuth,
   validate(schemas.updateDeal),
   async (req: Request, res: Response): Promise<void> => {
     try {

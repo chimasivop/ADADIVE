@@ -13,7 +13,11 @@ function config() {
       // Uploads and management live on different V3 hosts/paths.
       uploadUrl: "https://uploads.pinata.cloud/v3/files",
       apiUrl:    "https://api.pinata.cloud/v3/files/public",
-      gateway:   process.env.PINATA_GATEWAY ?? "https://gateway.pinata.cloud/ipfs",
+      // `||`, not `??`: dev-up.sh and the container both export PINATA_GATEWAY
+      // as an empty string when unset, and `??` treats "" as a value — which
+      // produced hostless gateway URLs like "/bafy…". Blank means "use the
+      // default".
+      gateway:   process.env.PINATA_GATEWAY?.trim() || "https://gateway.pinata.cloud/ipfs",
     },
     solana: {
       // Was the Koios Cardano REST base URL. The chain reads below now go over

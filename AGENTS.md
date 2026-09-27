@@ -24,6 +24,45 @@ picker modal:
 Symptoms when this is broken: the extension shows the site as connected, the UI
 stays on "CONNECT PHANTOM", and no error appears in the console.
 
+## Wallet-signature auth (api-server and oracle)
+
+The browser signs in once, against the **oracle**, and the resulting bearer
+token is accepted by **both** services:
+
+1. `POST :5001/auth/challenge {wallet}` — oracle mints a one-time message.
+2. `wallet.signMessage(utf8(message))` — a message, not a transaction.
+3. `POST :5001/auth/verify {wallet, nonce, signature}` — oracle verifies over
+   the *stored* message and returns an HS256 session token.
+4. `Authorization: Bearer <token>` on oracle mutations and on `POST /api/storage/pin`.
+
+Key points that are easy to get wrong:
+
+- **`SESSION_SECRET` must be identical in both services.** The oracle *issues*
+  (default source is a per-process ephemeral key — wrong for dev) and the
+  api-server only *verifies*; a mismatch fails closed to a 401 with a log line
+  `wallet session rejected`. `scripts/dev-up.sh` sets a shared dev value and
+  `SESSION_SECRET_SOURCE=env` for the oracle. The token format, base58 codec,
+  issuer (`adadive-oracle-backend`) and audience (`adadive-api`) all live in
+  `lib/solana-escrow/src/backend/{sessionToken,base58}.ts` and are shared; do
+  not copy them.
+- **The OIDC `requireAuth` path is dead from the UI.** No `/auth/login` call is
+  ever made, so no `sid` cookie is set. Routes still gated by `requireAuth` are
+  unreachable from the app. `POST /storage/pin`, `POST /deals`,
+  `PATCH /deals/:id` and `POST /providers` are gated by `requireWalletOrOidcAuth`.
+  Any further mutating route the frontend needs must be moved the same way; the
+  GET routes are unauthenticated by design.
+- **Subpath exports need a `paths` entry.** The oracle's `moduleResolution` is
+  `node`, which does not read `package.json` `exports`, so
+  `tsconfig.json` maps `@workspace/solana-escrow/backend/*` explicitly. The
+  api-server ships the package as a dependency (`workspace:*`); the oracle
+  already had it.
+- **`PINATA_GATEWAY` empty-string trap.** Deployment tooling exports it as `""`
+  when unset; `process.env.X ?? default` keeps `""` and produces hostless
+  gateway URLs like `/bafy…`. The api-server uses `?.trim() || default`.
+
+Symptom when the secret is missing or mismatched: Pin Files signs successfully
+but `POST /api/storage/pin` answers `401 {"error":"Authentication required"}`.
+
 ## Testing the frontend without a wallet extension
 
 The headless browser has no extension, so `Installed` adapters never appear. To
