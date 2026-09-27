@@ -15,6 +15,7 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import { assert } from "chai";
 
 import { encodeBase58 } from "../src/backend/base58";
+import { BackendApi } from "../src/backend/api";
 import { computeFeeSplit } from "../src/solana/fee";
 import { findDealAddress, findPlatformConfigAddress } from "../src/solana/pda";
 import { ESCROW_PROGRAM_ID } from "../src/solana/constants";
@@ -132,5 +133,61 @@ describe("PDA derivation", () => {
     );
     const [actual] = findDealAddress(ESCROW_PROGRAM_ID, depositor, id);
     assert.equal(actual.toBase58(), expected.toBase58());
+  });
+});
+
+describe("BackendApi transport", () => {
+  it("calls the real fetch without rebinding its receiver", async () => {
+    // Regression: the constructor used to store a bare `fetch`. Calling it as
+    // `this.fetchImpl(...)` then passed the BackendApi instance as the receiver,
+    // which browsers reject with "Illegal invocation". Node's fetch ignores the
+    // receiver and returns data anyway, so only a caller that asserts the
+    // receiver — as this one does — can catch it off a browser.
+    const original = globalThis.fetch;
+    const receivers: unknown[] = [];
+    globalThis.fetch = function (this: unknown) {
+      receivers.push(this);
+      return Promise.resolve(
+        new Response('{"ok":true,"oracle":"x","oracleSource":"test"}', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      );
+    } as typeof fetch;
+
+    try {
+      const api = new BackendApi({ baseUrl: "/backend" });
+      await api.health();
+      assert.equal(receivers.length, 1);
+      // `undefined` under a plain call or `globalThis` when explicitly bound;
+      // never an object that is neither.
+      assert.isTrue(
+        receivers[0] === undefined || receivers[0] === globalThis,
+        `fetch was called with receiver ${String(receivers[0])}`
+      );
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("leaves an injected fetchImpl untouched", async () => {
+    // A stub is a plain function with no global to bind to; calling it with the
+    // instance as receiver is fine and tests rely on it.
+    const calls: unknown[] = [];
+    const api = new BackendApi({
+      baseUrl: "/backend",
+      fetchImpl: function (this: unknown) {
+        calls.push(this);
+        return Promise.resolve(
+          new Response('{"ok":true,"oracle":"x","oracleSource":"stub"}', {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        );
+      } as typeof fetch,
+    });
+    const health = await api.health();
+    assert.equal(health.oracle, "x");
+    assert.equal(calls.length, 1);
   });
 });

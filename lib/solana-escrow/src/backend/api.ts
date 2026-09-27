@@ -170,7 +170,12 @@ export class BackendApi {
 
   constructor(opts: BackendApiOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BACKEND_BASE_URL).replace(/\/+$/, "");
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    // `fetch` must be bound to the global. A bare reference stored on the
+    // instance and later invoked as `this.fetchImpl(...)` sets `this` to the
+    // instance, which browsers reject with "Illegal invocation"; Node's fetch
+    // ignores the receiver, so only a real browser surfaces it. Extracted only
+    // when no implementation is injected, so a test stub is left untouched.
+    this.fetchImpl = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.now = opts.now ?? (() => Date.now());
   }
 
