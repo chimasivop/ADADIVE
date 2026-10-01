@@ -165,3 +165,26 @@ browser-driven UI E2E (see above) that drives the real app with a fake Phantom
 wallet. It is opt-in, needs the frontend + oracle + api-server running, and is
 not part of `pnpm test`; report it on its own line, not folded into the unit
 count.
+
+## Escrow program keypair: run `dev-up.sh`, never `cargo build-sbf` first
+
+The escrow program id is fixed by `declare_id!`, and deploying needs the
+matching keypair. That keypair is gitignored, so it is kept at
+`keys/adadive_escrow-keypair.json` and `dev-up.sh` restores it into
+`target/deploy/` on demand.
+
+`cargo build-sbf` does **not** read `declare_id!`. If `target/deploy/` has no
+keypair it silently generates a fresh random one and writes it there — so
+running `cargo build-sbf` before `dev-up.sh` produces a keypair whose address
+does not match `declare_id!`, and a deploy with it fails (or worse, deploys
+under the wrong id). It will also overwrite a keypair already placed in
+`target/deploy/`.
+
+Correct order: `dev-up.sh` first (it seeds `target/deploy/` from `keys/`, then
+builds and deploys). If you must build standalone, copy the keypair back before
+deploying:
+
+    cp keys/adadive_escrow-keypair.json target/deploy/adadive_escrow-keypair.json
+
+and confirm it matches: `solana-keygen pubkey target/deploy/adadive_escrow-keypair.json`
+must equal the `declare_id!` value.
