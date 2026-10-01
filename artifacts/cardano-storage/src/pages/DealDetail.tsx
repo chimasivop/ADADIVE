@@ -1,8 +1,11 @@
-import { useGetDeal, getGetDealQueryKey } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useGetDeal, useUpdateDeal, getGetDealQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { useConnection } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Database, ArrowLeft, HardDrive, Coins, Clock, Hash } from "lucide-react";
@@ -27,10 +30,36 @@ export default function DealDetail() {
   const { connection } = useConnection();
   const signableWallet = useSignableWallet();
   const { api, ensureSession } = useBackendSession();
+  const queryClient = useQueryClient();
 
   const { data: deal, isLoading } = useGetDeal(dealId, {
     query: { queryKey: getGetDealQueryKey(dealId), enabled: !!dealId }
   });
+
+  const updateDeal = useUpdateDeal();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // The api-server authorises a deal update against the deal's own
+  // `clientAddress`, so only show the control to the wallet that owns the deal.
+  // The button is a courtesy; the server is what enforces the rule.
+  const isOwner = !!address && !!deal && address === deal.clientAddress;
+
+  const nextStatus = deal?.status === "pending" ? "active" : deal?.status === "active" ? "completed" : null;
+
+  const handleStatusChange = (status: "active" | "completed") => {
+    setActionError(null);
+    updateDeal.mutate(
+      { id: dealId, data: { status } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) });
+        },
+        onError: (err) => {
+          setActionError(err instanceof Error ? err.message : String(err));
+        },
+      }
+    );
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -121,6 +150,52 @@ export default function DealDetail() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="bg-card/50 border-primary/20">
+            <CardHeader>
+              <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>Deal Actions</span>
+                {address && (
+                  <Badge variant={isOwner ? "default" : "destructive"} className="font-mono">
+                    {isOwner ? "you are the client" : "not your deal"}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="font-mono text-xs text-muted-foreground">
+                Only the deal's client wallet may change its status. The server
+                checks the authenticated wallet against the deal's client address
+                and refuses anyone else with 403.
+              </p>
+              {address ? (
+                nextStatus ? (
+                  <Button
+                    className="font-mono gap-2"
+                    disabled={updateDeal.isPending}
+                    onClick={() => handleStatusChange(nextStatus)}
+                  >
+                    {updateDeal.isPending
+                      ? "Submitting..."
+                      : nextStatus === "active"
+                        ? "Activate deal"
+                        : "Mark completed"}
+                  </Button>
+                ) : (
+                  <p className="font-mono text-xs text-muted-foreground italic">
+                    No further status change is available for a {deal.status} deal.
+                  </p>
+                )
+              ) : (
+                <p className="font-mono text-xs text-muted-foreground italic">
+                  Connect a wallet to act on this deal.
+                </p>
+              )}
+              {actionError && (
+                <p className="font-mono text-xs text-destructive break-all">{actionError}</p>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className="bg-card/50 border-primary/20">
             <CardHeader>

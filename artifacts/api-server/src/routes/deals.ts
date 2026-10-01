@@ -43,6 +43,22 @@ router.post(
     try {
       const body = req.body;
 
+      // `requireWalletOrOidcAuth` proves *who* is calling, not that they own the
+      // deal being created. `clientAddress` is the deal's owning wallet, so a
+      // caller may only propose a deal for themselves — otherwise any
+      // authenticated wallet could create a deal in someone else's name. Same
+      // posture as the oracle's settle route: skip when there is no wallet
+      // identity (the OIDC path, unreachable from the app), enforce otherwise.
+      if (
+        req.walletAddress !== undefined &&
+        req.walletAddress !== body.clientAddress
+      ) {
+        res.status(403).json({
+          error: "the authenticated wallet is not the client for this deal",
+        });
+        return;
+      }
+
       const [provider] = await db
         .select()
         .from(providersTable)
@@ -119,6 +135,30 @@ router.patch(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const id = Number(req.params.id);
+
+      // Load the row before touching it: the deal's `clientAddress` is the
+      // owning wallet, and only that wallet may change the deal. Without this
+      // read the update ran on any id, so any authenticated wallet could flip
+      // the status of any deal. Mirrors the oracle's settle ownership check.
+      const [existing] = await db
+        .select()
+        .from(dealsTable)
+        .where(eq(dealsTable.id, id));
+
+      if (!existing) {
+        res.status(404).json({ error: "Deal not found" });
+        return;
+      }
+
+      if (
+        req.walletAddress !== undefined &&
+        req.walletAddress !== existing.clientAddress
+      ) {
+        res.status(403).json({
+          error: "the authenticated wallet is not the client for this deal",
+        });
+        return;
+      }
 
       const body = req.body;
       const updateData: Partial<typeof dealsTable.$inferInsert> = {};

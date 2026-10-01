@@ -12,7 +12,9 @@ import {
   useWallet as useAdapterWallet,
   type Wallet as WalletAdapter,
 } from "@solana/wallet-adapter-react";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { BALANCE_POLL_MS } from "@/lib/chain";
+import { useBackendSession } from "@/hooks/useBackendSession";
 
 /**
  * Wallet state for the app.
@@ -94,7 +96,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     connecting: adapterConnecting,
     disconnect: adapterDisconnect,
     wallets,
+    select,
+    wallet,
   } = useAdapterWallet();
+
+  const { ensureSession } = useBackendSession();
+
+  // `@solana/wallet-adapter-react` only tracks an adapter once one has been
+  // *selected*; until `select()` has run it reports `connected: false` and a
+  // null `publicKey` no matter what the extension does. This app uses a single
+  // connect button rather than a picker modal, so select the preferred adapter
+  // up front, but only when nothing is selected yet.
+  useEffect(() => {
+    if (wallet) return;
+    const preferred = pickWallet(wallets);
+    if (preferred) select(preferred.adapter.name);
+  }, [wallet, wallets, select]);
+
+  // Make the wallet-signed session available to the generated API client so
+  // mutating calls (`useCreateDeal`, `useUpdateDeal`, …) carry the bearer token.
+  // The getter is only invoked by the client on a request that will actually be
+  // sent, and only for mutations here — the read hooks pass
+  // `auth: "none"`, so browsing deals/providers never triggers a wallet prompt.
+  useEffect(() => {
+    setAuthTokenGetter(() => (publicKey ? ensureSession() : null));
+    return () => setAuthTokenGetter(null);
+  }, [publicKey, ensureSession]);
 
   const [lamports, setLamports] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);

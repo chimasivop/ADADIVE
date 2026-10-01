@@ -97,3 +97,71 @@ api-server takes a comma-separated list:
 `POST /api/storage/pin` with a preview `Origin` should answer `401` with
 `content-type: application/json` and an `access-control-allow-origin` echoing
 that origin — not an HTML `500`.
+
+## Resource-level ownership on api-server deal mutations
+
+`requireWalletOrOidcAuth` proves *identity*, not ownership. Gating a handler with
+it only says "a wallet signed in"; it does not say the wallet owns the row the
+handler touches. Both deal mutations originally stopped there, so any
+authenticated wallet could create a deal naming any `clientAddress` and could
+PATCH any deal by id.
+
+The deal's owning wallet is `deals.clientAddress` (there is no wallet-valued
+provider column here — `providers.nodeId` holds opaque ids like `pool1abc123`,
+not a pubkey). Both handlers now compare `req.walletAddress` to it and answer
+`403` on mismatch, mirroring the oracle's settle route
+(`req.authenticatedWallet !== deal.provider`). PATCH loads the row first so a
+missing deal is still `404` and a present-but-not-owned one is `403`.
+
+Posture, matching the oracle: the check is **skipped when `req.walletAddress` is
+`undefined`** (the OIDC path, unreachable from the UI), and enforced whenever a
+wallet session is present. When adding another mutating route, remember the
+middleware alone is authentication only — add the ownership comparison too.
+
+Note the React client now *does* attach the bearer token: `WalletContext`
+registers `setAuthTokenGetter(() => ensureSession())` while a key is connected,
+and `custom-fetch` calls the getter only for mutating methods (GET/HEAD are the
+public reads and must not trigger a signature prompt). `NewDeal` prefills
+`clientAddress` with the connected wallet, and `DealDetail` exposes an
+owner-only status control so the PATCH path is reachable. Before that wiring
+existed the hooks carried no token and these routes `401`ed from the UI; the
+ownership check is still the boundary for direct API callers, so don't read a
+passing UI flow as proof the check is unnecessary.
+
+To verify the flow end to end without a wallet extension, drive the real app in
+Chromium with a fake `window.phantom.solana` and delegate signing back to Node
+(`page.exposeFunction`), because `@solana/wallet-adapter-phantom` needs an
+`ed25519` implementation the injected script does not have. Checks that matter:
+wallet A creates a deal and the stored `clientAddress` equals A; wallet B's
+PATCH is `403` and the UI surfaces it; A's own PATCH is `2xx` (positive control
+that the `403` is an ownership decision, not a blanket refusal).
+
+## Test report taxonomy
+
+Do not report one combined pass count. Three categories, and they prove
+different things:
+
+1. **Unit tests** — `pnpm test` (oracle-backend `tests/*.test.ts` excluding
+   `e2e.live.test.ts`, plus solana-escrow and api-zod). Real Postgres for
+   oracle-backend; the chain is a `FakeChain` and the *service* tests stub
+   `verifyPin` directly (they are about challenge-window logic).
+2. **Tests that stub `verifyPin`** — the service-level suites
+   (`api.test.ts`, `auth.test.ts`, `challengeWindow.test.ts`). They exercise the
+   window/settle/auth decisions, not Pinata. `pinStatus.test.ts` is the
+   exception: it stubs Pinata at the HTTP `fetchImpl` boundary, so it really
+   tests the pin check.
+3. **Opt-in live Pinata E2E curl check** — the manual, per-route walkthrough
+   with a real oracle-issued token (pin → real CID, `POST /providers`,
+   `POST /deals`, `PATCH /deals/:id`). Requires real Pinata credentials and a
+   running stack; it is not part of `pnpm test`. The oracle's on-chain E2E
+   (`npm run test:e2e` in oracle-backend, `tests/e2e.live.test.ts`) is a
+   separate opt-in that needs a local validator — also not in `pnpm test`.
+
+Report each category separately so a green unit run is never mistaken for a
+live Pinata check that did not run.
+
+A fourth, separate check exists for the ownership rule specifically: a
+browser-driven UI E2E (see above) that drives the real app with a fake Phantom
+wallet. It is opt-in, needs the frontend + oracle + api-server running, and is
+not part of `pnpm test`; report it on its own line, not folded into the unit
+count.

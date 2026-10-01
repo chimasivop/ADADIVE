@@ -350,8 +350,12 @@ export async function customFetch<T = unknown>(
   }
 
   // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
-  if (_authTokenGetter && !headers.has("authorization")) {
+  // Authorization header has been explicitly provided. Only on mutating
+  // methods: the public read routes (deals, providers, stats) are
+  // unauthenticated by design, and calling the getter there would trigger a
+  // wallet signature prompt just for opening a list.
+  const isReadOnly = method === "GET" || method === "HEAD";
+  if (_authTokenGetter && !isReadOnly && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
