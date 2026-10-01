@@ -35,7 +35,7 @@ import {
 const FEE_BP = 250; // 2.5%
 const TREASURY = new PublicKey("CDCftN6avq75rWVxUGR816YxFqLrpPyQCXBBpBnPjAKt");
 const PROGRAM_ID = new PublicKey(
-  "B6kX44TWx7p75rEXaJmQ5jQJ3L9wGhZqaQ8xEK2j1cGp"
+  "7oK8tkw3H8HYqfb23wm2Jss82hSmVffhUDS2R5GE4NdS"
 );
 
 /** Where the role keypairs are written; `scripts/devnet-setup.sh` points this

@@ -10,7 +10,7 @@ pub use error::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("B6kX44TWx7p75rEXaJmQ5jQJ3L9wGhZqaQ8xEK2j1cGp");
+declare_id!("7oK8tkw3H8HYqfb23wm2Jss82hSmVffhUDS2R5GE4NdS");
 
 #[program]
 pub mod adadive_escrow {

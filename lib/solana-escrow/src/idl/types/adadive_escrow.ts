@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/adadive_escrow.json`.
  */
 export type AdadiveEscrow = {
-  "address": "B6kX44TWx7p75rEXaJmQ5jQJ3L9wGhZqaQ8xEK2j1cGp",
+  "address": "7oK8tkw3H8HYqfb23wm2Jss82hSmVffhUDS2R5GE4NdS",
   "metadata": {
     "name": "adadiveEscrow",
     "version": "0.1.0",

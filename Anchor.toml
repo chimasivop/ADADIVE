@@ -3,7 +3,7 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [programs.localnet]
-adadive_escrow = "B6kX44TWx7p75rEXaJmQ5jQJ3L9wGhZqaQ8xEK2j1cGp"
+adadive_escrow = "7oK8tkw3H8HYqfb23wm2Jss82hSmVffhUDS2R5GE4NdS"
 
 [scripts]
 # `anchor test` runs the program suite. The Phase 2 client-flow suite has its

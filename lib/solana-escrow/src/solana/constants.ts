@@ -28,7 +28,7 @@ export const FEE_BASIS_POINTS_DENOMINATOR = BigInt(10_000);
  * runtime so a rebuilt program cannot silently mismatch this constant.
  */
 export const ESCROW_PROGRAM_ID = new PublicKey(
-  "B6kX44TWx7p75rEXaJmQ5jQJ3L9wGhZqaQ8xEK2j1cGp"
+  "7oK8tkw3H8HYqfb23wm2Jss82hSmVffhUDS2R5GE4NdS"
 );
 
 /** Lamports per SOL, for display and form parsing only. */
