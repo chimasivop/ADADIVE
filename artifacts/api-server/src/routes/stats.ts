@@ -10,8 +10,8 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
     .select({
       totalProviders: sql<number>`count(*)::int`,
       activeProviders: sql<number>`count(*) filter (where status = 'active')::int`,
-      totalStorageTb: sql<number>`sum(total_storage_gb) / 1024.0`,
-      usedStorageTb: sql<number>`sum(used_storage_gb) / 1024.0`,
+      totalStorageTb: sql<number | null>`sum(total_storage_gb) / 1024.0`,
+      usedStorageTb: sql<number | null>`sum(used_storage_gb) / 1024.0`,
       avgReputationScore: sql<number>`avg(reputation_score)`,
       totalSolLocked: sql<number>`coalesce(sum(total_sol_earned), 0)`,
     })
@@ -27,23 +27,28 @@ router.get("/stats/network", async (_req, res): Promise<void> => {
   // Get the live epoch from the Solana cluster.
   const currentEpoch = await getCurrentEpoch();
 
-  const totalStorageTb = providerStats.totalStorageTb ?? 0;
-  const usedStorageTb = providerStats.usedStorageTb ?? 0;
+  // sum() is NULL over an empty table. Keep that distinct from a genuine 0 so
+  // the UI can say "no data" instead of asserting zero capacity.
+  const totalStorageTb = providerStats.totalStorageTb;
+  const usedStorageTb = providerStats.usedStorageTb;
   const networkUtilizationPercent =
-    totalStorageTb > 0 ? (usedStorageTb / totalStorageTb) * 100 : 0;
+    totalStorageTb !== null && totalStorageTb > 0
+      ? ((usedStorageTb ?? 0) / totalStorageTb) * 100
+      : null;
 
   res.json({
     totalProviders: providerStats.totalProviders,
     activeProviders: providerStats.activeProviders,
-    totalStorageTb: Number(totalStorageTb.toFixed(2)),
-    usedStorageTb: Number(usedStorageTb.toFixed(2)),
+    totalStorageTb: totalStorageTb === null ? null : Number(totalStorageTb.toFixed(2)),
+    usedStorageTb: usedStorageTb === null ? null : Number(usedStorageTb.toFixed(2)),
     activeDeals: dealStats.activeDeals,
     totalDealsAllTime: dealStats.totalDealsAllTime,
     totalSolLocked: Number((providerStats.totalSolLocked ?? 0).toFixed(2)),
     avgReputationScore: Number((providerStats.avgReputationScore ?? 0).toFixed(1)),
     currentEpoch,
     currentEpochSource: currentEpoch !== null ? "solana" : "unavailable",
-    networkUtilizationPercent: Number(networkUtilizationPercent.toFixed(1)),
+    networkUtilizationPercent:
+      networkUtilizationPercent === null ? null : Number(networkUtilizationPercent.toFixed(1)),
   });
 });
 

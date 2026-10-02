@@ -621,9 +621,15 @@ components:
         activeProviders:
           type: integer
         totalStorageTb:
-          type: number
+          type: [number, "null"]
+          description: >-
+            Total registered capacity in TB, or null when there are no providers
+            to aggregate (distinct from a genuine 0).
         usedStorageTb:
-          type: number
+          type: [number, "null"]
+          description: >-
+            Used capacity in TB, or null when there are no providers to
+            aggregate (distinct from a genuine 0).
         activeDeals:
           type: integer
         totalDealsAllTime:
@@ -635,7 +641,10 @@ components:
         currentEpoch:
           type: integer
         networkUtilizationPercent:
-          type: number
+          type: [number, "null"]
+          description: >-
+            Utilisation percentage, or null when total capacity is unknown
+            (no providers), so the UI can show "No data" rather than 0%.
 
     EconomyStats:
       type: object

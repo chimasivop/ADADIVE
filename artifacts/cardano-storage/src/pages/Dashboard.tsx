@@ -29,6 +29,21 @@ export default function Dashboard() {
     query: { queryKey: getGetRecentActivityQueryKey() }
   });
 
+  // null capacity means "no providers to aggregate", which must read as
+  // "No data" rather than a confident 0.00 TB.
+  const storageLabel =
+    network?.totalStorageTb === undefined
+      ? undefined
+      : network.totalStorageTb === null
+        ? "No data"
+        : `${network.totalStorageTb.toFixed(2)} TB`;
+  const utilisationLabel =
+    network?.networkUtilizationPercent === undefined
+      ? undefined
+      : network.networkUtilizationPercent === null
+        ? "No data"
+        : `${network.networkUtilizationPercent.toFixed(1)}% Utilised`;
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* ── Page heading ── */}
@@ -61,8 +76,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Total Storage"
-          value={network?.totalStorageTb !== undefined ? `${network.totalStorageTb.toFixed(2)} TB` : undefined}
-          subtitle={network?.networkUtilizationPercent !== undefined ? `${network.networkUtilizationPercent.toFixed(1)}% Utilised` : undefined}
+          value={storageLabel}
+          subtitle={utilisationLabel}
           icon={HardDrive}
           loading={networkLoading}
         />

@@ -9,12 +9,24 @@
 export interface NetworkStats {
   totalProviders: number;
   activeProviders: number;
-  totalStorageTb: number;
-  usedStorageTb: number;
+  /**
+     * Total registered capacity in TB, or null when there are no providers to aggregate (distinct from a genuine 0).
+     * @nullable
+     */
+  totalStorageTb: number | null;
+  /**
+     * Used capacity in TB, or null when there are no providers to aggregate (distinct from a genuine 0).
+     * @nullable
+     */
+  usedStorageTb: number | null;
   activeDeals: number;
   totalDealsAllTime: number;
   totalSolLocked: number;
   avgReputationScore: number;
   currentEpoch: number;
-  networkUtilizationPercent: number;
+  /**
+     * Utilisation percentage, or null when total capacity is unknown (no providers), so the UI can show "No data" rather than 0%.
+     * @nullable
+     */
+  networkUtilizationPercent: number | null;
 }
