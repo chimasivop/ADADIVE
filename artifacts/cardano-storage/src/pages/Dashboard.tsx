@@ -3,7 +3,6 @@ import {
   useGetEconomyStats, getGetEconomyStatsQueryKey,
   useGetRecentActivity, getGetRecentActivityQueryKey
 } from "@workspace/api-client-react";
-import { THT } from "@/lib/token";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -54,7 +53,7 @@ export default function Dashboard() {
             opacity: 0.9,
           }}
         >
-          Live telemetry from the Cardano decentralised storage economy.
+          Live telemetry from the Solana decentralised storage economy.
         </p>
       </div>
 
@@ -75,15 +74,15 @@ export default function Dashboard() {
           loading={networkLoading}
         />
         <StatCard 
-          title="THT Locked"
-          value={network?.totalAdaLocked !== undefined ? THT.label(network.totalAdaLocked.toLocaleString()) : undefined}
+          title="SOL Locked"
+          value={network?.totalSolLocked !== undefined ? `◎ ${network.totalSolLocked.toLocaleString()}` : undefined}
           subtitle="In Active Escrow"
           icon={Coins}
           loading={networkLoading}
         />
         <StatCard 
           title="Avg Market Price"
-          value={economy?.adaPerGbPerEpoch ? THT.label(economy.adaPerGbPerEpoch.toFixed(4)) : undefined}
+          value={economy?.solPerGbPerEpoch ? `◎ ${economy.solPerGbPerEpoch.toFixed(4)}` : undefined}
           subtitle="per GB / Epoch"
           icon={Activity}
           loading={economyLoading}
@@ -103,7 +102,7 @@ export default function Dashboard() {
                   color: "hsl(var(--muted-foreground))",
                 }}
               >
-                MARKET PRICE HISTORY (THT/GB/EPOCH)
+                MARKET PRICE HISTORY (SOL/GB/EPOCH)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -127,7 +126,7 @@ export default function Dashboard() {
                         stroke="hsl(var(--muted-foreground))" 
                         fontSize={10}
                         fontFamily="'DM Mono', monospace"
-                        tickFormatter={(val) => `${val} THT`}
+                        tickFormatter={(val) => `${val} SOL`}
                       />
                       <RechartsTooltip 
                         contentStyle={{
@@ -142,7 +141,7 @@ export default function Dashboard() {
                       />
                       <Line 
                         type="monotone" 
-                        dataKey="priceAda" 
+                        dataKey="priceSol" 
                         stroke="hsl(var(--primary))" 
                         strokeWidth={1.5}
                         dot={false}

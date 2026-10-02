@@ -1,27 +1,74 @@
 import axios from "axios";
 import FormData from "form-data";
+import { Connection, PublicKey } from "@solana/web3.js";
 
 function config() {
   return {
     pinata: {
-      apiKey:    process.env.PINATA_API_KEY    ?? "",
-      apiSecret: process.env.PINATA_API_SECRET ?? "",
-      baseUrl:   "https://api.pinata.cloud",
-      gateway:   "https://gateway.pinata.cloud/ipfs",
+      // Pinata's V3 Files API authenticates with the JWT only — the legacy
+      // `pinata_api_key`/`pinata_secret_api_key` pair is not accepted (it gets a
+      // 401). `PINATA_API_KEY`/`PINATA_API_SECRET` are still read by deployment
+      // tooling but are no longer used to sign requests here.
+      jwt:       process.env.PINATA_JWT ?? "",
+      // Uploads and management live on different V3 hosts/paths.
+      uploadUrl: "https://uploads.pinata.cloud/v3/files",
+      apiUrl:    "https://api.pinata.cloud/v3/files/public",
+      // `||`, not `??`: dev-up.sh and the container both export PINATA_GATEWAY
+      // as an empty string when unset, and `??` treats "" as a value — which
+      // produced hostless gateway URLs like "/bafy…". Blank means "use the
+      // default".
+      gateway:   process.env.PINATA_GATEWAY?.trim() || "https://gateway.pinata.cloud/ipfs",
     },
-    koios: {
-      baseUrl: process.env.KOIOS_URL ?? "https://preprod.koios.rest/api/v1",
+    solana: {
+      // Was the Koios Cardano REST base URL. The chain reads below now go over
+      // JSON-RPC instead; the field it feeds (`getNetworkTip` / `getAddressInfo`)
+      // keeps its name so the routes and the generated clients do not change.
+      rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
     },
   };
 }
 
+let cachedConnection: Connection | null = null;
+let cachedRpcUrl: string | null = null;
+
+function solanaConnection(): Connection {
+  const { solana } = config();
+  if (!cachedConnection || cachedRpcUrl !== solana.rpcUrl) {
+    cachedConnection = new Connection(solana.rpcUrl, "confirmed");
+    cachedRpcUrl = solana.rpcUrl;
+  }
+  return cachedConnection;
+}
+
 function assertPinataConfig() {
   const c = config();
-  const missing: string[] = [];
-  if (!c.pinata.apiKey)    missing.push("PINATA_API_KEY");
-  if (!c.pinata.apiSecret) missing.push("PINATA_API_SECRET");
-  if (missing.length) throw new Error(`Missing env vars: ${missing.join(", ")}`);
+  if (!c.pinata.jwt) throw new Error("Missing env vars: PINATA_JWT");
   return c;
+}
+
+/** Pinata V3 requests authenticate with the account JWT in a bearer header. */
+function pinataHeaders(extra: Record<string, string> = {}) {
+  return { Authorization: `Bearer ${config().pinata.jwt}`, ...extra };
+}
+
+/**
+ * Pull a human-readable error out of a Pinata V3 error body.
+ *
+ * V3 answers with `{"error": {"reason": "...", "details": "..."}}`; surfacing
+ * `reason` is what turns an opaque 500 into "Unsupported CID version".
+ */
+function pinataError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as
+      | { error?: { reason?: string; details?: string } | string; message?: string }
+      | undefined;
+    const e = data?.error;
+    if (typeof e === "string") return e;
+    if (e?.reason) return e.reason;
+    if (data?.message) return data.message;
+    if (err.response) return `Pinata request failed with HTTP ${err.response.status}`;
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 // ─── IPFS / Pinata ───────────────────────────────────────────────────────────
@@ -34,30 +81,34 @@ export async function pinFileToIPFS(
 ) {
   const c  = assertPinataConfig();
   const fd = new FormData();
+  // V3 expects the file plus a required `network` field; metadata is a flat
+  // `keyvalues` object (not the legacy `pinataMetadata` wrapper).
   fd.append("file", fileBuffer, { filename: fileName, contentType: mimeType });
-  fd.append("pinataMetadata", JSON.stringify({
-    name: fileName,
-    keyvalues: { protocol: "ADADIVE", network: "Cardano", timestamp: new Date().toISOString(), ...metadata },
+  fd.append("network", "public");
+  fd.append("name", fileName);
+  fd.append("keyvalues", JSON.stringify({
+    protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString(), ...metadata,
   }));
-  fd.append("pinataOptions", JSON.stringify({ cidVersion: 1 }));
 
-  const res = await axios.post(`${c.pinata.baseUrl}/pinning/pinFileToIPFS`, fd, {
-    maxBodyLength: Infinity,
-    headers: {
-      ...fd.getHeaders(),
-      pinata_api_key:        c.pinata.apiKey,
-      pinata_secret_api_key: c.pinata.apiSecret,
-    },
-  });
+  let data: PinataV3File;
+  try {
+    const res = await axios.post(c.pinata.uploadUrl, fd, {
+      maxBodyLength: Infinity,
+      headers: { ...fd.getHeaders(), ...pinataHeaders() },
+    });
+    data = res.data?.data as PinataV3File;
+  } catch (err) {
+    throw new Error(`Pinata upload failed: ${pinataError(err)}`);
+  }
 
-  const cid = res.data.IpfsHash as string;
+  const cid = data.cid;
   return {
     success:    true,
     cid,
     ipfsUrl:    `ipfs://${cid}`,
     gatewayUrl: `${c.pinata.gateway}/${cid}`,
-    size:       res.data.PinSize   as number,
-    timestamp:  res.data.Timestamp as string,
+    size:       data.size,
+    timestamp:  data.created_at,
     fileName,
     mimeType,
   };
@@ -65,20 +116,27 @@ export async function pinFileToIPFS(
 
 export async function pinJSONToIPFS(jsonData: object, name = "ADADIVE Metadata") {
   const c = assertPinataConfig();
-  const res = await axios.post(`${c.pinata.baseUrl}/pinning/pinJSONToIPFS`, {
-    pinataContent: jsonData,
-    pinataMetadata: {
-      name,
-      keyvalues: { protocol: "ADADIVE", network: "Cardano", timestamp: new Date().toISOString() },
-    },
-  }, {
-    headers: {
-      "Content-Type":        "application/json",
-      pinata_api_key:        c.pinata.apiKey,
-      pinata_secret_api_key: c.pinata.apiSecret,
-    },
-  });
-  const cid = res.data.IpfsHash as string;
+  // V3 has no JSON endpoint; a JSON document is uploaded as a file with a
+  // JSON content type, which produces the same v1 CID the legacy call did.
+  const body = Buffer.from(JSON.stringify(jsonData), "utf8");
+  const fd = new FormData();
+  fd.append("file", body, { filename: `${name}.json`, contentType: "application/json" });
+  fd.append("network", "public");
+  fd.append("name", name);
+  fd.append("keyvalues", JSON.stringify({ protocol: "ADADIVE", network: "Solana", timestamp: new Date().toISOString() }));
+
+  let data: PinataV3File;
+  try {
+    const res = await axios.post(c.pinata.uploadUrl, fd, {
+      maxBodyLength: Infinity,
+      headers: { ...fd.getHeaders(), ...pinataHeaders() },
+    });
+    data = res.data?.data as PinataV3File;
+  } catch (err) {
+    throw new Error(`Pinata metadata upload failed: ${pinataError(err)}`);
+  }
+
+  const cid = data.cid;
   return {
     success:    true,
     cid,
@@ -87,45 +145,118 @@ export async function pinJSONToIPFS(jsonData: object, name = "ADADIVE Metadata")
   };
 }
 
-export async function checkPinStatus(cid: string) {
-  const c   = assertPinataConfig();
-  const res = await axios.get(`${c.pinata.baseUrl}/pinning/pinList?hashContains=${cid}`, {
-    headers: {
-      pinata_api_key:        c.pinata.apiKey,
-      pinata_secret_api_key: c.pinata.apiSecret,
-    },
-  });
-  const pins   = res.data.rows as Array<{ date_unpinned: string | null }>;
-  const pinned = pins.length > 0 && pins[0].date_unpinned === null;
-  return { pinned, status: pinned ? "pinned" : "not_found", details: pins[0] ?? null };
+interface PinataV3File {
+  id: string;
+  name: string;
+  cid: string;
+  size: number;
+  mime_type: string;
+  created_at: string;
 }
 
-// ─── Koios / Cardano ─────────────────────────────────────────────────────────
+export async function checkPinStatus(cid: string) {
+  const c = assertPinataConfig();
+  let data: { files?: PinataV3File[] };
+  try {
+    const res = await axios.get(c.pinata.apiUrl, {
+      // V3 filters via a `cid` query param (the legacy `hashContains` is gone).
+      params: { cid },
+      headers: pinataHeaders(),
+    });
+    data = res.data?.data;
+  } catch (err) {
+    throw new Error(`Pinata pin lookup failed: ${pinataError(err)}`);
+  }
+
+  // V3's `cid` filter is a contains-match, so confirm an exact hash rather than
+  // trusting the first row. A V3 file record only exists while it is stored, so
+  // a match means the pin is present.
+  const match = (data.files ?? []).find((f) => f.cid === cid);
+  const pinned = Boolean(match);
+  return { pinned, status: pinned ? "pinned" : "not_found", details: match ?? null };
+}
+
+// ─── Solana RPC ──────────────────────────────────────────────────────────────
+//
+// These two functions were the Koios (Cardano REST) readers. They keep their
+// names and their response shapes — `GET /network/status` and `GET /wallet/:address`
+// are consumed by the generated client and by the UI, so the *fields* stay
+// exactly as they were. Only the source of the numbers changed:
+//
+//   tip        → `getEpochInfo()` (slot / absolute slot / epoch)
+//   address    → `getBalance()` + `getSignaturesForAddress()` for a tx count
+//
+// `balanceADA` / `balanceLovelace` keep their misnomers deliberately: renaming
+// them would mean a database column change, an OpenAPI change and a codegen run
+// for a display-only value. `balanceADA` now carries SOL. See
+// `SOLANA_MIGRATION.md`.
 
 export async function getNetworkTip() {
-  const c   = config();
-  const res = await axios.get(`${c.koios.baseUrl}/tip`);
-  const tip = res.data[0] as { block_no: number; epoch_no: number; block_hash: string };
-  return { success: true, ...tip };
+  const info = await solanaConnection().getEpochInfo();
+  return {
+    success: true,
+    // Field names preserved from the Koios response. `block_no` is the current
+    // slot and `epoch_no` the Solana epoch; `block_hash` has no Solana analogue
+    // at this endpoint, so the genesis hash stands in as a stable network id.
+    block_no: info.absoluteSlot,
+    epoch_no: info.epoch,
+    block_hash: await genesisHash(),
+  };
+}
+
+let genesisHashPromise: Promise<string> | null = null;
+
+/** The genesis hash is constant per cluster, so resolve it at most once. */
+function genesisHash(): Promise<string> {
+  if (!genesisHashPromise) {
+    genesisHashPromise = solanaConnection()
+      .getGenesisHash()
+      // The field is informational; a transient RPC failure should not fail the
+      // whole tip read.
+      .catch(() => "");
+  }
+  return genesisHashPromise;
+}
+
+/**
+ * The current Solana epoch, or `null` if the cluster cannot be reached.
+ *
+ * Replaces the Koios `/tip` epoch read in `routes/stats.ts`. Returns `null`
+ * rather than throwing so a stats response degrades to "unavailable" instead of
+ * failing, which is how the endpoint behaved when Koios was down.
+ */
+export async function getCurrentEpoch(): Promise<number | null> {
+  try {
+    const info = await solanaConnection().getEpochInfo();
+    return info.epoch;
+  } catch {
+    return null;
+  }
 }
 
 export async function getAddressInfo(address: string) {
-  const c   = config();
-  const res = await axios.post(
-    `${c.koios.baseUrl}/address_info`,
-    { _addresses: [address] },
-    { headers: { "Content-Type": "application/json" } },
-  );
-  const info = res.data[0] as { balance?: string; stake_address?: string; utxo_set?: unknown[] };
-  if (!info) throw new Error("Address not found on network");
-  const balanceLovelace = parseInt(info.balance ?? "0");
+  let publicKey: PublicKey;
+  try {
+    publicKey = new PublicKey(address);
+  } catch {
+    throw new Error("Address is not a valid Solana public key");
+  }
+
+  const connection = solanaConnection();
+  const lamports = await connection.getBalance(publicKey, "confirmed");
+
+  // A bounded page of signatures is enough to report "has this account been
+  // used" without paging an unbounded history on a public endpoint.
+  const signatures = await connection.getSignaturesForAddress(publicKey, { limit: 1000 });
+
   return {
     success:        true,
-    address,
-    balanceADA:     balanceLovelace / 1_000_000,
-    balanceLovelace,
-    stakeAddress:   info.stake_address,
-    utxoCount:      info.utxo_set?.length ?? 0,
+    address:        publicKey.toBase58(),
+    balanceADA:     lamports / 1_000_000_000,
+    balanceLovelace: lamports,
+    // No stake-address concept on a Solana wallet account.
+    stakeAddress:   null as string | null,
+    utxoCount:      signatures.length,
   };
 }
 
@@ -139,7 +270,10 @@ export function buildDealMetadata(params: {
   const sl = params.storageLayer ?? "ipfs";
   return {
     "1337": {
-      protocol: "ADADIVE", version: "1.0", network: "Cardano", storageLayer: sl,
+      // The label numbers and the JSON shape are unchanged — the client still
+      // receives a `cardanoMetadata` object — but `network` now names the chain
+      // the escrow actually settles on.
+      protocol: "ADADIVE", version: "1.0", network: "Solana", storageLayer: sl,
       deal: {
         cid:           params.cid,
         fileName:      params.fileName.slice(0, 64),
@@ -204,11 +338,24 @@ export async function createStorageDeal(
     fileName,
     fileSize:         ipfsResult.size,
     mimeType,
-    providerAddress:  dealParams.providerAddress  ?? "addr1_provider",
-    userAddress:      dealParams.userAddress      ?? "addr1_user",
+    providerAddress:  dealParams.providerAddress  ?? "11111111111111111111111111111111",
+    userAddress:      dealParams.userAddress      ?? "11111111111111111111111111111111",
     durationEpochs:   dealParams.durationEpochs   ?? 10,
     pricePerEpochTHT: dealParams.pricePerEpochTHT ?? 0.0013,
   });
+
+  // The escrow parameters the browser needs to call `initialize` on-chain. The
+  // backend cannot pick the provider or oracle for the user, so these are echoes
+  // of what was supplied plus a deal id derived from the CID — the client
+  // prefers them but falls back to its own connected wallet when they are blank.
+  const escrow = {
+    dealId:        ipfsResult.cid,
+    provider:      dealParams.providerAddress ?? "",
+    oracle:        process.env.ORACLE_PUBKEY ?? "",
+    amountLamports: String(
+      BigInt(Math.max(0, Math.floor((dealParams.durationEpochs ?? 10) * (dealParams.pricePerEpochTHT ?? 0.0013) * 1_000_000_000)))
+    ),
+  };
 
   return {
     success: true,
@@ -223,6 +370,7 @@ export async function createStorageDeal(
     metadataCid: metadataResult.cid,
     metadataUrl: metadataResult.gatewayUrl,
     cardanoMetadata,
+    escrow,
     deal: {
       status:         "ready_to_sign",
       provider:       dealParams.providerAddress,

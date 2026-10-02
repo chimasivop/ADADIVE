@@ -1,0 +1,31 @@
+{
+  "name": "@workspace/solana-escrow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./solana": "./src/solana/index.ts",
+    "./backend": "./src/backend/api.ts",
+    "./backend/base58": "./src/backend/base58.ts",
+    "./backend/session": "./src/backend/sessionToken.ts",
+    "./format": "./src/format.ts"
+  },
+  "dependencies": {
+    "@anchor-lang/core": "catalog:",
+    "@solana/web3.js": "catalog:"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.1.0",
+    "@types/node": "catalog:",
+    "chai": "^4.5.0",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.0.0",
+    "typescript": "~5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --build",
+    "test": "ts-mocha -p tsconfig.test.json -t 30000 'tests/*.test.ts'"
+  }
+}

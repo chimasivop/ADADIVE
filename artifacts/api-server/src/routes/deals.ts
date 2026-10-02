@@ -2,13 +2,14 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, dealsTable, providersTable, activityTable } from "@workspace/db";
 import { validate, schemas } from "@workspace/api-zod";
-import { requireAuth } from "../middlewares/authMiddleware";
+import { requireWalletOrOidcAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
 router.get("/deals", async (req: Request, res: Response): Promise<void> => {
   try {
-    const status = req.query.status as string | undefined;
+    type DealStatus = (typeof dealsTable.status.enumValues)[number];
+    const status = req.query.status as DealStatus | "all" | undefined;
     const providerIdParam = req.query.providerId as string | undefined;
     const providerId = providerIdParam ? parseInt(providerIdParam) : undefined;
 
@@ -36,11 +37,27 @@ router.get("/deals", async (req: Request, res: Response): Promise<void> => {
 
 router.post(
   "/deals",
-  requireAuth,
+  requireWalletOrOidcAuth,
   validate(schemas.createDeal),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const body = req.body;
+
+      // `requireWalletOrOidcAuth` proves *who* is calling, not that they own the
+      // deal being created. `clientAddress` is the deal's owning wallet, so a
+      // caller may only propose a deal for themselves — otherwise any
+      // authenticated wallet could create a deal in someone else's name. Same
+      // posture as the oracle's settle route: skip when there is no wallet
+      // identity (the OIDC path, unreachable from the app), enforce otherwise.
+      if (
+        req.walletAddress !== undefined &&
+        req.walletAddress !== body.clientAddress
+      ) {
+        res.status(403).json({
+          error: "the authenticated wallet is not the client for this deal",
+        });
+        return;
+      }
 
       const [provider] = await db
         .select()
@@ -52,7 +69,7 @@ router.post(
         return;
       }
 
-      const totalCostAda = body.storageGb * body.durationEpochs * provider.pricePerGbPerEpoch;
+      const totalCostSol = body.storageGb * body.durationEpochs * provider.pricePerGbPerEpoch;
 
       const [deal] = await db
         .insert(dealsTable)
@@ -62,7 +79,7 @@ router.post(
           clientAddress: body.clientAddress,
           storageGb: body.storageGb,
           durationEpochs: body.durationEpochs,
-          totalCostAda,
+          totalCostSol,
           dataHash: body.dataHash,
           status: "pending",
         })
@@ -113,11 +130,35 @@ router.get(
 
 router.patch(
   "/deals/:id",
-  requireAuth,
+  requireWalletOrOidcAuth,
   validate(schemas.updateDeal),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const id = Number(req.params.id);
+
+      // Load the row before touching it: the deal's `clientAddress` is the
+      // owning wallet, and only that wallet may change the deal. Without this
+      // read the update ran on any id, so any authenticated wallet could flip
+      // the status of any deal. Mirrors the oracle's settle ownership check.
+      const [existing] = await db
+        .select()
+        .from(dealsTable)
+        .where(eq(dealsTable.id, id));
+
+      if (!existing) {
+        res.status(404).json({ error: "Deal not found" });
+        return;
+      }
+
+      if (
+        req.walletAddress !== undefined &&
+        req.walletAddress !== existing.clientAddress
+      ) {
+        res.status(403).json({
+          error: "the authenticated wallet is not the client for this deal",
+        });
+        return;
+      }
 
       const body = req.body;
       const updateData: Partial<typeof dealsTable.$inferInsert> = {};
@@ -149,7 +190,7 @@ router.patch(
           type: "deal_completed",
           description: `Deal #${updated.id} completed successfully`,
           relatedId: updated.id,
-          metadata: { totalCostAda: updated.totalCostAda },
+          metadata: { totalCostSol: updated.totalCostSol },
         });
       }
 

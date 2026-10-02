@@ -79,8 +79,8 @@ export default function ProviderDetail() {
               icon={Database}
             />
             <StatCard
-              title="ADA Earned"
-              value={`₳ ${(provider.totalAdaEarned ?? 0).toLocaleString()}`}
+              title="SOL Earned"
+              value={`◎ ${(provider.totalSolEarned ?? 0).toLocaleString()}`}
               subtitle="Total lifetime"
               icon={Coins}
             />
@@ -100,7 +100,7 @@ export default function ProviderDetail() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm text-muted-foreground">Price per GB / Epoch</span>
-                  <span className="font-mono font-bold text-primary">₳ {provider.pricePerGbPerEpoch.toFixed(6)}</span>
+                  <span className="font-mono font-bold text-primary">◎ {provider.pricePerGbPerEpoch.toFixed(6)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm text-muted-foreground">Region</span>
@@ -169,7 +169,7 @@ export default function ProviderDetail() {
                             <p className="font-mono text-xs text-muted-foreground">{deal.durationEpochs} epochs</p>
                           </div>
                           <div>
-                            <p className="font-mono text-sm text-primary">₳ {deal.totalCostAda.toFixed(2)}</p>
+                            <p className="font-mono text-sm text-primary">◎ {deal.totalCostSol.toFixed(2)}</p>
                           </div>
                           <Badge
                             variant={deal.status === "active" ? "default" : deal.status === "completed" ? "secondary" : "outline"}

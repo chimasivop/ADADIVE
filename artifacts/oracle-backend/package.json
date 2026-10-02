@@ -1,0 +1,39 @@
+{
+  "name": "@workspace/oracle-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ADADIVE oracle backend: pin verification, optimistic challenge window, wallet-signature auth, and server-side settle submission",
+  "scripts": {
+    "build": "node ./build.mjs",
+    "start": "node --enable-source-maps ./dist/index.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "tsx ./src/db/migrate.ts",
+    "dev": "tsx ./src/index.ts",
+    "test": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts'",
+    "test:unit": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts'",
+    "test:e2e": "ts-mocha -p tsconfig.json -t 120000 tests/e2e.live.test.ts",
+    "auth:demo": "tsx ./scripts/auth-demo.ts",
+    "setup:localnet": "tsx ./scripts/devnet-setup.ts"
+  },
+  "dependencies": {
+    "@solana/web3.js": "catalog:",
+    "@workspace/solana-escrow": "workspace:*",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@noble/curves": "^1.9.7",
+    "@types/chai": "^4.3.0",
+    "@types/express": "^4.17.21",
+    "@types/mocha": "^9.1.0",
+    "@types/node": "catalog:",
+    "@types/pg": "^8.11.10",
+    "chai": "^4.5.0",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.0.0",
+    "tsx": "catalog:",
+    "typescript": "~5.9.3",
+    "esbuild": "catalog:",
+    "ts-node": "^10.9.2"
+  }
+}

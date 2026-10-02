@@ -16,7 +16,7 @@ export const providersTable = pgTable("providers", {
   region: text("region").notNull(),
   uptimePercent: real("uptime_percent"),
   activeDeals: integer("active_deals").default(0),
-  totalAdaEarned: real("total_ada_earned").default(0),
+  totalSolEarned: real("total_sol_earned").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

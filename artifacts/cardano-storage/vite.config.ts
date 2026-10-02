@@ -15,6 +15,36 @@ const basePath = process.env.BASE_PATH || "/";
 
 const apiTarget = process.env.API_URL || "http://localhost:5000";
 
+// The Solana JSON-RPC endpoint the browser reads (`lib/chain.ts`). Defaults to
+// the public devnet cluster, matching `SOLANA_CLUSTER`; a local validator would
+// be `http://127.0.0.1:8899`. Proxied rather than called cross-origin so the
+// page works through a forwarded host without CORS.
+const rpcTarget = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+
+// The oracle backend (`lib/backend/endpoint.ts`) — pin verification, the
+// challenge-window settle flow and wallet-signature auth. Defaults to the
+// port the backend's own dev script binds.
+const backendTarget = process.env.BACKEND_URL || "http://localhost:5001";
+
+const proxy = {
+  "/api": {
+    target: apiTarget,
+    changeOrigin: true,
+  },
+  "/rpc": {
+    target: rpcTarget,
+    changeOrigin: true,
+  },
+  // `BackendApi` builds URLs as `<baseUrl>/health`, `/deals`, … with
+  // `<baseUrl>` ending in `/backend`, but the backend serves those routes at
+  // its root. Strip the prefix here or every call 404s.
+  "/backend": {
+    target: backendTarget,
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/backend/, ""),
+  },
+};
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -55,22 +85,12 @@ export default defineConfig({
     fs: {
       strict: true,
     },
-    proxy: {
-      "/api": {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-    },
+    proxy,
   },
   preview: {
     port,
     host: "0.0.0.0",
     allowedHosts: true,
-    proxy: {
-      "/api": {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-    },
+    proxy,
   },
 });

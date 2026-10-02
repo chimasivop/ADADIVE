@@ -14,7 +14,7 @@ export const dealsTable = pgTable("deals", {
   clientAddress: text("client_address").notNull(),
   storageGb: real("storage_gb").notNull(),
   durationEpochs: integer("duration_epochs").notNull(),
-  totalCostAda: real("total_cost_ada").notNull(),
+  totalCostSol: real("total_cost_sol").notNull(),
   status: dealStatusEnum("status").notNull().default("pending"),
   dataHash: text("data_hash").notNull(),
   startEpoch: integer("start_epoch"),

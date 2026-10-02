@@ -1,5 +1,4 @@
 import { Link, useLocation } from "wouter";
-import { THT } from "@/lib/token";
 import { useWallet } from "@/contexts/WalletContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
@@ -37,7 +36,7 @@ const mist   = "#4a5a7a";
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { connected, connecting, connect, disconnect, displayAddress, thtBalance, adaBalance, error } = useWallet();
+  const { connected, connecting, connect, disconnect, displayAddress, solBalance, error } = useWallet();
   const { isDark, toggleTheme } = useTheme();
 
   const accent = isDark ? gold : goldDk;
@@ -69,50 +68,8 @@ export function AppSidebar() {
                 >
                   ADADIVE
                 </span>
-                <span
-                  style={{
-                    fontFamily: "'DM Mono', monospace",
-                    fontSize: "9px",
-                    letterSpacing: "0.22em",
-                    color: dim,
-                    marginTop: "1px",
-                  }}
-                >
-                  by THETA
-                </span>
               </div>
             </div>
-          </div>
-
-          {/* ── Gold divider: powered by THT ── */}
-          <div className="px-5 mb-4 flex items-center gap-2">
-            <div
-              style={{
-                flex: 1,
-                height: "1px",
-                background: `linear-gradient(90deg, transparent, ${accent})`,
-                opacity: 0.4,
-              }}
-            />
-            <span
-              style={{
-                fontFamily: "'DM Mono', monospace",
-                fontSize: "8px",
-                letterSpacing: "0.22em",
-                color: dim,
-                opacity: 0.7,
-              }}
-            >
-              powered by {THT.symbol}
-            </span>
-            <div
-              style={{
-                flex: 1,
-                height: "1px",
-                background: `linear-gradient(90deg, ${accent}, transparent)`,
-                opacity: 0.4,
-              }}
-            />
           </div>
 
           {/* ── Nav group label ── */}
@@ -277,8 +234,7 @@ export function AppSidebar() {
             )}
 
             {[
-              ["THT", thtBalance != null ? thtBalance.toLocaleString() : "—", accent],
-              ["ADA", adaBalance != null ? `₳ ${adaBalance.toFixed(2)}` : "—", dim],
+              ["SOL", solBalance != null ? solBalance.toFixed(4) : "—", accent],
             ].map(([label, val, col]) => (
               <div key={label as string} style={{ display: "flex", justifyContent: "space-between" }}>
                 <span
@@ -359,7 +315,7 @@ export function AppSidebar() {
               {connecting ? (
                 <><Loader2 className="size-3 animate-spin" /> CONNECTING...</>
               ) : (
-                <><Wallet className="size-3" /> CONNECT ETERNL</>
+                <><Wallet className="size-3" /> CONNECT PHANTOM</>
               )}
             </button>
             <p
@@ -372,7 +328,7 @@ export function AppSidebar() {
                 opacity: 0.6,
               }}
             >
-              Requires Eternl browser extension
+              Requires Phantom or Solflare extension
             </p>
           </>
         )}

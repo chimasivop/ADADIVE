@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Database, Loader2 } from "lucide-react";
-import { THT } from "@/lib/token";
+import { useWallet } from "@/contexts/WalletContext";
 
 export default function NewDeal() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { address, connected } = useWallet();
 
   const [providerId, setProviderId] = useState("");
   const [clientAddress, setClientAddress] = useState("");
@@ -33,15 +34,20 @@ export default function NewDeal() {
 
   const createDeal = useCreateDeal();
 
+  // The deal's client address is the wallet that owns it, and the api-server
+  // now enforces that `clientAddress` equals the authenticated wallet. Offer the
+  // connected address so the common path cannot be a 403 by typo.
+  const effectiveClientAddress = clientAddress || address || "";
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!providerId || !clientAddress || !storageGb || !durationEpochs || !dataHash) return;
+    if (!providerId || !effectiveClientAddress || !storageGb || !durationEpochs || !dataHash) return;
 
     createDeal.mutate(
       {
         data: {
           providerId: parseInt(providerId, 10),
-          clientAddress,
+          clientAddress: effectiveClientAddress,
           storageGb: parseFloat(storageGb),
           durationEpochs: parseInt(durationEpochs, 10),
           dataHash,
@@ -55,6 +61,9 @@ export default function NewDeal() {
       }
     );
   };
+
+  const errorMessage =
+    createDeal.error instanceof Error ? createDeal.error.message : null;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl">
@@ -91,7 +100,7 @@ export default function NewDeal() {
                 <SelectContent>
                   {providers?.map((p) => (
                     <SelectItem key={p.id} value={String(p.id)} className="font-mono">
-                      {p.name} — {p.pricePerGbPerEpoch.toFixed(5)} THT/GB/epoch — {p.region}
+                      {p.name} — {p.pricePerGbPerEpoch.toFixed(5)} SOL/GB/epoch — {p.region}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -101,11 +110,16 @@ export default function NewDeal() {
             <div className="space-y-2">
               <Label className="font-mono text-xs uppercase text-muted-foreground">Client Wallet Address</Label>
               <Input
-                value={clientAddress}
+                value={effectiveClientAddress}
                 onChange={(e) => setClientAddress(e.target.value)}
-                placeholder="addr1..."
+                placeholder={connected ? address ?? "base58 public key…" : "connect a wallet to fill this"}
                 className="font-mono bg-background/50 border-primary/20 text-sm"
               />
+              <p className="font-mono text-xs text-muted-foreground">
+                {connected
+                  ? "Defaults to your connected wallet — a deal can only be created for its owner."
+                  : "Connect a wallet first; the server requires the deal's client to be the authenticated wallet."}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -146,9 +160,9 @@ export default function NewDeal() {
             {estimatedCost && (
               <div className="p-4 bg-background/50 rounded border border-primary/30">
                 <p className="font-mono text-xs text-muted-foreground uppercase mb-1">Estimated Total Cost</p>
-                <p className="font-mono text-2xl font-bold text-primary">{THT.label(estimatedCost)}</p>
+                <p className="font-mono text-2xl font-bold text-primary">{estimatedCost} SOL</p>
                 <p className="font-mono text-xs text-muted-foreground mt-1">
-                  {storageGb} GB × {durationEpochs} epochs × {selectedProvider?.pricePerGbPerEpoch.toFixed(6)} THT/GB/epoch
+                  {storageGb} GB × {durationEpochs} epochs × {selectedProvider?.pricePerGbPerEpoch.toFixed(6)} SOL/GB/epoch
                 </p>
               </div>
             )}
@@ -156,7 +170,7 @@ export default function NewDeal() {
             <Button
               type="submit"
               className="w-full font-mono gap-2"
-              disabled={createDeal.isPending || !providerId || !clientAddress || !storageGb || !durationEpochs || !dataHash}
+              disabled={createDeal.isPending || !providerId || !effectiveClientAddress || !storageGb || !durationEpochs || !dataHash}
             >
               {createDeal.isPending ? (
                 <><Loader2 className="size-4 animate-spin" /> Submitting...</>
@@ -165,9 +179,9 @@ export default function NewDeal() {
               )}
             </Button>
 
-            {createDeal.isError && (
-              <p className="font-mono text-xs text-destructive text-center">
-                Failed to submit deal. Please try again.
+            {errorMessage && (
+              <p className="font-mono text-xs text-destructive text-center break-all">
+                {errorMessage}
               </p>
             )}
           </form>

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Api
   version: 0.1.0
-  description: Cardano Decentralized Storage Economy API
+  description: Solana Decentralized Storage Economy API
 servers:
   - url: /api
     description: Base API path
@@ -507,14 +507,14 @@ components:
           type: string
         nodeId:
           type: string
-          description: Cardano node identifier
+          description: Solana node identifier
         totalStorageGb:
           type: number
         usedStorageGb:
           type: number
         pricePerGbPerEpoch:
           type: number
-          description: Price in ADA lovelace per GB per epoch
+          description: Price in SOL lamports per GB per epoch
         reputationScore:
           type: number
           description: 0-100 reputation score
@@ -527,7 +527,7 @@ components:
           type: ["number", "null"]
         activeDeals:
           type: ["integer", "null"]
-        totalAdaEarned:
+        totalSolEarned:
           type: ["number", "null"]
         createdAt:
           type: string
@@ -550,7 +550,7 @@ components:
 
     Deal:
       type: object
-      required: [id, providerId, providerName, clientAddress, storageGb, durationEpochs, totalCostAda, status, dataHash, startEpoch, createdAt]
+      required: [id, providerId, providerName, clientAddress, storageGb, durationEpochs, totalCostSol, status, dataHash, startEpoch, createdAt]
       properties:
         id:
           type: integer
@@ -560,12 +560,12 @@ components:
           type: string
         clientAddress:
           type: string
-          description: Cardano wallet address of the client
+          description: Solana wallet address of the client
         storageGb:
           type: number
         durationEpochs:
           type: integer
-        totalCostAda:
+        totalCostSol:
           type: number
         status:
           type: string
@@ -579,7 +579,7 @@ components:
           type: ["integer", "null"]
         txHash:
           type: ["string", "null"]
-          description: Cardano transaction hash
+          description: Solana transaction hash
         createdAt:
           type: string
           format: date-time
@@ -614,7 +614,7 @@ components:
 
     NetworkStats:
       type: object
-      required: [totalProviders, activeProviders, totalStorageTb, usedStorageTb, activeDeals, totalDealsAllTime, totalAdaLocked, avgReputationScore, currentEpoch, networkUtilizationPercent]
+      required: [totalProviders, activeProviders, totalStorageTb, usedStorageTb, activeDeals, totalDealsAllTime, totalSolLocked, avgReputationScore, currentEpoch, networkUtilizationPercent]
       properties:
         totalProviders:
           type: integer
@@ -628,7 +628,7 @@ components:
           type: integer
         totalDealsAllTime:
           type: integer
-        totalAdaLocked:
+        totalSolLocked:
           type: number
         avgReputationScore:
           type: number
@@ -639,18 +639,18 @@ components:
 
     EconomyStats:
       type: object
-      required: [adaPerGbPerEpoch, avgDealSizeGb, avgDealDurationEpochs, totalAdaEarnedAllTime, dailyAdaVolume, priceHistory, storageByRegion]
+      required: [solPerGbPerEpoch, avgDealSizeGb, avgDealDurationEpochs, totalSolEarnedAllTime, dailySolVolume, priceHistory, storageByRegion]
       properties:
-        adaPerGbPerEpoch:
+        solPerGbPerEpoch:
           type: number
           description: Average market price
         avgDealSizeGb:
           type: number
         avgDealDurationEpochs:
           type: number
-        totalAdaEarnedAllTime:
+        totalSolEarnedAllTime:
           type: number
-        dailyAdaVolume:
+        dailySolVolume:
           type: number
         priceHistory:
           type: array
@@ -663,11 +663,11 @@ components:
 
     PricePoint:
       type: object
-      required: [epoch, priceAda, dealsCount]
+      required: [epoch, priceSol, dealsCount]
       properties:
         epoch:
           type: integer
-        priceAda:
+        priceSol:
           type: number
         dealsCount:
           type: integer

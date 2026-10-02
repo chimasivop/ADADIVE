@@ -7,6 +7,19 @@ packages:
 autoInstallPeers: false
 
 catalog:
+  # Solana stack (Phase 5). The Escrow program's Anchor client, the RPC client,
+  # the wallet-standard adapters, and the Buffer polyfill web3.js needs in a
+  # browser. Versions are pinned to ranges that resolve against this monorepo's
+  # React 19 / Vite 7 / TypeScript 5.9 setup — the wallet adapters declare React
+  # 16–18 peers, which `.npmrc`'s `strict-peer-dependencies=false` tolerates.
+  '@anchor-lang/core': ^1.2.0
+  '@solana/web3.js': ^1.99.0
+  '@solana/wallet-adapter-base': ^0.9.28
+  '@solana/wallet-adapter-react': ^0.15.40
+  '@solana/wallet-adapter-react-ui': ^0.9.40
+  '@solana/wallet-adapter-phantom': ^0.9.30
+  '@solana/wallet-adapter-solflare': ^0.6.34
+  buffer: ^6.0.3
   '@replit/vite-plugin-cartographer': ^0.5.1
   '@replit/vite-plugin-dev-banner': ^0.1.1
   '@replit/vite-plugin-runtime-error-modal': ^0.0.6

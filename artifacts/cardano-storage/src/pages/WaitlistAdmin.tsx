@@ -202,7 +202,7 @@ export default function WaitlistAdmin() {
       )}
 
       <p style={{ fontFamily: mono, fontSize: "9px", color: "hsl(var(--muted-foreground))", opacity: 0.5, marginTop: "20px", letterSpacing: "0.1em" }}>
-        ADADIVE by THETA — waitlist data stored in your Replit PostgreSQL database
+        ADADIVE — waitlist data stored in your Replit PostgreSQL database
       </p>
     </div>
   );

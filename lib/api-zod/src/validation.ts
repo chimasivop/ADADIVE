@@ -29,29 +29,95 @@ import type { Request, Response, NextFunction } from "express";
 // REUSABLE FIELD VALIDATORS
 // ============================================================
 
+const BASE58_ALPHABET =
+  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
 /**
- * Cardano address validator.
- * Accepts both mainnet (addr1...) and testnet (addr_test1...)
- * Bech32 addresses are long, so we check prefix + reasonable length
- * rather than a full Bech32 decode (keeps this dependency-free).
+ * Decode base58 to bytes, or `null` if the input is not valid base58.
+ *
+ * Kept local and dependency-free: `@workspace/api-zod` is imported by the API
+ * server and the generated clients, and pulling a Solana SDK in for a length
+ * check would outweigh the fifteen lines here. This is the same algorithm the
+ * shared client library uses to encode; agreeing on it is what makes a length
+ * check meaningful.
+ */
+function decodeBase58(value: string): Uint8Array | null {
+  if (value.length === 0) return null;
+
+  const bytes: number[] = [];
+  for (const char of value) {
+    let carry = BASE58_ALPHABET.indexOf(char);
+    if (carry < 0) return null;
+    for (let j = 0; j < bytes.length; j++) {
+      carry += bytes[j] * 58;
+      bytes[j] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+
+  // Each leading '1' is one leading zero byte, which the loop above does not
+  // produce (a zero byte contributes nothing to the running value).
+  for (const char of value) {
+    if (char !== "1") break;
+    bytes.push(0);
+  }
+
+  return Uint8Array.from(bytes.reverse());
+}
+
+/**
+ * Is `value` base58 that decodes to exactly `length` bytes?
+ *
+ * Length is checked after decoding rather than by counting characters: a
+ * 32-character string is not necessarily 32 bytes, and a Cardano `addr1…`
+ * address that happens to sit in the base58 alphabet and the right character
+ * range must still be rejected.
+ */
+function isBase58OfLength(value: string, length: number): boolean {
+  const decoded = decodeBase58(value);
+  return decoded !== null && decoded.length === length;
+}
+
+/**
+ * Solana wallet address validator (base58 public key).
+ *
+ * Replaces the Cardano bech32 validator, which required an `addr1…` /
+ * `addr_test1…` prefix and so rejected every Solana key. A Solana public key is
+ * exactly 32 bytes base58-encoded, so that is what this checks.
+ *
+ * The exported names (`cardanoAddress`, `txHash`) are retained because they are
+ * imported across the API server and baked into the generated OpenAPI clients;
+ * renaming them would ripple through the spec for no behavioural gain.
  */
 export const cardanoAddress = z
   .string()
   .trim()
-  .min(20, "Wallet address is too short to be valid")
-  .max(120, "Wallet address is too long to be valid")
+  .min(32, "Wallet address is too short to be a Solana public key")
+  .max(44, "Wallet address is too long to be a Solana public key")
   .refine(
-    (val) => val.startsWith("addr1") || val.startsWith("addr_test1"),
-    { message: "Wallet address must start with 'addr1' (mainnet) or 'addr_test1' (testnet)" }
+    (val) => isBase58OfLength(val, 32),
+    { message: "Wallet address must be a base58-encoded 32-byte Solana public key" }
   );
 
 /**
- * Cardano transaction hash — 64 character hex string
+ * Solana transaction signature — a base58-encoded 64-byte Ed25519 signature.
+ *
+ * Replaces the 64-character hex Cardano transaction hash. The field name is
+ * retained for the same reason as the address validator above.
  */
 export const txHash = z
   .string()
   .trim()
-  .regex(/^[a-fA-F0-9]{64}$/, "Transaction hash must be a 64-character hex string");
+  .min(64, "Transaction signature is too short to be valid")
+  .max(88, "Transaction signature is too long to be valid")
+  .refine(
+    (val) => isBase58OfLength(val, 64),
+    { message: "Transaction signature must be a base58-encoded 64-byte Solana signature" }
+  );
 
 /**
  * IPFS CID — supports both CIDv0 (Qm...) and CIDv1 (ba...)

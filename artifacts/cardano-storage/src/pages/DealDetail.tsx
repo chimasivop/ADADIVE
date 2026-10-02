@@ -1,11 +1,19 @@
-import { useGetDeal, getGetDealQueryKey } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useGetDeal, useUpdateDeal, getGetDealQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
+import { useConnection } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Database, ArrowLeft, HardDrive, Coins, Clock, Hash } from "lucide-react";
 import { format } from "date-fns";
+import { useWallet } from "@/contexts/WalletContext";
+import { useSignableWallet } from "@/hooks/useBackendAdapters";
+import { useBackendSession } from "@/hooks/useBackendSession";
+import { DealStatusCard } from "@/components/DealStatusCard";
 
 const statusColors: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   active: "default",
@@ -18,9 +26,40 @@ export default function DealDetail() {
   const { id } = useParams<{ id: string }>();
   const dealId = parseInt(id, 10);
 
+  const { address } = useWallet();
+  const { connection } = useConnection();
+  const signableWallet = useSignableWallet();
+  const { api, ensureSession } = useBackendSession();
+  const queryClient = useQueryClient();
+
   const { data: deal, isLoading } = useGetDeal(dealId, {
     query: { queryKey: getGetDealQueryKey(dealId), enabled: !!dealId }
   });
+
+  const updateDeal = useUpdateDeal();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // The api-server authorises a deal update against the deal's own
+  // `clientAddress`, so only show the control to the wallet that owns the deal.
+  // The button is a courtesy; the server is what enforces the rule.
+  const isOwner = !!address && !!deal && address === deal.clientAddress;
+
+  const nextStatus = deal?.status === "pending" ? "active" : deal?.status === "active" ? "completed" : null;
+
+  const handleStatusChange = (status: "active" | "completed") => {
+    setActionError(null);
+    updateDeal.mutate(
+      { id: dealId, data: { status } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) });
+        },
+        onError: (err) => {
+          setActionError(err instanceof Error ? err.message : String(err));
+        },
+      }
+    );
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -59,7 +98,7 @@ export default function DealDetail() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard title="Storage" value={`${deal.storageGb} GB`} subtitle="Allocated" icon={HardDrive} />
             <StatCard title="Duration" value={`${deal.durationEpochs}`} subtitle="Epochs" icon={Clock} />
-            <StatCard title="Total Cost" value={`₳ ${deal.totalCostAda.toFixed(2)}`} subtitle="ADA locked" icon={Coins} />
+            <StatCard title="Total Cost" value={`◎ ${deal.totalCostSol.toFixed(2)}`} subtitle="SOL locked" icon={Coins} />
             <StatCard
               title="Provider"
               value={deal.providerName}
@@ -114,6 +153,52 @@ export default function DealDetail() {
 
           <Card className="bg-card/50 border-primary/20">
             <CardHeader>
+              <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span>Deal Actions</span>
+                {address && (
+                  <Badge variant={isOwner ? "default" : "destructive"} className="font-mono">
+                    {isOwner ? "you are the client" : "not your deal"}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="font-mono text-xs text-muted-foreground">
+                Only the deal's client wallet may change its status. The server
+                checks the authenticated wallet against the deal's client address
+                and refuses anyone else with 403.
+              </p>
+              {address ? (
+                nextStatus ? (
+                  <Button
+                    className="font-mono gap-2"
+                    disabled={updateDeal.isPending}
+                    onClick={() => handleStatusChange(nextStatus)}
+                  >
+                    {updateDeal.isPending
+                      ? "Submitting..."
+                      : nextStatus === "active"
+                        ? "Activate deal"
+                        : "Mark completed"}
+                  </Button>
+                ) : (
+                  <p className="font-mono text-xs text-muted-foreground italic">
+                    No further status change is available for a {deal.status} deal.
+                  </p>
+                )
+              ) : (
+                <p className="font-mono text-xs text-muted-foreground italic">
+                  Connect a wallet to act on this deal.
+                </p>
+              )}
+              {actionError && (
+                <p className="font-mono text-xs text-destructive break-all">{actionError}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/50 border-primary/20">
+            <CardHeader>
               <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                 <Hash className="size-4" /> On-Chain Data
               </CardTitle>
@@ -135,6 +220,27 @@ export default function DealDetail() {
                   <p className="font-mono text-sm text-muted-foreground italic">Pending on-chain confirmation</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Oracle-backed lifecycle: pin verification, the challenge window and
+              settlement. Keyed by the deal's data hash, which is the deal id the
+              oracle backend was given at registration. */}
+          <Card className="bg-card/50 border-primary/20">
+            <CardHeader>
+              <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
+                Settlement Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DealStatusCard
+                api={api}
+                dealId={deal.dataHash}
+                wallet={address}
+                ensureSession={ensureSession}
+                connection={connection}
+                signer={signableWallet}
+              />
             </CardContent>
           </Card>
         </>
