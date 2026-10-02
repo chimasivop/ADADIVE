@@ -129,10 +129,19 @@ export default function Landing() {
   const { data: networkStats } = useGetNetworkStats();
   const { data: economyStats } = useGetEconomyStats();
 
-  // Helper to format storage values
-  const formatStorage = (tb?: number) => {
+  // Helper to format storage values. `null` means "no providers to aggregate",
+  // which is different from a genuine 0 TB, so it gets its own label.
+  const formatStorage = (tb?: number | null) => {
     if (tb === undefined) return "--";
+    if (tb === null) return "No data";
     return `${tb.toFixed(2)} TB`;
+  };
+
+  // Helper to format utilisation, keeping "loading" distinct from "no data".
+  const formatUtilisation = (pct?: number | null) => {
+    if (pct === undefined) return "Loading...";
+    if (pct === null) return "No data";
+    return `${pct.toFixed(1)}% Utilised`;
   };
 
   // Helper to format price
@@ -212,7 +221,7 @@ export default function Landing() {
         {/* Live badge */}
         <div className="afu" style={{ display:"inline-flex", alignItems:"center", gap:"10px", border:"1px solid rgba(201,169,110,.2)", borderRadius:"100px", padding:"6px 20px", marginBottom:"40px" }}>
           <span style={{ width:"6px", height:"6px", borderRadius:"50%", background:"#00ffa3", display:"block", animation:"adadivePulse 2s infinite" }} />
-          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".22em", color:T.smoke }}>LIVE ON SOLANA · {networkStats ? `${networkStats.totalStorageTb.toFixed(2)} TB ONLINE` : "LOADING..."}</span>
+          <span style={{ fontFamily:"'DM Mono',monospace", fontSize:"9px", letterSpacing:".22em", color:T.smoke }}>LIVE ON SOLANA · {networkStats ? (networkStats.totalStorageTb === null ? "NO CAPACITY DATA" : `${networkStats.totalStorageTb.toFixed(2)} TB ONLINE`) : "LOADING..."}</span>
         </div>
 
         <h1 className="afu ad1" style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(32px,7vw,88px)", fontWeight:600, lineHeight:1.08, letterSpacing:"-.01em", marginBottom:"6px" }}>
@@ -299,7 +308,7 @@ export default function Landing() {
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:"16px" }}>
             {[
-              { label:"Total Storage", value: formatStorage(networkStats?.totalStorageTb), sub: networkStats?.networkUtilizationPercent !== undefined ? `${networkStats.networkUtilizationPercent.toFixed(1)}% Utilised` : "Loading...", icon:"▣" },
+              { label:"Total Storage", value: formatStorage(networkStats?.totalStorageTb), sub: formatUtilisation(networkStats?.networkUtilizationPercent), icon:"▣" },
               { label:"Active Deals",  value: String(networkStats?.activeDeals ?? "--"), sub: networkStats?.totalDealsAllTime !== undefined ? `${networkStats.totalDealsAllTime} All Time` : "Loading...", icon:"⬡" },
               { label:"SOL Locked",    value: `◎ ${networkStats?.totalSolLocked?.toLocaleString() ?? "--"}`, sub:"In Active Escrow", icon:"◈" },
               { label:"Avg Price",     value: formatPrice(economyStats?.solPerGbPerEpoch), sub:"per GB / Epoch", icon:"∿" },

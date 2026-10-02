@@ -235,14 +235,14 @@ export const UpdateDealResponse = zod.object({
 export const GetNetworkStatsResponse = zod.object({
   "totalProviders": zod.number(),
   "activeProviders": zod.number(),
-  "totalStorageTb": zod.number(),
-  "usedStorageTb": zod.number(),
+  "totalStorageTb": zod.number().nullable().describe('Total registered capacity in TB, or null when there are no providers to aggregate (distinct from a genuine 0).'),
+  "usedStorageTb": zod.number().nullable().describe('Used capacity in TB, or null when there are no providers to aggregate (distinct from a genuine 0).'),
   "activeDeals": zod.number(),
   "totalDealsAllTime": zod.number(),
   "totalSolLocked": zod.number(),
   "avgReputationScore": zod.number(),
   "currentEpoch": zod.number(),
-  "networkUtilizationPercent": zod.number()
+  "networkUtilizationPercent": zod.number().nullable().describe('Utilisation percentage, or null when total capacity is unknown (no providers), so the UI can show \"No data\" rather than 0%.')
 })
 
 
