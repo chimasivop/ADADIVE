@@ -48,6 +48,12 @@ pub struct PlatformConfig {
     /// (250 = 2.5%). Applied as `amount * fee_basis_points / 10_000` so the
     /// math stays in integers.
     pub fee_basis_points: u16,
+    /// Maximum value a single deal may escrow, in lamports. `initialize`
+    /// rejects any deposit above this, so it is a hard on-chain ceiling on
+    /// worst-case loss per deal. Stored here rather than as a program constant
+    /// so it is a policy the platform can raise later via `update_config`
+    /// without redeploying.
+    pub max_deal_amount: u64,
     /// Destination of the settle fee. Not a signer: it only ever receives
     /// lamports, and is referenced by address in `settle`.
     pub treasury: Pubkey,

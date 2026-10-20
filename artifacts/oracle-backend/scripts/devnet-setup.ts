@@ -9,9 +9,9 @@
  * It hand-encodes `initialize_config` rather than going through the Anchor
  * client because this is the one setup step a new checkout must be able to run
  * before the shared library's Anchor dependency has been resolved — and because
- * the instruction is a fixed 8-byte discriminator plus a `u16` and a `pubkey`,
- * which is less code than the plumbing it replaces. Everything past setup goes
- * through `@workspace/solana-escrow`.
+ * the instruction is a fixed 8-byte discriminator plus a `u16`, a `pubkey` and
+ * an `Option<u64>`, which is less code than the plumbing it replaces. Everything
+ * past setup goes through `@workspace/solana-escrow`.
  *
  * The keypairs are plain Solana CLI JSON and can be imported into Phantom or
  * Solflare to drive the walkthrough. They are throwaway localnet keys and are
@@ -88,7 +88,9 @@ async function main() {
   if (await exists(connection, config)) {
     console.log(`PlatformConfig already exists at ${config.toBase58()}`);
   } else {
-    // `initialize_config(fee_basis_points: u16, treasury: pubkey)`.
+    // `initialize_config(fee_basis_points: u16, treasury: pubkey,
+    // max_deal_amount: Option<u64>)`. The trailing `None` tag keeps the
+    // program's `DEFAULT_MAX_DEAL_AMOUNT` as the cap for localnet.
     const data = Buffer.concat([
       discriminator("initialize_config"),
       (() => {
@@ -97,6 +99,7 @@ async function main() {
         return b;
       })(),
       TREASURY.toBuffer(),
+      Buffer.from([0]), // Option<u64> = None
     ]);
 
     const ix = new TransactionInstruction({

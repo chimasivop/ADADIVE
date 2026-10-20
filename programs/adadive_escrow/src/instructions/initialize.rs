@@ -1,7 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{self, Transfer};
 
-use crate::{constants::*, state::Deal, EscrowError};
+use crate::{
+    constants::*,
+    state::{Deal, PlatformConfig},
+    EscrowError,
+};
 
 #[derive(Accounts)]
 #[instruction(amount: u64, deal_id: String, start_time: i64, deadline: i64)]
@@ -24,6 +28,13 @@ pub struct Initialize<'info> {
     )]
     pub deal: Account<'info, Deal>,
 
+    /// Platform policy account, read to enforce the per-deal value cap. Required
+    /// so a deal cannot be opened before the platform has set its policy; the
+    /// `[PLATFORM_CONFIG_SEED]` PDA and the program's ownership of it mean this
+    /// cannot be a look-alike account.
+    #[account(seeds = [PLATFORM_CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, PlatformConfig>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -34,8 +45,10 @@ pub fn handle_initialize(
     start_time: i64,
     deadline: i64,
 ) -> Result<()> {
-    // Scope guards mirroring the Aiken `is_v1_scope` block.
-    require!(amount > 0, EscrowError::InvalidAmount);
+    // Scope guards mirroring the Aiken `is_v1_scope` block. The amount guards
+    // (positive, within the platform cap) are factored into
+    // `validate_deposit_amount` so they can be unit tested directly.
+    validate_deposit_amount(amount, ctx.accounts.config.max_deal_amount)?;
     require!(!deal_id.is_empty(), EscrowError::EmptyDealId);
     require!(
         ctx.accounts.depositor.key() != ctx.accounts.provider.key()
@@ -73,4 +86,59 @@ pub fn handle_initialize(
         deal.deal_id
     );
     Ok(())
+}
+
+/// Guard a requested deposit against the platform policy.
+///
+/// Split out from `handle_initialize` so the two amount rules — positive, and
+/// no greater than the live `PlatformConfig::max_deal_amount` — are a pure
+/// function that can be unit tested without a `Context`. The cap comparison is
+/// inclusive: a deposit of exactly `max_deal_amount` is allowed, and only a
+/// strictly greater amount is rejected.
+pub fn validate_deposit_amount(amount: u64, max_deal_amount: u64) -> Result<()> {
+    require!(amount > 0, EscrowError::InvalidAmount);
+    require!(amount <= max_deal_amount, EscrowError::DealAmountExceedsMax);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A deal exactly at the cap is accepted (boundary is inclusive).
+    #[test]
+    fn deposit_at_cap_is_accepted() {
+        assert!(validate_deposit_amount(10_000_000_000, 10_000_000_000).is_ok());
+    }
+
+    /// One lamport over the cap is rejected.
+    #[test]
+    fn deposit_over_cap_is_rejected() {
+        let err = validate_deposit_amount(10_000_000_001, 10_000_000_000)
+            .expect_err("over-cap deposit must be rejected");
+        assert_eq!(err, EscrowError::DealAmountExceedsMax.into());
+    }
+
+    /// A comfortably-under-cap deposit is accepted.
+    #[test]
+    fn deposit_under_cap_is_accepted() {
+        assert!(validate_deposit_amount(1, 10_000_000_000).is_ok());
+    }
+
+    /// Zero is still rejected by the positivity rule, not the cap rule.
+    #[test]
+    fn zero_deposit_is_rejected() {
+        let err =
+            validate_deposit_amount(0, 10_000_000_000).expect_err("zero deposit must be rejected");
+        assert_eq!(err, EscrowError::InvalidAmount.into());
+    }
+
+    /// The cap is read from config, so a raised cap admits a previously
+    /// over-cap amount — this is the "raise it later" path.
+    #[test]
+    fn raising_the_cap_admits_larger_deposit() {
+        let amount = 50_000_000_000;
+        assert!(validate_deposit_amount(amount, 10_000_000_000).is_err());
+        assert!(validate_deposit_amount(amount, 100_000_000_000).is_ok());
+    }
 }

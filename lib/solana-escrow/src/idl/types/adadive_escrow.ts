@@ -10,7 +10,7 @@ export type AdadiveEscrow = {
     "name": "adadiveEscrow",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "ADADIVE deal escrow prototype (Solana/Anchor)"
+    "description": "ADADIVE deal escrow (Solana/Anchor)"
   },
   "instructions": [
     {
@@ -121,6 +121,39 @@ export type AdadiveEscrow = {
           }
         },
         {
+          "name": "config",
+          "docs": [
+            "Platform policy account, read to enforce the per-deal value cap. Required",
+            "so a deal cannot be opened before the platform has set its policy; the",
+            "`[PLATFORM_CONFIG_SEED]` PDA and the program's ownership of it mean this",
+            "cannot be a look-alike account."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -209,6 +242,12 @@ export type AdadiveEscrow = {
         {
           "name": "treasury",
           "type": "pubkey"
+        },
+        {
+          "name": "maxDealAmount",
+          "type": {
+            "option": "u64"
+          }
         }
       ]
     },
@@ -478,6 +517,12 @@ export type AdadiveEscrow = {
           "type": {
             "option": "pubkey"
           }
+        },
+        {
+          "name": "maxDealAmount",
+          "type": {
+            "option": "u64"
+          }
         }
       ]
     }
@@ -565,6 +610,16 @@ export type AdadiveEscrow = {
       "code": 6010,
       "name": "invalidTreasuryAccount",
       "msg": "Treasury must not be the escrow account or the platform config account"
+    },
+    {
+      "code": 6011,
+      "name": "dealAmountExceedsMax",
+      "msg": "Escrow amount exceeds the platform's maximum deal value"
+    },
+    {
+      "code": 6012,
+      "name": "invalidMaxDealAmount",
+      "msg": "Maximum deal amount must be greater than zero"
     }
   ],
   "types": [
@@ -666,6 +721,17 @@ export type AdadiveEscrow = {
               "math stays in integers."
             ],
             "type": "u16"
+          },
+          {
+            "name": "maxDealAmount",
+            "docs": [
+              "Maximum value a single deal may escrow, in lamports. `initialize`",
+              "rejects any deposit above this, so it is a hard on-chain ceiling on",
+              "worst-case loss per deal. Stored here rather than as a program constant",
+              "so it is a policy the platform can raise later via `update_config`",
+              "without redeploying."
+            ],
+            "type": "u64"
           },
           {
             "name": "treasury",

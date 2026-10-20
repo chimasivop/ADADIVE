@@ -44,11 +44,13 @@ pub mod adadive_escrow {
         ctx: Context<InitializeConfig>,
         fee_basis_points: u16,
         treasury: Pubkey,
+        max_deal_amount: Option<u64>,
     ) -> Result<()> {
         crate::instructions::initialize_config::handle_initialize_config(
             ctx,
             fee_basis_points,
             treasury,
+            max_deal_amount,
         )
     }
 
@@ -56,8 +58,14 @@ pub mod adadive_escrow {
         ctx: Context<UpdateConfig>,
         fee_basis_points: Option<u16>,
         treasury: Option<Pubkey>,
+        max_deal_amount: Option<u64>,
     ) -> Result<()> {
-        crate::instructions::update_config::handle_update_config(ctx, fee_basis_points, treasury)
+        crate::instructions::update_config::handle_update_config(
+            ctx,
+            fee_basis_points,
+            treasury,
+            max_deal_amount,
+        )
     }
 
     pub fn transfer_authority(ctx: Context<TransferAuthority>) -> Result<()> {

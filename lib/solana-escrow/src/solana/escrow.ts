@@ -206,6 +206,18 @@ export async function buildInitializeTransaction(
   const wallet = new AdapterWallet(depositor);
   const scoped = makeEscrowProgram(connection, wallet);
 
+  // The program enforces the per-deal cap on-chain; reading the config here
+  // lets us fail with a clear message before the user signs, and gives the
+  // instruction the config account it needs.
+  const configAddress = platformConfigAddress(program.programId);
+  const config = await fetchPlatformConfig(scoped);
+  if (amount > BigInt(config.maxDealAmount.toString())) {
+    throw new Error(
+      `amount ${amount} exceeds the platform maximum deal value ` +
+        `${config.maxDealAmount} lamports`
+    );
+  }
+
   const tx = await scoped.methods
     .initialize(
       new BN(amount.toString()),
@@ -218,6 +230,7 @@ export async function buildInitializeTransaction(
       provider,
       oracle,
       deal: dealPda,
+      config: configAddress,
       systemProgram: SystemProgram.programId,
     })
     .transaction();

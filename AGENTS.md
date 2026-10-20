@@ -188,3 +188,28 @@ deploying:
 
 and confirm it matches: `solana-keygen pubkey target/deploy/adadive_escrow-keypair.json`
 must equal the `declare_id!` value.
+
+## Per-deal value cap (`PlatformConfig.max_deal_amount`)
+
+`initialize` requires the singleton `PlatformConfig` account and rejects any
+deposit above `max_deal_amount` (lamports) with `DealAmountExceedsMax` (6011).
+The cap is a config field, not a constant, so `update_config` can raise it
+without a redeploy; `initialize_config` takes an `Option<u64>` and falls back to
+`DEFAULT_MAX_DEAL_AMOUNT` (10 SOL) when `None`. The comparison is inclusive:
+exactly the cap is allowed, one lamport over is rejected. The check is on-chain,
+so the client-side preview in `buildInitializeTransaction` is a UX nicety only —
+bypassing it still hits the program.
+
+Two consequences when touching this area:
+
+- The instruction signature changed. Any hand-encoded caller must add the
+  trailing `Option<u64>` tag to `initialize_config` (`Buffer.from([0])` for
+  `None`) and pass the config PDA to `initialize`. `devnet-setup.ts` does this.
+- New error variants are appended *after* the existing ones so the numeric codes
+  of the v1 errors do not shift under a deployed client.
+
+`test:cap` in oracle-backend (`tests/escrowCap.live.test.ts`) is the opt-in
+on-chain proof. It submits raw `initialize` instructions rather than going
+through the client builder, so a pass means the *program* enforced the boundary,
+not that the client refused early. It needs the same local validator +
+`PlatformConfig` as `test:e2e`, and is excluded from `pnpm test`.

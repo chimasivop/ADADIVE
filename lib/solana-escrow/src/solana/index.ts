@@ -23,6 +23,15 @@ export {
 
 export { ESCROW_IDL, type EscrowProgram } from "./idl";
 
+/**
+ * Re-export Anchor's `BN`, the integer type every instruction argument uses.
+ *
+ * Callers that build an instruction by hand (the oracle's live cap test) need
+ * it, and getting it from here means they do not have to depend on
+ * `@anchor-lang/core` directly or risk resolving a second copy of it.
+ */
+export { BN } from "@anchor-lang/core";
+
 export {
   AdapterWallet,
   KeypairWallet,

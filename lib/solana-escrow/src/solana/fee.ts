@@ -1,8 +1,12 @@
+import type { BN } from "@anchor-lang/core";
+
 import { FEE_BASIS_POINTS_DENOMINATOR } from "./constants";
 
 /** The on-chain `PlatformConfig`, camelCased as Anchor's client decodes it. */
 export interface PlatformConfigView {
   feeBasisPoints: number;
+  /** Per-deal value ceiling in lamports; `initialize` rejects deposits above it. */
+  maxDealAmount: BN;
   treasury: import("@solana/web3.js").PublicKey;
   authority: import("@solana/web3.js").PublicKey;
   bump: number;

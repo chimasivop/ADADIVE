@@ -27,6 +27,7 @@ pub fn handle_update_config(
     ctx: Context<UpdateConfig>,
     fee_basis_points: Option<u16>,
     treasury: Option<Pubkey>,
+    max_deal_amount: Option<u64>,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
 
@@ -41,10 +42,18 @@ pub fn handle_update_config(
         require!(t != Pubkey::default(), EscrowError::InvalidConfigTreasury);
         config.treasury = t;
     }
+    if let Some(max) = max_deal_amount {
+        // Raising the cap is the intended use; lowering it is allowed but only
+        // affects *new* deposits, since existing deals keep the amount they
+        // already locked. A zero cap is rejected outright.
+        require!(max > 0, EscrowError::InvalidMaxDealAmount);
+        config.max_deal_amount = max;
+    }
 
     msg!(
-        "Platform config updated: fee {} bp, treasury {}",
+        "Platform config updated: fee {} bp, max deal {} lamports, treasury {}",
         config.fee_basis_points,
+        config.max_deal_amount,
         config.treasury
     );
     Ok(())

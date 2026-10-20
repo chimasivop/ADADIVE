@@ -1,6 +1,9 @@
 use anchor_lang::prelude::*;
 
-use crate::{constants::*, error::EscrowError, state::PlatformConfig, MAX_FEE_BASIS_POINTS};
+use crate::{
+    constants::*, error::EscrowError, state::PlatformConfig, DEFAULT_MAX_DEAL_AMOUNT,
+    MAX_FEE_BASIS_POINTS,
+};
 
 /// One-time setup of the singleton `PlatformConfig`.
 ///
@@ -32,6 +35,7 @@ pub fn handle_initialize_config(
     ctx: Context<InitializeConfig>,
     fee_basis_points: u16,
     treasury: Pubkey,
+    max_deal_amount: Option<u64>,
 ) -> Result<()> {
     require!(
         u64::from(fee_basis_points) <= MAX_FEE_BASIS_POINTS,
@@ -46,15 +50,24 @@ pub fn handle_initialize_config(
         EscrowError::InvalidConfigTreasury
     );
 
+    // The cap defaults to `DEFAULT_MAX_DEAL_AMOUNT` when the platform does not
+    // pass one, so a config created by an older caller still gets a safe
+    // ceiling rather than an unlimited one. An explicit 0 is rejected: it would
+    // block every deal, which is never a sensible policy.
+    let max_deal_amount = max_deal_amount.unwrap_or(DEFAULT_MAX_DEAL_AMOUNT);
+    require!(max_deal_amount > 0, EscrowError::InvalidMaxDealAmount);
+
     let config = &mut ctx.accounts.config;
     config.fee_basis_points = fee_basis_points;
+    config.max_deal_amount = max_deal_amount;
     config.treasury = treasury;
     config.authority = ctx.accounts.authority.key();
     config.bump = ctx.bumps.config;
 
     msg!(
-        "Platform config initialized: fee {} bp, treasury {}, authority {}",
+        "Platform config initialized: fee {} bp, max deal {} lamports, treasury {}, authority {}",
         fee_basis_points,
+        max_deal_amount,
         treasury,
         ctx.accounts.authority.key()
     );

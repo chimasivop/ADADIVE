@@ -9,11 +9,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx ./src/db/migrate.ts",
     "dev": "tsx ./src/index.ts",
-    "test": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts'",
-    "test:unit": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts'",
+    "test": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts' --ignore 'tests/escrowCap.live.test.ts'",
+    "test:unit": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts' --ignore 'tests/escrowCap.live.test.ts'",
     "test:e2e": "ts-mocha -p tsconfig.json -t 120000 tests/e2e.live.test.ts",
     "auth:demo": "tsx ./scripts/auth-demo.ts",
-    "setup:localnet": "tsx ./scripts/devnet-setup.ts"
+    "setup:localnet": "tsx ./scripts/devnet-setup.ts",
+    "test:cap": "ts-mocha -p tsconfig.json -t 180000 tests/escrowCap.live.test.ts"
   },
   "dependencies": {
     "@solana/web3.js": "catalog:",

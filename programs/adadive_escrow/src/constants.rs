@@ -17,5 +17,14 @@ pub const FEE_BASIS_POINTS_DENOMINATOR: u64 = 10_000;
 #[constant]
 pub const MAX_FEE_BASIS_POINTS: u64 = 10_000;
 
+/// Default per-deal value cap, in lamports (10 SOL).
+///
+/// The cap actually enforced on-chain lives in `PlatformConfig::max_deal_amount`
+/// so it is a platform policy value that `update_config` can raise later without
+/// redeploying the program. This constant is only the default applied by
+/// `initialize_config` when the platform does not pass an explicit cap; it is
+/// deliberately *not* read by `initialize`, which trusts the stored config.
+pub const DEFAULT_MAX_DEAL_AMOUNT: u64 = 10_000_000_000;
+
 /// Maximum length of a `deal_id` (the off-chain storage deal identifier).
 pub const MAX_DEAL_ID_LEN: usize = 64;

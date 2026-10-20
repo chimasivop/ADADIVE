@@ -24,4 +24,11 @@ pub enum EscrowError {
     ConfigAuthorityMismatch,
     #[msg("Treasury must not be the escrow account or the platform config account")]
     InvalidTreasuryAccount,
+    /// Appended after the v1 variants so existing error codes keep their
+    /// numbers — a client decoding `6001` as `RolesNotDistinct` must not start
+    /// seeing `DealAmountExceedsMax` there after an upgrade.
+    #[msg("Escrow amount exceeds the platform's maximum deal value")]
+    DealAmountExceedsMax,
+    #[msg("Maximum deal amount must be greater than zero")]
+    InvalidMaxDealAmount,
 }
