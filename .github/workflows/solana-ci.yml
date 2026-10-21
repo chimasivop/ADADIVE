@@ -14,6 +14,11 @@ on:
     paths:
       - "programs/adadive_escrow/**"
       - "lib/solana-escrow/**"
+      - "lib/api-zod/**"
+      - "lib/db/**"
+      - "artifacts/oracle-backend/**"
+      - "artifacts/api-server/**"
+      - "artifacts/provider-agent/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -25,6 +30,11 @@ on:
     paths:
       - "programs/adadive_escrow/**"
       - "lib/solana-escrow/**"
+      - "lib/api-zod/**"
+      - "lib/db/**"
+      - "artifacts/oracle-backend/**"
+      - "artifacts/api-server/**"
+      - "artifacts/provider-agent/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -96,3 +106,18 @@ jobs:
       # client. Run the full unit suite locally with `pnpm test`.
       - name: Oracle backend tests (no database)
         run: pnpm --filter @workspace/oracle-backend run test:ci
+
+      # Validator and provider-storage validators. Neither touches a database.
+      - name: API validation tests
+        run: pnpm --filter @workspace/api-zod run test
+
+      # The provider-storage endpoints, driven over HTTP with an in-memory
+      # store (no Postgres) and a real session token minted with the shared
+      # verifier. See AGENTS.md ("Test report taxonomy").
+      - name: API server provider-endpoint tests
+        run: pnpm --filter @workspace/api-server run test
+
+      # The standalone agent: poll/confirm/heartbeat cycles and the wallet
+      # sign-in it reuses, all against fakes — no live IPFS node.
+      - name: Provider agent tests
+        run: pnpm --filter @workspace/provider-agent run test

@@ -142,9 +142,12 @@ Do not report one combined pass count. Three categories, and they prove
 different things:
 
 1. **Unit tests** — `pnpm test` (oracle-backend `tests/*.test.ts` excluding
-   `e2e.live.test.ts`, plus solana-escrow and api-zod). Real Postgres for
-   oracle-backend; the chain is a `FakeChain` and the *service* tests stub
-   `verifyPin` directly (they are about challenge-window logic).
+   `e2e.live.test.ts`, plus solana-escrow, api-zod, api-server and
+   provider-agent). Real Postgres for oracle-backend; the chain is a `FakeChain`
+   and the *service* tests stub `verifyPin` directly (they are about
+   challenge-window logic). api-server and provider-agent need **no** Postgres:
+   the endpoint suite drives the real router with an in-memory store, and the
+   agent suite uses fakes for the api-server and the IPFS node.
 2. **Tests that stub `verifyPin`** — the service-level suites
    (`api.test.ts`, `auth.test.ts`, `challengeWindow.test.ts`). They exercise the
    window/settle/auth decisions, not Pinata. `pinStatus.test.ts` is the
@@ -166,18 +169,86 @@ wallet. It is opt-in, needs the frontend + oracle + api-server running, and is
 not part of `pnpm test`; report it on its own line, not folded into the unit
 count.
 
+The provider-storage suites fit into category 1 (no database, no live node):
+
+- `artifacts/api-server/tests/providerEndpoints.test.ts` — the new endpoints
+  over HTTP with `supertest`. The real router and the real
+  `requireWalletOrOidcAuth` run; only persistence (in-memory store) and the OIDC
+  session lookup are faked. Tokens are minted with the *shared*
+  `issueSessionToken`, so a 401 really means the verifier rejected it.
+- `artifacts/oracle-backend/tests/{findprovs,providerVerification,providerVerificationService}.test.ts`
+  — the findprovs client stubs `fetchImpl` (so parsing and the peer-scoped
+  answer are really exercised); the decision rule is pure; the service test
+  stubs the feed and the findprovs client.
+- `artifacts/provider-agent/tests/*.test.ts` — the poller/heartbeat cycles and
+  the wallet sign-in, against fakes for `ProviderApi` and `IpfsNode`.
+- `lib/api-zod/tests/providerStorage.test.ts` — the `peerId` validator and the
+  new request schemas.
+
+## Provider-run storage layer
+
+An additive second storage path. A provider with no registered node
+(`providers.peer_id IS NULL`) keeps the centralized Pinata flow exactly as
+before; the provider-agent path only engages once a `peer_id` exists.
+
+- **Schema** (`lib/db/migrations/0002_provider_storage_nodes.sql`) adds
+  `providers.peer_id`, `providers.last_heartbeat_at`, `providers.wallet_address`
+  and the `deal_assignments` table. The whole migration is wrapped in a
+  `DO $$ … $$` block that returns early when `providers`/`deals` do not exist
+  yet, because `migrate.mjs` runs *before* `drizzle-kit push` on a fresh
+  database — an unguarded `ALTER TABLE providers` fails there with
+  `relation "providers" does not exist`. Use `SERIAL`, not `BIGSERIAL`: `push`
+  diffs against the Drizzle schema and would "correct" a type mismatch.
+- **api-server** — `routes/provider.ts` exports
+  `createProviderStorageRouter(store)`. The handlers depend on the
+  `ProviderStorageStore` seam (`lib/providerStorage.ts`), not on `db`, so they
+  can be tested without Postgres; production wires `drizzleProviderStorageStore`
+  from `routes/index.ts`. Endpoints: `GET /api/provider/assignments`,
+  `POST /api/provider/confirm-pin`, `POST /api/provider/heartbeat`,
+  `POST /api/providers` (now also sets `peerId`), `PATCH /api/providers/:id/node`,
+  plus the token-guarded `GET|PATCH /api/internal/provider-assignments`.
+- **oracle-backend** — `ipfs/findprovs.ts` (hand-written Kubo client: the oracle
+  is CJS and `kubo-rpc-client` is ESM-only), `provider/providerVerification.ts`
+  (the pure decision rule), `provider/providerVerificationService.ts`,
+  `provider/internalFeed.ts` and `jobs/providerVerificationScheduler.ts`.
+  Disabled unless `PROVIDER_VERIFICATION_ENABLED=true`; enabling it *requires*
+  `INTERNAL_API_TOKEN`, so a half-configured sweep fails at startup rather than
+  401ing every tick. It reads the api-server's feed over HTTP because the two
+  services own separate databases (see the wallet-auth notes above).
+- **provider-agent** — `artifacts/provider-agent`, a standalone ESM package
+  (not part of api-server). It reuses the existing wallet-signature flow via the
+  oracle (`/auth/challenge → sign → /auth/verify`), polls assignments, pins on a
+  local Kubo node through `kubo-rpc-client`, confirms, and heartbeats. `--once`
+  runs a single cycle and exits.
+- **The at-risk rule**: a deal is flagged only when the heartbeat is stale
+  **and** `findprovs` conclusively no longer shows the peer. An inconclusive DHT
+  answer (search hit its limit) never flags; a transport failure is `unknown`
+  and leaves the stored state untouched. The flag is explicit
+  (`deal_assignments.at_risk` + `verification_detail`), never a silent failure.
+
+`dev-up.sh` sets a shared dev `INTERNAL_API_TOKEN` and passes it to both
+services, so the internal-feed channel is never open. The oracle's findprovs
+sweep is **off by default** there (`PROVIDER_VERIFICATION_ENABLED=false`): it
+needs a running Kubo node, and Kubo's default API port (5001) collides with the
+oracle's own port in that script. Set `PROVIDER_VERIFICATION_ENABLED=true` and
+point `IPFS_API_URL` at a real node to exercise the provider-run path locally —
+the script prints those instructions when the sweep is off.
+
 ## CI
 
 `.github/workflows/solana-ci.yml` runs on paths touching
-`programs/adadive_escrow/**` or `lib/solana-escrow/**`. Two jobs: `rust`
-(clippy `-D warnings` + `cargo test --workspace`) and `typescript`
-(`solana-escrow` tests + `oracle-backend`'s `test:ci`).
+`programs/adadive_escrow/**`, `lib/solana-escrow/**`, `lib/api-zod/**`,
+`lib/db/**`, or the `artifacts/{oracle-backend,api-server,provider-agent}/**`
+packages. Two jobs: `rust` (clippy `-D warnings` + `cargo test --workspace`) and
+`typescript` (`solana-escrow` + `oracle-backend`'s `test:ci` + `api-zod` +
+`api-server` + `provider-agent`).
 
 `test:ci` is the oracle-backend subset that needs **no Postgres** —
-`oracleKeySecurity`, `pinStatus`, `scheduler`, `signature`. The DB-backed
-suites (`api`, `auth`, `challengeWindow`) are excluded there but still run in
-`pnpm test`, which needs a real database. Keep the two lists in sync when adding
-a suite: if it uses `makeTestPool`/`makeTestContext`, add an `--ignore` to
+`oracleKeySecurity`, `pinStatus`, `scheduler`, `signature`, plus the new
+`findprovs`/`providerVerification`/`providerVerificationService` suites. The
+DB-backed suites (`api`, `auth`, `challengeWindow`) are excluded there but still
+run in `pnpm test`, which needs a real database. Keep the two lists in sync when
+adding a suite: if it uses `makeTestPool`/`makeTestContext`, add an `--ignore` to
 `test:ci`; if it does not, leave it in.
 
 `test:e2e` and `test:cap` never run in CI — they need a validator and real time.

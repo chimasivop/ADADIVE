@@ -92,6 +92,33 @@ export interface OracleKeyConfig {
   localKeypairPath: string | null;
 }
 
+/**
+ * Provider-node (findprovs) verification.
+ *
+ * Additive to the Pinata path: when disabled, no provider-verification scheduler
+ * is started and the existing Pinata verification is all that runs. When enabled,
+ * the oracle reads the api-server's internal provider feed over HTTP (the two
+ * services keep separate databases — see AGENTS.md) and sweeps the assigned
+ * nodes on `intervalMs`.
+ */
+export interface ProviderVerificationConfig {
+  /** Whether to run the findprovs sweep at all. */
+  enabled: boolean;
+  /** Kubo HTTP RPC base used for DHT queries. */
+  ipfsApiUrl: string;
+  /** api-server base URL including its `/api` prefix (the internal feed). */
+  apiServerBaseUrl: string;
+  /** Shared bearer token guarding the api-server's internal feed. */
+  internalApiToken: SecretString | null;
+  /** How often the sweep runs, in milliseconds. */
+  intervalMs: number;
+  /** A heartbeat older than this marks the node silent (half of at-risk). */
+  heartbeatStaleMs: number;
+  /** Providers to request from the DHT; a small number suffices. */
+  numProviders: number;
+  timeoutMs: number;
+}
+
 export interface BackendConfig {
   port: number;
   databaseUrl: string;
@@ -113,6 +140,7 @@ export interface BackendConfig {
   demoProviderKeypairPath: string | null;
   nodeEnv: string;
   auth: AuthConfig;
+  providerVerification: ProviderVerificationConfig;
 }
 
 export class ConfigError extends Error {
@@ -253,6 +281,49 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
       nodeEnv === "production" ? null : optional(env, "DEMO_PROVIDER_KEYPAIR_PATH"),
     nodeEnv,
     auth: loadAuthConfig(env, nodeEnv),
+    providerVerification: loadProviderVerificationConfig(env),
+  };
+}
+
+/**
+ * Provider-verification configuration.
+ *
+ * Disabled by default: enabling it requires the shared internal-feed token, and
+ * a half-configured sweep (enabled with no token) is a startup error rather than
+ * a job that 401s on every tick. A *disabled* one is fine even if the other
+ * values are absent, so an environment that only runs the Pinata path needs
+ * nothing new.
+ */
+function loadProviderVerificationConfig(
+  env: NodeJS.ProcessEnv
+): ProviderVerificationConfig {
+  const enabled = env.PROVIDER_VERIFICATION_ENABLED === "true";
+  const rawToken = optional(env, "INTERNAL_API_TOKEN");
+
+  if (enabled && !rawToken) {
+    throw new ConfigError(
+      "PROVIDER_VERIFICATION_ENABLED=true requires INTERNAL_API_TOKEN " +
+        "(the shared bearer token guarding the api-server's internal " +
+        "provider feed; set the same value on both services)"
+    );
+  }
+
+  return {
+    enabled,
+    ipfsApiUrl: (env.IPFS_API_URL ?? "http://127.0.0.1:5001/api/v0").replace(/\/+$/, ""),
+    apiServerBaseUrl: (env.API_SERVER_BASE_URL ?? "http://127.0.0.1:5000/api").replace(
+      /\/+$/,
+      ""
+    ),
+    internalApiToken: rawToken ? new SecretString(rawToken) : null,
+    intervalMs: intFromEnv(env, "PROVIDER_VERIFICATION_INTERVAL_MS", 60_000),
+    heartbeatStaleMs: intFromEnv(
+      env,
+      "PROVIDER_HEARTBEAT_STALE_MS",
+      3 * 60_000
+    ),
+    numProviders: intFromEnv(env, "FINDPROVS_NUM_PROVIDERS", 20),
+    timeoutMs: intFromEnv(env, "FINDPROVS_TIMEOUT_MS", 15_000),
   };
 }
 

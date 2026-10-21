@@ -1,0 +1,466 @@
+/**
+ * The new provider-storage endpoints, driven over HTTP with `supertest`.
+ *
+ * Real code paths: the actual Express router, the actual `requireWalletOrOidcAuth`
+ * middleware, and the actual shared session verifier (a token is minted here with
+ * the same `issueSessionToken` the oracle uses). Only two things are fake — the
+ * persistence (an in-memory store, so no Postgres) and the auth *session lookup*,
+ * which the wallet path never touches.
+ *
+ * This is the category AGENTS.md calls "unit tests": no database, no live node,
+ * no second service. The findprovs logic and the provider-agent's own behaviour
+ * have their own suites.
+ */
+
+import { expect } from "chai";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import request from "supertest";
+
+import {
+  issueSessionToken,
+  parseSessionSecret,
+} from "@workspace/solana-escrow/backend/session";
+import { WALLET_SESSION_AUDIENCE, WALLET_SESSION_ISSUER } from "../src/lib/walletAuth";
+import { createProviderStorageRouter } from "../src/routes/provider";
+import { InMemoryProviderStorage } from "./helpers/memoryStore";
+
+const CID = "bafybeigdyrzt5k5c5w3z2s4o5tq7vw3h4k5r6m7n8p9q0r1s2t3u4v5w6x7y";
+const UNKNOWN_CID = "bafybeiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const PEER = "12D3KooWJbGQVJvGzS8m5cJvV5zZ5s4v1tQbJ3xQ5cZ8mFkQ9rQW3dG7hZ2xY";
+const OTHER_PEER = "12D3KooWPeer2Qm9rT4vXbNpZ7cJ5sKw2YhL6dFg8aE1uR3tVbCdEf";
+const WALLET_A = "7xKq8m3vJbGQVJvGzS8m5cJvV5zZ5s4v1tQbJ3xQ5cZ8mFk";
+const WALLET_B = "9pQr2sT4uV6wX8yZ1aB3cD5eF7gH9jK2mN4pQ6rS8tU0vW";
+
+// The verifier reads SESSION_SECRET lazily and caches it; set it before the first
+// request so a real token can be minted and checked.
+process.env.SESSION_SECRET = "test-session-secret-that-is-at-least-32-bytes-long";
+
+const SECRET = parseSessionSecret(process.env.SESSION_SECRET);
+
+function tokenFor(wallet: string): string {
+  return issueSessionToken({
+    wallet,
+    secret: SECRET,
+    issuer: WALLET_SESSION_ISSUER,
+    audience: WALLET_SESSION_AUDIENCE,
+    ttlSeconds: 3600,
+  });
+}
+
+/**
+ * A minimal app around the real router. `authMiddleware`'s job in the full app is
+ * to populate the OIDC session; here there is no OIDC session, so a stub reports
+ * "not authenticated". The wallet path never consults it.
+ */
+function buildApp(store: InMemoryProviderStorage, internalToken: string | null = "internal-test-token"): Express {
+  const app = express();
+  app.use(express.json());
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    req.isAuthenticated = (() => false) as Request["isAuthenticated"];
+    next();
+  });
+  app.use(
+    "/api",
+    createProviderStorageRouter({
+      store,
+      internalToken,
+      log: { debug: () => {}, warn: () => {}, error: () => {} },
+    })
+  );
+  return app;
+}
+
+describe("provider storage endpoints", () => {
+  let store: InMemoryProviderStorage;
+
+  beforeEach(() => {
+    store = new InMemoryProviderStorage();
+  });
+
+  describe("auth", () => {
+    it("rejects an unauthenticated request to GET /provider/assignments", async () => {
+      const res = await request(buildApp(store)).get("/api/provider/assignments");
+      expect(res.status).to.equal(401);
+    });
+
+    it("rejects a token signed with the wrong secret", async () => {
+      const forged = issueSessionToken({
+        wallet: WALLET_A,
+        secret: parseSessionSecret("a completely different secret value 123456"),
+        issuer: WALLET_SESSION_ISSUER,
+        audience: WALLET_SESSION_AUDIENCE,
+        ttlSeconds: 3600,
+      });
+      const res = await request(buildApp(store))
+        .get("/api/provider/assignments")
+        .set("Authorization", `Bearer ${forged}`);
+      expect(res.status).to.equal(401);
+    });
+
+    it("answers 404 when the wallet has no provider row", async () => {
+      const res = await request(buildApp(store))
+        .get("/api/provider/assignments")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`);
+      expect(res.status).to.equal(404);
+    });
+  });
+
+  describe("registration (POST /providers)", () => {
+    it("registers a provider with no node (Pinata path) and stores the session wallet", async () => {
+      const res = await request(buildApp(store))
+        .post("/api/providers")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({
+          name: "Pinata Provider",
+          nodeId: "pool1pinata",
+          totalStorageGb: 100,
+          pricePerGbPerEpoch: 0.001,
+          region: "us-east",
+        });
+
+      expect(res.status).to.equal(201);
+      expect(res.body.peerId).to.equal(null);
+      // The wallet came from the verified session, not the body.
+      expect(res.body.walletAddress).to.equal(WALLET_A);
+    });
+
+    it("registers a provider with a linked node when peerId is supplied", async () => {
+      const res = await request(buildApp(store))
+        .post("/api/providers")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({
+          name: "Node Provider",
+          nodeId: "pool1node",
+          totalStorageGb: 100,
+          pricePerGbPerEpoch: 0.001,
+          region: "us-east",
+          peerId: PEER,
+        });
+
+      expect(res.status).to.equal(201);
+      expect(res.body.peerId).to.equal(PEER);
+    });
+
+    it("refuses to register in another wallet's name", async () => {
+      const res = await request(buildApp(store))
+        .post("/api/providers")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        // A body `walletAddress` is not accepted as the owner.
+        .send({
+          name: "Spoof",
+          nodeId: "pool1x",
+          totalStorageGb: 1,
+          pricePerGbPerEpoch: 0.001,
+          region: "us-east",
+          walletAddress: WALLET_B,
+        });
+
+      expect(res.status).to.equal(201);
+      expect(res.body.walletAddress).to.equal(WALLET_A);
+    });
+  });
+
+  describe("node linking (PATCH /providers/:id/node)", () => {
+    it("lets the owner link a node", async () => {
+      const provider = store.seedProvider({ walletAddress: WALLET_A });
+      const res = await request(buildApp(store))
+        .patch(`/api/providers/${provider.id}/node`)
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: PEER });
+
+      expect(res.status).to.equal(200);
+      expect(res.body.peerId).to.equal(PEER);
+      expect(provider.peerId).to.equal(PEER);
+    });
+
+    it("lets the owner clear the node to return to the Pinata path", async () => {
+      const provider = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const res = await request(buildApp(store))
+        .patch(`/api/providers/${provider.id}/node`)
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: null });
+
+      expect(res.status).to.equal(200);
+      expect(res.body.peerId).to.equal(null);
+    });
+
+    it("forbids a different wallet from changing the node (ownership, not just identity)", async () => {
+      const provider = store.seedProvider({ walletAddress: WALLET_A });
+      const res = await request(buildApp(store))
+        .patch(`/api/providers/${provider.id}/node`)
+        .set("Authorization", `Bearer ${tokenFor(WALLET_B)}`)
+        .send({ peerId: PEER });
+
+      expect(res.status).to.equal(403);
+      expect(provider.peerId).to.equal(null);
+    });
+
+    it("answers 404 for a provider that does not exist", async () => {
+      const res = await request(buildApp(store))
+        .patch("/api/providers/9999/node")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: PEER });
+      expect(res.status).to.equal(404);
+    });
+
+    it("rejects a malformed peer id with a 400", async () => {
+      const provider = store.seedProvider({ walletAddress: WALLET_A });
+      const res = await request(buildApp(store))
+        .patch(`/api/providers/${provider.id}/node`)
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: "not a peer id!!" });
+      expect(res.status).to.equal(400);
+    });
+  });
+
+  describe("GET /provider/assignments", () => {
+    it("returns only this provider's unconfirmed assignments", async () => {
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const b = store.seedProvider({ walletAddress: WALLET_B, peerId: OTHER_PEER });
+      const dealA = store.seedDeal({ dataHash: CID });
+      store.seedAssignment({ dealId: dealA.id, providerId: a.id, peerId: PEER });
+      const dealB = store.seedDeal({ dataHash: "bafyother" });
+      store.seedAssignment({ dealId: dealB.id, providerId: b.id, peerId: OTHER_PEER });
+
+      const res = await request(buildApp(store))
+        .get("/api/provider/assignments")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`);
+
+      expect(res.status).to.equal(200);
+      expect(res.body.assignments).to.have.length(1);
+      expect(res.body.assignments[0].cid).to.equal(CID);
+      expect(res.body.assignments[0].peerId).to.equal(PEER);
+    });
+
+    it("omits assignments already confirmed", async () => {
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const dealA = store.seedDeal({ dataHash: CID });
+      store.seedAssignment({
+        dealId: dealA.id,
+        providerId: a.id,
+        peerId: PEER,
+        status: "confirmed",
+      });
+
+      const res = await request(buildApp(store))
+        .get("/api/provider/assignments")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`);
+
+      expect(res.status).to.equal(200);
+      expect(res.body.assignments).to.have.length(0);
+    });
+
+    it("returns an empty list for a provider with no node registered", async () => {
+      store.seedProvider({ walletAddress: WALLET_A, peerId: null });
+      const res = await request(buildApp(store))
+        .get("/api/provider/assignments")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`);
+      expect(res.status).to.equal(200);
+      expect(res.body.assignments).to.deep.equal([]);
+    });
+  });
+
+  describe("POST /provider/confirm-pin", () => {
+    function seedAssigned() {
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const deal = store.seedDeal({ dataHash: CID });
+      const assignment = store.seedAssignment({
+        dealId: deal.id,
+        providerId: a.id,
+        peerId: PEER,
+      });
+      return { a, deal, assignment };
+    }
+
+    it("confirms the assignment when the peer id matches", async () => {
+      const { assignment } = seedAssigned();
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ cid: CID, peerId: PEER });
+
+      expect(res.status).to.equal(200);
+      expect(res.body.status).to.equal("confirmed");
+      expect(assignment.status).to.equal("confirmed");
+      expect(assignment.confirmedAt).to.not.equal(null);
+    });
+
+    it("answers 403 when a different provider's wallet tries to confirm", async () => {
+      const { assignment } = seedAssigned();
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_B)}`)
+        .send({ cid: CID, peerId: PEER });
+
+      // Wallet B has no provider row at all -> 404; register one to reach 403.
+      expect(res.status).to.equal(404);
+      expect(assignment.status).to.equal("assigned");
+    });
+
+    it("answers 403 when another registered provider claims this assignment", async () => {
+      const { a, deal, assignment } = seedAssigned();
+      const other = store.seedProvider({ walletAddress: WALLET_B, peerId: OTHER_PEER });
+
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_B)}`)
+        .send({ cid: CID, peerId: assignment.peerId });
+
+      expect(res.status).to.equal(403);
+      expect(assignment.status).to.equal("assigned");
+      expect(other.id).to.not.equal(a.id);
+      expect(deal.id).to.equal(assignment.dealId);
+    });
+
+    it("answers 409 when the reported peer id is not the assigned node", async () => {
+      const { assignment } = seedAssigned();
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ cid: CID, peerId: OTHER_PEER });
+
+      expect(res.status).to.equal(409);
+      expect(assignment.status).to.equal("assigned");
+    });
+
+    it("answers 404 when no deal has that CID", async () => {
+      const { assignment } = seedAssigned();
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ cid: UNKNOWN_CID, peerId: PEER });
+
+      expect(res.status).to.equal(404);
+      expect(assignment.status).to.equal("assigned");
+    });
+
+    it("rejects a malformed CID with a 400", async () => {
+      seedAssigned();
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ cid: "not-a-cid", peerId: PEER });
+      expect(res.status).to.equal(400);
+    });
+  });
+
+  describe("POST /provider/heartbeat", () => {
+    it("records the heartbeat time for the owner", async () => {
+      const provider = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const res = await request(buildApp(store))
+        .post("/api/provider/heartbeat")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: PEER });
+
+      expect(res.status).to.equal(200);
+      expect(res.body.ok).to.equal(true);
+      expect(provider.lastHeartbeatAt).to.not.equal(null);
+    });
+
+    it("answers 409 when the heartbeat names the wrong node", async () => {
+      const provider = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const res = await request(buildApp(store))
+        .post("/api/provider/heartbeat")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: OTHER_PEER });
+
+      expect(res.status).to.equal(409);
+      expect(provider.lastHeartbeatAt).to.equal(null);
+    });
+
+    it("rejects a malformed peer id with a 400", async () => {
+      store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const res = await request(buildApp(store))
+        .post("/api/provider/heartbeat")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: "" });
+      expect(res.status).to.equal(400);
+    });
+  });
+
+  describe("internal feed", () => {
+    const TOKEN = "internal-test-token";
+
+    it("closes the feed when no internal token is configured", async () => {
+      const app = buildApp(store, null);
+      const res = await request(app).get("/api/internal/provider-assignments");
+      expect(res.status).to.equal(503);
+    });
+
+    it("rejects a request with the wrong internal token", async () => {
+      const res = await request(buildApp(store))
+        .get("/api/internal/provider-assignments")
+        .set("Authorization", "Bearer wrong-token");
+      expect(res.status).to.equal(401);
+    });
+
+    it("serves assignments (with heartbeat) to the oracle", async () => {
+      const a = store.seedProvider({
+        walletAddress: WALLET_A,
+        peerId: PEER,
+        lastHeartbeatAt: new Date("2024-06-01T11:00:00.000Z"),
+      });
+      const deal = store.seedDeal({ dataHash: CID });
+      store.seedAssignment({ dealId: deal.id, providerId: a.id, peerId: PEER });
+
+      const res = await request(buildApp(store))
+        .get("/api/internal/provider-assignments")
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).to.equal(200);
+      expect(res.body.assignments).to.have.length(1);
+      expect(res.body.assignments[0].cid).to.equal(CID);
+      expect(res.body.assignments[0].peerId).to.equal(PEER);
+      expect(res.body.assignments[0].lastHeartbeatAt).to.equal("2024-06-01T11:00:00.000Z");
+    });
+
+    it("accepts a verdict only with the internal token", async () => {
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const deal = store.seedDeal({ dataHash: CID });
+      const assignment = store.seedAssignment({
+        dealId: deal.id,
+        providerId: a.id,
+        peerId: PEER,
+      });
+
+      const unauthorized = await request(buildApp(store))
+        .patch(`/api/internal/provider-assignments/${assignment.id}`)
+        .send({ atRisk: true });
+      expect(unauthorized.status).to.equal(401);
+
+      const res = await request(buildApp(store))
+        .patch(`/api/internal/provider-assignments/${assignment.id}`)
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({ atRisk: true, verificationDetail: "stale and not advertising" });
+
+      expect(res.status).to.equal(200);
+      expect(assignment.atRisk).to.equal(true);
+      expect(assignment.verificationDetail).to.equal("stale and not advertising");
+      expect(assignment.lastVerifiedAt).to.not.equal(null);
+    });
+
+    it("requires atRisk to be a boolean", async () => {
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const deal = store.seedDeal({ dataHash: CID });
+      const assignment = store.seedAssignment({
+        dealId: deal.id,
+        providerId: a.id,
+        peerId: PEER,
+      });
+
+      const res = await request(buildApp(store))
+        .patch(`/api/internal/provider-assignments/${assignment.id}`)
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({ atRisk: "yes" });
+      expect(res.status).to.equal(400);
+    });
+
+    it("answers 404 for a verdict on a missing assignment", async () => {
+      const res = await request(buildApp(store))
+        .patch("/api/internal/provider-assignments/4242")
+        .set("Authorization", `Bearer ${TOKEN}`)
+        .send({ atRisk: false });
+      expect(res.status).to.equal(404);
+    });
+  });
+});

@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    // Standalone rather than extending the base: the base sets
+    // `moduleResolution: bundler` + `customConditions`, which ts-node's
+    // CommonJS `require()` cannot use, and `rootDir: src` which would exclude
+    // `tests/`. The api-server is still `"type": "module"` at runtime, so the
+    // overrides here are for the test runner only.
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["mocha", "node"],
+    // `moduleResolution: node` does not read `package.json` `exports`, so the
+    // shared library's subpath export is mapped explicitly (same reason as the
+    // oracle backend's tsconfig).
+    "paths": {
+      "@workspace/solana-escrow": ["../../lib/solana-escrow/src/index.ts"],
+      "@workspace/solana-escrow/backend/session": [
+        "../../lib/solana-escrow/src/backend/sessionToken.ts"
+      ],
+      "@workspace/solana-escrow/backend/base58": [
+        "../../lib/solana-escrow/src/backend/base58.ts"
+      ],
+      "@workspace/db": ["../../lib/db/src/index.ts"],
+      "@workspace/db/schema": ["../../lib/db/src/schema/index.ts"],
+      "@workspace/api-zod": ["../../lib/api-zod/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@workspace/provider-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ADADIVE provider storage agent: polls for assigned deals, pins them on a local IPFS (Kubo) node, and heartbeats",
+  "type": "module",
+  "scripts": {
+    "build": "node ./build.mjs",
+    "start": "node --enable-source-maps ./dist/index.mjs",
+    "dev": "tsx ./src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "ts-mocha -p tsconfig.test.json -t 30000 'tests/*.test.ts'"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@solana/web3.js": "catalog:",
+    "@workspace/solana-escrow": "workspace:*",
+    "kubo-rpc-client": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.1.0",
+    "@types/node": "catalog:",
+    "chai": "^4.5.0",
+    "esbuild": "catalog:",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "tsx": "catalog:",
+    "typescript": "~5.9.3"
+  }
+}

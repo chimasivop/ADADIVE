@@ -3,6 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db, dealsTable, providersTable, activityTable } from "@workspace/db";
 import { validate, schemas } from "@workspace/api-zod";
 import { requireWalletOrOidcAuth } from "../middlewares/requireAuth";
+import { assignDealToProvider } from "../lib/assignments";
 
 const router: IRouter = Router();
 
@@ -91,6 +92,18 @@ router.post(
         relatedId: deal.id,
         metadata: { providerName: provider.name, durationEpochs: body.durationEpochs },
       });
+
+      // If the provider has registered a storage node, record which peer is
+      // responsible for this deal. A provider with no `peer_id` gets no
+      // assignment and its deals keep the centralized Pinata path — the
+      // assignment is additive, not a replacement.
+      try {
+        await assignDealToProvider(deal.id, provider);
+      } catch (assignErr) {
+        // A failed assignment must not fail the deal: the deal is valid, it just
+        // falls back to the Pinata path. Logged so the operator can see it.
+        req.log?.error({ err: assignErr, dealId: deal.id }, "deal assignment failed");
+      }
 
       res.status(201).json(deal);
     } catch (err) {

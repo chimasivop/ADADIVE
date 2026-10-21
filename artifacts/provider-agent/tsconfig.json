@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2020"],
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "types": ["mocha", "node"],
+    // `moduleResolution: node` does not read `package.json` `exports`, so the
+    // shared library's subpath is mapped explicitly for tsc. At runtime Node
+    // resolves it through the workspace symlink's `exports`; this mapping is
+    // typecheck-only, exactly as the oracle backend does it.
+    "paths": {
+      "@workspace/solana-escrow/backend/base58": [
+        "../../lib/solana-escrow/src/backend/base58.ts"
+      ]
+    }
+  },
+  "ts-node": {
+    // The shared library's package.json says `"type": "module"` (it is also
+    // bundled by Vite), which ts-node 10 would otherwise refuse to `require()`
+    // as CommonJS. Same pin the oracle backend uses.
+    "moduleTypes": {
+      "../../lib/solana-escrow/**/*": "cjs"
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

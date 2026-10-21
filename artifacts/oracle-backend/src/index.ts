@@ -36,6 +36,10 @@ import { createApp } from "./http/server";
 import { AuthService } from "./auth/authService";
 import { AuthChallengeRepository } from "./db/authChallengeRepository";
 import { makeSessionSecretProvider } from "./auth/sessionSecret";
+import { KuboFindProvsClient } from "./ipfs/findprovs";
+import { InternalProviderFeed } from "./provider/internalFeed";
+import { ProviderVerificationService } from "./provider/providerVerificationService";
+import { ProviderVerificationScheduler } from "./jobs/providerVerificationScheduler";
 import { SecretRegistry, safeErrorMessage } from "./security/redact";
 import { isMainModule } from "./util/isMainModule";
 
@@ -43,6 +47,8 @@ export interface BuiltService {
   config: BackendConfig;
   app: ReturnType<typeof createApp>;
   scheduler: ChallengeWindowScheduler;
+  /** Present only when provider verification is enabled in config. */
+  providerScheduler: ProviderVerificationScheduler | null;
   pool: ReturnType<typeof createPool>;
   shutdown: () => Promise<void>;
 }
@@ -153,13 +159,57 @@ export async function buildService(
     requireAuth: config.auth.required,
   });
 
+  // Provider-node verification is additive and off by default. When on, it reads
+  // the api-server's internal provider feed over HTTP (the two services keep
+  // separate databases) and sweeps assigned nodes via DHT findprovs. Deals with
+  // no provider node are absent from that feed and keep the Pinata path.
+  let providerScheduler: ProviderVerificationScheduler | null = null;
+  if (config.providerVerification.enabled) {
+    const token = config.providerVerification.internalApiToken!.reveal();
+    registry.register(config.providerVerification.internalApiToken!.reveal());
+    const feed = new InternalProviderFeed({
+      baseUrl: config.providerVerification.apiServerBaseUrl,
+      token,
+      timeoutMs: config.providerVerification.timeoutMs,
+      logger,
+      registry,
+    });
+    const findProvs = new KuboFindProvsClient({
+      apiUrl: config.providerVerification.ipfsApiUrl,
+      timeoutMs: config.providerVerification.timeoutMs,
+      numProviders: config.providerVerification.numProviders,
+      logger,
+      registry,
+    });
+    const providerVerification = new ProviderVerificationService({
+      feed,
+      findProvs,
+      logger,
+      registry,
+      heartbeatStaleMs: config.providerVerification.heartbeatStaleMs,
+    });
+    providerScheduler = new ProviderVerificationScheduler({
+      runJob: () => providerVerification.runOnce(),
+      intervalMs: config.providerVerification.intervalMs,
+      logger,
+      registry,
+    });
+    logger.info("provider verification enabled", {
+      ipfsApiUrl: config.providerVerification.ipfsApiUrl,
+      apiServerBaseUrl: config.providerVerification.apiServerBaseUrl,
+      intervalMs: config.providerVerification.intervalMs,
+    });
+  }
+
   return {
     config,
     app,
     scheduler,
+    providerScheduler,
     pool,
     shutdown: async () => {
       scheduler.stop();
+      providerScheduler?.stop();
       await pool.end();
     },
   };
@@ -201,7 +251,7 @@ function loadDemoProvider(
 
 async function main() {
   const built = await buildService();
-  const { config, app, scheduler, shutdown } = built;
+  const { config, app, scheduler, providerScheduler, shutdown } = built;
 
   const server = app.listen(config.port, () => {
     // Intentionally no secret in this line; the oracle's public key is printed
@@ -212,6 +262,7 @@ async function main() {
   });
 
   scheduler.start();
+  providerScheduler?.start();
 
   const stop = async () => {
     server.close();
