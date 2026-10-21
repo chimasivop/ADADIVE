@@ -62,6 +62,15 @@ BEGIN
       --               the matching peer id back via POST /api/provider/confirm-pin
       status            TEXT    NOT NULL DEFAULT 'assigned',
 
+      -- Last heartbeat seen *for this peer*. Deliberately per-assignment rather
+      -- than only on `providers.last_heartbeat_at`: the assignment is pinned to
+      -- the `peer_id` it was created with, and a provider may later rotate to a
+      -- different node. A provider-level timestamp would let the new node's beat
+      -- look like liveness for the old node's deal — the oracle would then record
+      -- the old assignment as verified even though `findprovs` no longer finds
+      -- that peer. Beat per peer, so each assignment's staleness is its own.
+      last_heartbeat_at TIMESTAMPTZ,
+
       -- Verification bookkeeping, written by the oracle's findprovs job.
       -- `at_risk` is the explicit flag the brief asks for in place of a silent
       -- failure: true means the heartbeat is stale AND the peer is no longer

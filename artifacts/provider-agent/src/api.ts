@@ -92,8 +92,16 @@ export class ProviderApi {
     return body.assignments ?? [];
   }
 
-  async confirmPin(cid: string, peerId: string): Promise<void> {
-    await this.request("POST", "/provider/confirm-pin", { cid, peerId });
+  async confirmPin(
+    assignmentId: number,
+    cid: string,
+    peerId: string
+  ): Promise<void> {
+    await this.request("POST", "/provider/confirm-pin", {
+      assignmentId,
+      cid,
+      peerId,
+    });
   }
 
   async heartbeat(peerId: string): Promise<void> {

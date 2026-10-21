@@ -39,6 +39,11 @@ export interface AssignmentView {
   providerId: number;
   peerId: string;
   status: string;
+  /**
+   * Last heartbeat for this assignment's *peer* (as the api-server reports it),
+   * not the provider row's — so a provider that rotated to a different node does
+   * not read as liveness for a deal still bound to the old peer.
+   */
   lastHeartbeatAt: string | null;
 }
 

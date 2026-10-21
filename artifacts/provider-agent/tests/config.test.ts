@@ -21,13 +21,37 @@ describe("loadConfig", () => {
     expect(() => loadConfig({})).to.throw(ConfigError);
   });
 
-  it("applies defaults when only the keypair path is set", () => {
-    const config = loadConfig({ PROVIDER_KEYPAIR_PATH: "/tmp/key.json" });
+  it("refuses a default config whose oracle and Kubo share a port", () => {
+    // With only the keypair path set, `ORACLE_BASE_URL` (the oracle's port,
+    // 5001) and `IPFS_API_URL` (Kubo's default, also 5001) resolve to the same
+    // origin. One process cannot be both, so the default `--once` cycle could
+    // never work. Refuse at startup and name the fix.
+    expect(() =>
+      loadConfig({ PROVIDER_KEYPAIR_PATH: "/tmp/key.json" })
+    ).to.throw(ConfigError, /5001/);
+  });
+
+  it("accepts distinct endpoints and applies the documented defaults", () => {
+    const config = loadConfig({
+      PROVIDER_KEYPAIR_PATH: "/tmp/key.json",
+      ORACLE_BASE_URL: "http://127.0.0.1:5001",
+      IPFS_API_URL: "http://127.0.0.1:5002/api/v0",
+    });
     expect(config.apiBaseUrl).to.equal("http://127.0.0.1:5000/api");
     expect(config.oracleBaseUrl).to.equal("http://127.0.0.1:5001");
-    expect(config.ipfsApiUrl).to.equal("http://127.0.0.1:5001/api/v0");
+    expect(config.ipfsApiUrl).to.equal("http://127.0.0.1:5002/api/v0");
     expect(config.pollIntervalMs).to.equal(15_000);
     expect(config.heartbeatIntervalMs).to.equal(30_000);
+  });
+
+  it("rejects an IPFS URL on the same origin as the oracle even off the default", () => {
+    expect(() =>
+      loadConfig({
+        PROVIDER_KEYPAIR_PATH: "/tmp/key.json",
+        ORACLE_BASE_URL: "https://shared.example:5001",
+        IPFS_API_URL: "https://shared.example:5001/api/v0",
+      })
+    ).to.throw(ConfigError, /different origins/);
   });
 
   it("strips trailing slashes from base URLs", () => {

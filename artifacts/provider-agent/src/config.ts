@@ -54,6 +54,38 @@ function stripTrailingSlash(value: string): string {
 }
 
 /**
+ * Reject a config where two of the three configured endpoints share an origin.
+ *
+ * Same host *and* same port means the same process is answering both, which is
+ * never what the agent wants: it signs in to the oracle and pins through Kubo,
+ * and those are different daemons. A shared origin silently misroutes one of
+ * them, so this is a startup error naming both variables.
+ */
+function assertDistinctOrigins(entries: Array<{ name: string; url: string }>): void {
+  const seen = new Map<string, string>();
+  for (const { name, url } of entries) {
+    let origin: string;
+    try {
+      const parsed = new URL(url);
+      origin = parsed.origin;
+    } catch {
+      throw new ConfigError(`${name} is not a valid URL: ${JSON.stringify(url)}`);
+    }
+    const previous = seen.get(origin);
+    if (previous !== undefined) {
+      throw new ConfigError(
+        `${name} and ${previous} both resolve to ${origin}; the oracle and the ` +
+          `IPFS (Kubo) node must be reachable on different origins. Point ` +
+          `ORACLE_BASE_URL at the oracle and IPFS_API_URL at the node's HTTP RPC ` +
+          `(Kubo defaults to http://127.0.0.1:5001/api/v0, so give the oracle a ` +
+          `different port)`
+      );
+    }
+    seen.set(origin, name);
+  }
+}
+
+/**
  * Build the config. `env` is injectable so tests and the CLI can construct one
  * without mutating the real process environment.
  */
@@ -68,12 +100,33 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     );
   }
 
+  const oracleBaseUrl = stripTrailingSlash(
+    env.ORACLE_BASE_URL ?? "http://127.0.0.1:5001"
+  );
+  const apiBaseUrl = stripTrailingSlash(env.API_BASE_URL ?? "http://127.0.0.1:5000/api");
+  const ipfsApiUrl = stripTrailingSlash(
+    env.IPFS_API_URL ?? "http://127.0.0.1:5001/api/v0"
+  );
+
+  // The three services must be reachable on distinct origins. The trap is that
+  // the oracle's default port (5001) is also Kubo's default: with only
+  // `PROVIDER_KEYPAIR_PATH` set, sign-in and `pin.add` would both go to
+  // `127.0.0.1:5001` — one of them to the wrong process. Whichever daemon does
+  // not own the port makes the default `--once` cycle fail, and the failure
+  // looks like a Kubo/oracle bug rather than a config one. `scripts/dev-up.sh`
+  // hits the same wall (it runs the oracle on 5001) and documents moving Kubo.
+  // Refuse at startup and say which variable to change, rather than spin a loop
+  // that can never sign in.
+  assertDistinctOrigins([
+    { name: "ORACLE_BASE_URL", url: oracleBaseUrl },
+    { name: "API_BASE_URL", url: apiBaseUrl },
+    { name: "IPFS_API_URL", url: ipfsApiUrl },
+  ]);
+
   return {
-    oracleBaseUrl: stripTrailingSlash(env.ORACLE_BASE_URL ?? "http://127.0.0.1:5001"),
-    apiBaseUrl: stripTrailingSlash(env.API_BASE_URL ?? "http://127.0.0.1:5000/api"),
-    ipfsApiUrl: stripTrailingSlash(
-      env.IPFS_API_URL ?? "http://127.0.0.1:5001/api/v0"
-    ),
+    oracleBaseUrl,
+    apiBaseUrl,
+    ipfsApiUrl,
     keypairPath,
     pollIntervalMs: intFromEnv(env, "POLL_INTERVAL_MS", 15_000),
     heartbeatIntervalMs: intFromEnv(env, "HEARTBEAT_INTERVAL_MS", 30_000),

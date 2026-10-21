@@ -42,6 +42,12 @@ export interface AssignmentRecord {
   lastVerifiedAt: Date | null;
   createdAt: Date;
   confirmedAt: Date | null;
+  /**
+   * Last heartbeat seen for this assignment's peer. The oracle's at-risk rule
+   * reads this, *not* `providers.last_heartbeat_at`, so a provider that rotates
+   * to a new node does not make the old node's assignment look alive.
+   */
+  lastHeartbeatAt: Date | null;
 }
 
 /** An assignment joined with the deal it stores and the provider that owns it. */
@@ -73,11 +79,23 @@ export interface ProviderStorageStore {
   /** Every assignment, for the oracle's verification sweep. */
   listAllAssignments(): Promise<AssignmentView[]>;
 
-  findDealByCid(cid: string): Promise<DealRecord | null>;
-  findAssignmentByDealId(dealId: number): Promise<AssignmentRecord | null>;
+  /** The deal with this id, to check a confirm's CID matches the assignment. */
+  findDealById(id: number): Promise<DealRecord | null>;
+  /** The assignment with this id, for a confirm addressed by `assignmentId`. */
+  findAssignmentById(id: number): Promise<AssignmentRecord | null>;
 
   confirmAssignment(id: number, at: Date): Promise<AssignmentRecord>;
-  recordHeartbeat(providerId: number, at: Date): Promise<void>;
+  /**
+   * Record a heartbeat for one provider *peer*. Writes both the provider-level
+   * timestamp and every open assignment bound to that peer, so the oracle's
+   * per-assignment staleness check sees the beat. Scoping by peer is what stops
+   * a rotated node from reviving the previous node's assignments.
+   */
+  recordHeartbeat(
+    providerId: number,
+    peerId: string,
+    at: Date
+  ): Promise<void>;
   recordVerdict(
     id: number,
     atRisk: boolean,

@@ -43,6 +43,7 @@ const assignmentColumns = {
   atRisk: dealAssignmentsTable.atRisk,
   verificationDetail: dealAssignmentsTable.verificationDetail,
   lastVerifiedAt: dealAssignmentsTable.lastVerifiedAt,
+  lastHeartbeatAt: dealAssignmentsTable.lastHeartbeatAt,
   createdAt: dealAssignmentsTable.createdAt,
   confirmedAt: dealAssignmentsTable.confirmedAt,
 };
@@ -130,19 +131,19 @@ export const drizzleProviderStorageStore: ProviderStorageStore = {
     return rows;
   },
 
-  async findDealByCid(cid: string): Promise<DealRecord | null> {
+  async findDealById(id: number): Promise<DealRecord | null> {
     const [row] = await db
       .select(dealColumns)
       .from(dealsTable)
-      .where(eq(dealsTable.dataHash, cid));
+      .where(eq(dealsTable.id, id));
     return row ?? null;
   },
 
-  async findAssignmentByDealId(dealId: number): Promise<AssignmentRecord | null> {
+  async findAssignmentById(id: number): Promise<AssignmentRecord | null> {
     const [row] = await db
       .select(assignmentColumns)
       .from(dealAssignmentsTable)
-      .where(eq(dealAssignmentsTable.dealId, dealId));
+      .where(eq(dealAssignmentsTable.id, id));
     return row ?? null;
   },
 
@@ -155,11 +156,26 @@ export const drizzleProviderStorageStore: ProviderStorageStore = {
     return row;
   },
 
-  async recordHeartbeat(providerId: number, at: Date): Promise<void> {
+  async recordHeartbeat(providerId: number, peerId: string, at: Date): Promise<void> {
+    // Provider-level timestamp, kept for the provider feed and operators.
     await db
       .update(providersTable)
       .set({ lastHeartbeatAt: at })
       .where(eq(providersTable.id, providerId));
+
+    // Per-assignment timestamp, scoped to this peer. The oracle's at-risk check
+    // reads *this*, so a heartbeat from a rotated-in node cannot mark the old
+    // node's deals alive. `confirmed` rows are included too: a node that has
+    // pinned content must keep proving it is still serving it.
+    await db
+      .update(dealAssignmentsTable)
+      .set({ lastHeartbeatAt: at })
+      .where(
+        and(
+          eq(dealAssignmentsTable.providerId, providerId),
+          eq(dealAssignmentsTable.peerId, peerId)
+        )
+      );
   },
 
   async recordVerdict(

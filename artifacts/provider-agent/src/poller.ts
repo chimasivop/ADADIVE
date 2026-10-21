@@ -78,15 +78,23 @@ export class AssignmentPoller {
       for (const assignment of assignments) {
         try {
           await this.deps.ipfs.pinCid(assignment.cid);
-          await this.deps.api.confirmPin(assignment.cid, nodePeerId);
+          // Echo the assignment id too: the api-server confirms *that* row, so a
+          // CID shared by two deals cannot send the confirmation to the wrong one.
+          await this.deps.api.confirmPin(
+            assignment.assignmentId,
+            assignment.cid,
+            nodePeerId
+          );
           result.pinned += 1;
           this.deps.logger.info("pinned and confirmed", {
+            assignmentId: assignment.assignmentId,
             dealId: assignment.dealId,
             cid: assignment.cid,
           });
         } catch (err) {
           result.failed += 1;
           this.deps.logger.error("assignment failed", {
+            assignmentId: assignment.assignmentId,
             dealId: assignment.dealId,
             cid: assignment.cid,
             error: err instanceof Error ? err.message : String(err),

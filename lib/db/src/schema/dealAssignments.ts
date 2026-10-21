@@ -27,6 +27,10 @@ export const dealAssignmentsTable = pgTable(
     peerId: text("peer_id").notNull(),
     // 'assigned' | 'confirmed' | 'failed' (CHECK constraint in the migration).
     status: text("status").notNull().default("assigned"),
+    // Last heartbeat seen for *this* peer. Per-assignment, not only
+    // provider-level, so rotating a provider to a new node cannot make the old
+    // node's deal look alive (see the migration comment).
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
     // Set by the oracle's findprovs verification; `true` is the explicit
     // at-risk signal, never a silent failure.
     atRisk: boolean("at_risk").notNull().default(false),

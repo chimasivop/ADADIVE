@@ -84,15 +84,17 @@ describe("ProviderApi", () => {
     expect(seen[0].auth).to.equal("Bearer tok");
   });
 
-  it("POSTs confirm-pin with the cid and peer id", async () => {
+  it("POSTs confirm-pin with the assignment id, cid and peer id", async () => {
     const session = new FakeSession(["tok"]);
     const { api, seen } = build(session, () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
 
-    await api.confirmPin(CID, PEER);
+    await api.confirmPin(42, CID, PEER);
 
     expect(seen[0].url).to.equal("https://api.example/api/provider/confirm-pin");
     expect(seen[0].method).to.equal("POST");
-    expect(seen[0].body).to.deep.equal({ cid: CID, peerId: PEER });
+    // The assignment id is the unambiguous target: `deals.data_hash` is not
+    // unique, so a cid-only confirm could hit the wrong row.
+    expect(seen[0].body).to.deep.equal({ assignmentId: 42, cid: CID, peerId: PEER });
   });
 
   it("POSTs heartbeat with the peer id", async () => {
@@ -133,7 +135,7 @@ describe("ProviderApi", () => {
 
     let threw: unknown = null;
     try {
-      await api.confirmPin(CID, PEER);
+      await api.confirmPin(42, CID, PEER);
     } catch (err) {
       threw = err;
     }

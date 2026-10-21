@@ -277,7 +277,7 @@ describe("provider storage endpoints", () => {
       const res = await request(buildApp(store))
         .post("/api/provider/confirm-pin")
         .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
-        .send({ cid: CID, peerId: PEER });
+        .send({ assignmentId: assignment.id, cid: CID, peerId: PEER });
 
       expect(res.status).to.equal(200);
       expect(res.body.status).to.equal("confirmed");
@@ -290,7 +290,7 @@ describe("provider storage endpoints", () => {
       const res = await request(buildApp(store))
         .post("/api/provider/confirm-pin")
         .set("Authorization", `Bearer ${tokenFor(WALLET_B)}`)
-        .send({ cid: CID, peerId: PEER });
+        .send({ assignmentId: assignment.id, cid: CID, peerId: PEER });
 
       // Wallet B has no provider row at all -> 404; register one to reach 403.
       expect(res.status).to.equal(404);
@@ -304,7 +304,7 @@ describe("provider storage endpoints", () => {
       const res = await request(buildApp(store))
         .post("/api/provider/confirm-pin")
         .set("Authorization", `Bearer ${tokenFor(WALLET_B)}`)
-        .send({ cid: CID, peerId: assignment.peerId });
+        .send({ assignmentId: assignment.id, cid: CID, peerId: assignment.peerId });
 
       expect(res.status).to.equal(403);
       expect(assignment.status).to.equal("assigned");
@@ -317,29 +317,71 @@ describe("provider storage endpoints", () => {
       const res = await request(buildApp(store))
         .post("/api/provider/confirm-pin")
         .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
-        .send({ cid: CID, peerId: OTHER_PEER });
+        .send({ assignmentId: assignment.id, cid: CID, peerId: OTHER_PEER });
 
       expect(res.status).to.equal(409);
       expect(assignment.status).to.equal("assigned");
     });
 
-    it("answers 404 when no deal has that CID", async () => {
+    it("answers 404 when the assignment id is unknown", async () => {
       const { assignment } = seedAssigned();
       const res = await request(buildApp(store))
         .post("/api/provider/confirm-pin")
         .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
-        .send({ cid: UNKNOWN_CID, peerId: PEER });
+        .send({ assignmentId: assignment.id + 1000, cid: CID, peerId: PEER });
 
       expect(res.status).to.equal(404);
       expect(assignment.status).to.equal("assigned");
     });
 
+    it("answers 409 when the CID is not the one the assignment stores", async () => {
+      // The assignment id selects the row; the CID must agree. Without this a
+      // caller could mark deal A stored on the strength of deal B's CID.
+      const { assignment } = seedAssigned();
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ assignmentId: assignment.id, cid: UNKNOWN_CID, peerId: PEER });
+
+      expect(res.status).to.equal(409);
+      expect(assignment.status).to.equal("assigned");
+    });
+
+    it("confirms the right deal when two share a CID", async () => {
+      // `deals.data_hash` is not unique. Addressing by assignment id is what
+      // keeps a shared CID from confirming the wrong row.
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const dealOne = store.seedDeal({ dataHash: CID });
+      const dealTwo = store.seedDeal({ dataHash: CID });
+      const first = store.seedAssignment({ dealId: dealOne.id, providerId: a.id, peerId: PEER });
+      const second = store.seedAssignment({ dealId: dealTwo.id, providerId: a.id, peerId: PEER });
+
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ assignmentId: second.id, cid: CID, peerId: PEER });
+
+      expect(res.status).to.equal(200);
+      expect(res.body.dealId).to.equal(dealTwo.id);
+      expect(second.status).to.equal("confirmed");
+      expect(first.status).to.equal("assigned");
+    });
+
     it("rejects a malformed CID with a 400", async () => {
+      const { assignment } = seedAssigned();
+      const res = await request(buildApp(store))
+        .post("/api/provider/confirm-pin")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ assignmentId: assignment.id, cid: "not-a-cid", peerId: PEER });
+      expect(res.status).to.equal(400);
+    });
+
+    it("rejects a missing assignment id with a 400", async () => {
       seedAssigned();
       const res = await request(buildApp(store))
         .post("/api/provider/confirm-pin")
         .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
-        .send({ cid: "not-a-cid", peerId: PEER });
+        .send({ cid: CID, peerId: PEER });
       expect(res.status).to.equal(400);
     });
   });
@@ -363,6 +405,45 @@ describe("provider storage endpoints", () => {
         .post("/api/provider/heartbeat")
         .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
         .send({ peerId: OTHER_PEER });
+
+      expect(res.status).to.equal(409);
+      expect(provider.lastHeartbeatAt).to.equal(null);
+    });
+
+    it("stamps the assignment for the reporting peer, not every provider assignment", async () => {
+      // The provider rotated nodes: an old assignment is still bound to PEER, a
+      // new one to OTHER_PEER. A heartbeat from the new node must not look like
+      // liveness for the old node's deal.
+      const provider = store.seedProvider({ walletAddress: WALLET_A, peerId: OTHER_PEER });
+      const oldDeal = store.seedDeal({ dataHash: CID });
+      const newDeal = store.seedDeal({ dataHash: UNKNOWN_CID });
+      const oldAssignment = store.seedAssignment({
+        dealId: oldDeal.id,
+        providerId: provider.id,
+        peerId: PEER,
+      });
+      const newAssignment = store.seedAssignment({
+        dealId: newDeal.id,
+        providerId: provider.id,
+        peerId: OTHER_PEER,
+      });
+
+      const res = await request(buildApp(store))
+        .post("/api/provider/heartbeat")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: OTHER_PEER });
+
+      expect(res.status).to.equal(200);
+      expect(newAssignment.lastHeartbeatAt).to.not.equal(null);
+      expect(oldAssignment.lastHeartbeatAt).to.equal(null);
+    });
+
+    it("answers 409 when the provider has no registered node", async () => {
+      const provider = store.seedProvider({ walletAddress: WALLET_A, peerId: null });
+      const res = await request(buildApp(store))
+        .post("/api/provider/heartbeat")
+        .set("Authorization", `Bearer ${tokenFor(WALLET_A)}`)
+        .send({ peerId: PEER });
 
       expect(res.status).to.equal(409);
       expect(provider.lastHeartbeatAt).to.equal(null);
@@ -394,14 +475,21 @@ describe("provider storage endpoints", () => {
       expect(res.status).to.equal(401);
     });
 
-    it("serves assignments (with heartbeat) to the oracle", async () => {
+    it("serves assignments with the per-peer heartbeat to the oracle", async () => {
       const a = store.seedProvider({
         walletAddress: WALLET_A,
         peerId: PEER,
-        lastHeartbeatAt: new Date("2024-06-01T11:00:00.000Z"),
+        // Provider-level beat is deliberately different from the assignment's, so
+        // the assertion proves the feed reads the *peer* timestamp.
+        lastHeartbeatAt: new Date("2024-06-01T09:00:00.000Z"),
       });
       const deal = store.seedDeal({ dataHash: CID });
-      store.seedAssignment({ dealId: deal.id, providerId: a.id, peerId: PEER });
+      store.seedAssignment({
+        dealId: deal.id,
+        providerId: a.id,
+        peerId: PEER,
+        lastHeartbeatAt: new Date("2024-06-01T11:00:00.000Z"),
+      });
 
       const res = await request(buildApp(store))
         .get("/api/internal/provider-assignments")

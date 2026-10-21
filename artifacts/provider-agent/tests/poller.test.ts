@@ -28,7 +28,7 @@ const NODE_PEER = "12D3KooWNodeReportsThisPeerId000000000000000000000000000";
 
 /** A `ProviderApi` double that records calls. */
 class FakeApi {
-  readonly confirmed: Array<{ cid: string; peerId: string }> = [];
+  readonly confirmed: Array<{ assignmentId: number; cid: string; peerId: string }> = [];
   listCalls = 0;
   private readonly assignments: Assignment[];
   private readonly listError?: Error;
@@ -44,8 +44,8 @@ class FakeApi {
     return this.assignments;
   }
 
-  async confirmPin(cid: string, peerId: string): Promise<void> {
-    this.confirmed.push({ cid, peerId });
+  async confirmPin(assignmentId: number, cid: string, peerId: string): Promise<void> {
+    this.confirmed.push({ assignmentId, cid, peerId });
   }
 
   async heartbeat(): Promise<void> {}
@@ -108,7 +108,9 @@ describe("AssignmentPoller", () => {
 
     expect(result).to.deep.equal({ scanned: 1, pinned: 1, failed: 0 });
     expect(ipfs.pinned).to.deep.equal([CID]);
-    expect(api.confirmed).to.deep.equal([{ cid: CID, peerId: NODE_PEER }]);
+    expect(api.confirmed).to.deep.equal([
+      { assignmentId: 1, cid: CID, peerId: NODE_PEER },
+    ]);
   });
 
   it("confirms with the node's own peer id even when the assignment names another", async () => {
@@ -131,7 +133,9 @@ describe("AssignmentPoller", () => {
     const result = await build(api, ipfs).runOnce();
 
     expect(result).to.deep.equal({ scanned: 2, pinned: 1, failed: 1 });
-    expect(api.confirmed).to.deep.equal([{ cid: cid2, peerId: NODE_PEER }]);
+    expect(api.confirmed).to.deep.equal([
+      { assignmentId: 2, cid: cid2, peerId: NODE_PEER },
+    ]);
   });
 
   it("sends no confirmations when the node's peer id cannot be read", async () => {

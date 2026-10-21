@@ -226,6 +226,29 @@ before; the provider-agent path only engages once a `peer_id` exists.
   and leaves the stored state untouched. The flag is explicit
   (`deal_assignments.at_risk` + `verification_detail`), never a silent failure.
 
+Three traps worth knowing before touching this layer:
+
+- **Liveness is per *peer*, not per provider.** A provider may rotate nodes; the
+  assignment stays bound to the `peer_id` it was created with (deliberately —
+  see the migration comment), so `providers.last_heartbeat_at` alone is wrong:
+  a newly-rotated-in node B would keep the row fresh while `findprovs` no longer
+  finds A, and A's assignment would read as verified instead of at-risk. The
+  heartbeat endpoint therefore stamps `deal_assignments.last_heartbeat_at` for
+  every open assignment whose `peer_id` matches the reporting node, and the
+  oracle reads *that* (the internal feed exposes it) — not the provider row.
+- **Confirm by `assignmentId`, not by CID.** `deals.data_hash` is not unique, so
+  a CID-only lookup can resolve to the wrong row. The poll already returns
+  `assignmentId`; the agent echoes it and `POST /api/provider/confirm-pin`
+  loads that row, checks ownership, then checks the CID matches before
+  confirming. A CID-only confirm can leave the intended assignment pending
+  forever (or confirm someone else's).
+- **Kubo RPC wants its args in the URL query.** `routing/findprovs` takes the
+  CID as `arg` and the limit as `num-providers` — hyphenated, in the query
+  string, not a form body, and *not* `numProviders` (that is the Go-struct name
+  from the library API; Kubo ignores it). Get this wrong and Kubo rejects the
+  call for a missing `arg`, which the service records as `unknown`, so no
+  verification or at-risk verdict is ever written.
+
 `dev-up.sh` sets a shared dev `INTERNAL_API_TOKEN` and passes it to both
 services, so the internal-feed channel is never open. The oracle's findprovs
 sweep is **off by default** there (`PROVIDER_VERIFICATION_ENABLED=false`): it

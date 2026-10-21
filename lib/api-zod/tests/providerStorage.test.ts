@@ -109,14 +109,29 @@ describe("providerHeartbeat and providerConfirmPin schemas", () => {
     assert.equal(parsed.body.peerId, ED25519_PEER);
   });
 
-  it("requires both a valid cid and peerId on confirm-pin", () => {
+  it("requires an assignmentId, a valid cid and a peerId on confirm-pin", () => {
     const cid = "bafybeigdyrzt5k5c5w3z2s4o5tq7vw3h4k5r6m7n8p9q0r1s2t3u4v5w6x7y";
-    const parsed = schemas.providerConfirmPin.parse({ body: { cid, peerId: ED25519_PEER } });
+    const parsed = schemas.providerConfirmPin.parse({
+      body: { assignmentId: 12, cid, peerId: ED25519_PEER },
+    });
     assert.equal(parsed.body.cid, cid);
+    assert.equal(parsed.body.assignmentId, 12);
 
-    assert.throws(() => schemas.providerConfirmPin.parse({ body: { peerId: ED25519_PEER } }));
+    // The assignment id is the unambiguous target; a body that omits it must not
+    // be accepted (a CID alone can name more than one deal).
     assert.throws(() =>
-      schemas.providerConfirmPin.parse({ body: { cid, peerId: "bad peer!" } })
+      schemas.providerConfirmPin.parse({ body: { cid, peerId: ED25519_PEER } })
+    );
+    assert.throws(() =>
+      schemas.providerConfirmPin.parse({ body: { assignmentId: 0, cid, peerId: ED25519_PEER } })
+    );
+    assert.throws(() =>
+      schemas.providerConfirmPin.parse({ body: { assignmentId: 12, peerId: ED25519_PEER } })
+    );
+    assert.throws(() =>
+      schemas.providerConfirmPin.parse({
+        body: { assignmentId: 12, cid, peerId: "bad peer!" },
+      })
     );
   });
 });

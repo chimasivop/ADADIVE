@@ -67,6 +67,7 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
       lastVerifiedAt: row.lastVerifiedAt ?? null,
       createdAt: row.createdAt ?? new Date("2024-06-01T00:00:00.000Z"),
       confirmedAt: row.confirmedAt ?? null,
+      lastHeartbeatAt: row.lastHeartbeatAt ?? null,
     };
     this.assignments.push(assignment);
     if (assignment.id >= this.assignmentSeq) this.assignmentSeq = assignment.id + 1;
@@ -111,11 +112,11 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
       .filter((v): v is AssignmentView => v !== null);
   }
 
-  async findDealByCid(cid: string): Promise<DealRecord | null> {
-    return this.deals.find((d) => d.dataHash === cid) ?? null;
+  async findDealById(id: number): Promise<DealRecord | null> {
+    return this.deals.find((d) => d.id === id) ?? null;
   }
-  async findAssignmentByDealId(dealId: number): Promise<AssignmentRecord | null> {
-    return this.assignments.find((a) => a.dealId === dealId) ?? null;
+  async findAssignmentById(id: number): Promise<AssignmentRecord | null> {
+    return this.assignments.find((a) => a.id === id) ?? null;
   }
 
   async confirmAssignment(id: number, at: Date): Promise<AssignmentRecord> {
@@ -125,10 +126,17 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
     assignment.confirmedAt = at;
     return assignment;
   }
-  async recordHeartbeat(providerId: number, at: Date): Promise<void> {
+  async recordHeartbeat(providerId: number, peerId: string, at: Date): Promise<void> {
     const provider = this.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error(`no provider ${providerId}`);
     provider.lastHeartbeatAt = at;
+    // Mirror the Drizzle store: per-peer, so a rotated node's beat does not
+    // touch assignments bound to the previous peer.
+    for (const assignment of this.assignments) {
+      if (assignment.providerId === providerId && assignment.peerId === peerId) {
+        assignment.lastHeartbeatAt = at;
+      }
+    }
   }
   async recordVerdict(
     id: number,

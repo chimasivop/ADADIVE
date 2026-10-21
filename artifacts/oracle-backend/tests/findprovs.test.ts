@@ -59,7 +59,7 @@ function ndjson(lines: unknown[]): Response {
 }
 
 describe("KuboFindProvsClient", () => {
-  it("POSTs to routing/findprovs with the CID in the form body", async () => {
+  it("POSTs to routing/findprovs with arg and num-providers in the URL query", async () => {
     const { client, requests } = makeClient({
       responses: [ndjson([{ ID: PEER, Type: 6 }])],
     });
@@ -67,13 +67,18 @@ describe("KuboFindProvsClient", () => {
     await client.isPeerAdvertising(CID, PEER);
 
     expect(requests).to.have.length(1);
-    expect(requests[0].url).to.equal(
+    // Kubo reads positional args and options from the *query string*, not the
+    // body — the contract is `arg=<cid>&num-providers=<limit>`. Asserting the
+    // parsed query (not the raw string) keeps the test independent of param
+    // ordering while still pinning both names, including the hyphen in
+    // `num-providers`.
+    const url = new URL(requests[0].url);
+    expect(`${url.origin}${url.pathname}`).to.equal(
       "http://127.0.0.1:5001/api/v0/routing/findprovs"
     );
-    // The form body carries `arg=<cid>` — this is the contract with Kubo.
-    const params = new URLSearchParams(requests[0].body);
-    expect(params.get("arg")).to.equal(CID);
-    expect(params.get("numProviders")).to.equal("20");
+    expect(url.searchParams.get("arg")).to.equal(CID);
+    expect(url.searchParams.get("num-providers")).to.equal("20");
+    expect(requests[0].body).to.equal("");
   });
 
   it("reports advertising when the assigned peer is among the providers", async () => {

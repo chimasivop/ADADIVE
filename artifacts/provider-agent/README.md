@@ -16,12 +16,17 @@ Once per poll interval:
    authenticated with a wallet-signed session.
 2. `pin.add <cid>` on the local Kubo node (fetches the content if the node does
    not already hold it, then pins it).
-3. `POST /api/provider/confirm-pin { cid, peerId }` — echoing the node's *actual*
-   peer id, which the api-server checks against the assignment.
+3. `POST /api/provider/confirm-pin { assignmentId, cid, peerId }` — echoing the
+   `assignmentId` it polled and the node's *actual* peer id, which the api-server
+   checks against the assignment. The id, not the CID alone, selects the row:
+   `deals.data_hash` is not unique, so two deals can share a CID and a CID-only
+   confirm could mark the wrong one stored.
 
-And once per heartbeat interval: `POST /api/provider/heartbeat { peerId }`,
-which the oracle's findprovs verification reads to tell "offline" from "online
-but no longer advertising the content".
+And once per heartbeat interval: `POST /api/provider/heartbeat { peerId }`.
+The api-server stamps the heartbeat on the *peer*, not just the provider, and
+the oracle's findprovs verification reads that per-peer timestamp to tell
+"offline" from "online but no longer advertising the content" — so a provider
+that rotates to a new node cannot make an old node's deals look alive.
 
 ## Sign-in
 
@@ -50,6 +55,20 @@ call would 401, so the agent refuses to start rather than spin).
 | `HEARTBEAT_INTERVAL_MS` | `30000` | How often to heartbeat |
 | `IPFS_TIMEOUT_MS` | `60000` | Timeout for one IPFS operation |
 | `NODE_ENV` | `development` | `production` raises the log level to `info` |
+
+The oracle and the Kubo node must be reachable on **different origins**. Their
+defaults collide: the oracle's port (`5001`) is also Kubo's, so with only
+`PROVIDER_KEYPAIR_PATH` set, sign-in and `pin.add` would both target
+`http://127.0.0.1:5001` and one of them would reach the wrong process. The agent
+refuses to start in that case and names the variable to change. Point
+`ORACLE_BASE_URL` at the oracle and `IPFS_API_URL` at the node, e.g.:
+
+```sh
+ORACLE_BASE_URL=http://127.0.0.1:5001 \
+IPFS_API_URL=http://127.0.0.1:5002/api/v0 \
+PROVIDER_KEYPAIR_PATH=/path/to/keypair.json \
+node artifacts/provider-agent/dist/index.mjs --once
+```
 
 ## Running
 

@@ -307,8 +307,13 @@ export const schemas = {
   }),
 
   // ── POST /api/provider/confirm-pin ──────────────────────────
+  // The agent confirms the *assignment it was handed*, not "some deal with this
+  // CID". `deals.data_hash` is not unique (two deals can store the same bytes),
+  // so a CID lookup can resolve to the wrong row; the assignment id is the only
+  // unambiguous target.
   providerConfirmPin: z.object({
     body: z.object({
+      assignmentId: z.coerce.number().int().positive("Invalid assignment ID"),
       cid:    ipfsCid,
       peerId,
     }),

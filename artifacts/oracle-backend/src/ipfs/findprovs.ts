@@ -132,18 +132,22 @@ export class KuboFindProvsClient {
    * depend on one Kubo version's exact framing.
    */
   async #findProvs(cid: string): Promise<{ peers: string[]; hitLimit: boolean }> {
-    const url = `${this.options.apiUrl.replace(/\/+$/, "")}/routing/findprovs`;
-    const form = new URLSearchParams({
-      arg: cid,
-      numProviders: String(this.options.numProviders),
-    });
+    // Kubo's HTTP RPC carries *arguments and options in the URL query*, not the
+    // request body ([Kubo RPC bindings](https://github.com/ipfs/kubo/blob/master/docs/implement-api-bindings.md)).
+    // `routing/findprovs` takes the CID as the `arg` positional and the limit as
+    // `num-providers` — note the hyphen; `numProviders` is a Go-struct name from
+    // the library API, not the RPC option name, and Kubo ignores it. Sending
+    // these in a form body (or under the wrong option name) makes Kubo reject
+    // the call for a missing `arg`, which the service turns into `unknown` and
+    // so it would never record a verification or at-risk verdict.
+    const url = new URL(`${this.options.apiUrl.replace(/\/+$/, "")}/routing/findprovs`);
+    url.searchParams.set("arg", cid);
+    url.searchParams.set("num-providers", String(this.options.numProviders));
 
-    this.options.logger.debug("findprovs request", { url, cid });
+    this.options.logger.debug("findprovs request", { url: url.toString(), cid });
 
-    const response = await this.fetchImpl(url, {
+    const response = await this.fetchImpl(url.toString(), {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: form.toString(),
       signal: AbortSignal.timeout(this.options.timeoutMs),
     });
 

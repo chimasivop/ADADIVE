@@ -176,37 +176,54 @@ export function createProviderStorageRouter(
   );
 
   // ── POST /provider/confirm-pin ─────────────────────────────────────────────
-  // "I fetched this CID and pinned it on my node." Flips the assignment to
-  // `confirmed`, but only for the provider that owns it and only when the
-  // reported peer id is the node the assignment names.
+  // "I fetched this CID and pinned it on my node." Flips the *named assignment*
+  // to `confirmed`, but only for the provider that owns it and only when the
+  // reported peer id is the node the assignment names. The agent echoes the
+  // `assignmentId` it received from the poll: a CID lookup is ambiguous, because
+  // `deals.data_hash` is not unique and two deals may share one CID.
   router.post(
     "/provider/confirm-pin",
     requireWalletOrOidcAuth,
     validate(schemas.providerConfirmPin),
     async (req: Request, res: Response): Promise<void> => {
       try {
-        const { cid, peerId } = req.body as { cid: string; peerId: string };
+        const { assignmentId, cid, peerId } = req.body as {
+          assignmentId: number;
+          cid: string;
+          peerId: string;
+        };
 
         const provider = await requireProvider(req, res, store);
         if (provider === null) return;
 
-        const deal = await store.findDealByCid(cid);
-        if (!deal) {
-          res.status(404).json({ error: "No deal found for this CID" });
-          return;
-        }
-        const assignment = await store.findAssignmentByDealId(deal.id);
+        const assignment = await store.findAssignmentById(assignmentId);
         if (!assignment) {
-          res.status(404).json({ error: "This deal has no storage-node assignment" });
+          res.status(404).json({ error: "No such assignment" });
           return;
         }
 
         // Ownership: the assignment belongs to a specific provider. Without this
         // any authenticated wallet could confirm a pin for someone else's node.
-        if (provider && assignment.providerId !== provider.id) {
+        if (assignment.providerId !== provider.id) {
           res.status(403).json({ error: "this assignment belongs to a different provider" });
           return;
         }
+
+        // The CID must be the one *this* assignment stores. The id selects the
+        // row; the CID guards against a stale list or a mispaired report, so a
+        // confirmation cannot mark one deal stored on the strength of another.
+        const deal = await store.findDealById(assignment.dealId);
+        if (!deal) {
+          res.status(404).json({ error: "the assignment's deal no longer exists" });
+          return;
+        }
+        if (deal.dataHash !== cid) {
+          res.status(409).json({
+            error: "cid does not match the cid assigned to this assignment",
+          });
+          return;
+        }
+
         // The reported peer id must be the one assigned: a confirmation from the
         // wrong node must not mark this assignment stored.
         if (!peerIdMatches(assignment.peerId, peerId)) {
@@ -233,8 +250,9 @@ export function createProviderStorageRouter(
   );
 
   // ── POST /provider/heartbeat ───────────────────────────────────────────────
-  // Periodic liveness report. Updates `providers.last_heartbeat_at`, which the
-  // oracle's findprovs job treats as one half of the at-risk check.
+  // Periodic liveness report. Updates the provider's and the peer's
+  // `last_heartbeat_at`, which the oracle's findprovs job treats as one half of
+  // the at-risk check.
   router.post(
     "/provider/heartbeat",
     requireWalletOrOidcAuth,
@@ -246,9 +264,26 @@ export function createProviderStorageRouter(
         const provider = await requireProvider(req, res, store);
         if (provider === null) return;
 
+        // A provider must have a *registered* node before its heartbeat can
+        // count. The heartbeat's whole purpose is one half of the oracle's
+        // at-risk check, and that check only runs for deals in
+        // `deal_assignments` — which only exist for providers with a peer id.
+        // Recording a beat for a provider with no node would be meaningless at
+        // best and, if the row later gained a node, a stale beat would look like
+        // fresh liveness for a node that never reported. Refuse it explicitly
+        // rather than accept a beat nothing will ever read.
+        if (provider.peerId === null || provider.peerId.trim() === "") {
+          res.status(409).json({
+            error:
+              "no storage node is registered for this provider; " +
+              "register a peer id before sending heartbeats",
+          });
+          return;
+        }
+
         // A heartbeat must come from the node the provider registered; otherwise
         // a misconfigured agent would revive a node it does not run.
-        if (provider && !peerIdMatches(provider.peerId, peerId)) {
+        if (!peerIdMatches(provider.peerId, peerId)) {
           res.status(409).json({
             error: "peer id does not match the registered node for this provider",
           });
@@ -256,7 +291,7 @@ export function createProviderStorageRouter(
         }
 
         const now = new Date();
-        await store.recordHeartbeat(provider.id, now);
+        await store.recordHeartbeat(provider.id, peerId, now);
         log.debug({ peerId, providerId: provider.id }, "provider heartbeat");
         res.json({ ok: true, peerId, lastHeartbeatAt: now.toISOString() });
       } catch (err) {
@@ -286,7 +321,10 @@ export function createProviderStorageRouter(
             atRisk: assignment.atRisk,
             verificationDetail: assignment.verificationDetail,
             lastVerifiedAt: assignment.lastVerifiedAt?.toISOString() ?? null,
-            lastHeartbeatAt: provider.lastHeartbeatAt?.toISOString() ?? null,
+            // Per-peer liveness, not the provider row's: the assignment is bound
+            // to a specific peer, and a provider that rotated nodes must not have
+            // its new node's beats read as liveness for this (older) assignment.
+            lastHeartbeatAt: assignment.lastHeartbeatAt?.toISOString() ?? null,
           })),
         });
       } catch (err) {
