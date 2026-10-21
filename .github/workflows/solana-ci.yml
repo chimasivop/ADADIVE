@@ -53,6 +53,11 @@ jobs:
       - name: Cache cargo registry and build
         uses: Swatinem/rust-cache@v2
 
+      # Fails on any file rustfmt would rewrite, so formatting drift becomes a
+      # failed run rather than a note nobody reads.
+      - name: Check formatting
+        run: cargo fmt --all --check
+
       # `-D warnings` turns a new lint into a failure rather than a note that
       # scrolls past. `--locked` fails if `Cargo.lock` is out of date instead of
       # silently resolving new versions.

@@ -181,7 +181,8 @@ a suite: if it uses `makeTestPool`/`makeTestContext`, add an `--ignore` to
 `test:ci`; if it does not, leave it in.
 
 `test:e2e` and `test:cap` never run in CI — they need a validator and real time.
-No `cargo fmt --check` gate either: `cancel.rs` already fails it on `main`.
+The `rust` job gates on `cargo fmt --all --check` too, so run `cargo fmt` before
+pushing a Rust change.
 
 ## Escrow program keypair: run `dev-up.sh`, never `cargo build-sbf` first
 
