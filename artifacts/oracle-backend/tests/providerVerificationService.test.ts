@@ -157,6 +157,43 @@ describe("ProviderVerificationService", () => {
     expect(feed.verdicts).to.have.length(0);
   });
 
+  it("leaves the stored at-risk verdict unchanged for every inconclusive shape", async () => {
+    // Codex case 6: end-to-end, not just the parser's return value. A stale
+    // heartbeat is one half of at-risk; each of these DHT answers is inconclusive,
+    // so `decideAssignment` must return `unknown` and the service must write
+    // nothing — which is what "the stored state is unchanged" means, since a
+    // previous atRisk value lives in the row this would otherwise overwrite.
+    //
+    // Deliberately varied: an error-only payload, a success followed by an error,
+    // a truncated stream that named a peer but never returned a response, and an
+    // unrecognised framing. All reach the client as the same `conclusive: false`.
+    const stale = new Date(NOW.getTime() - STALE_MS - 1000).toISOString();
+    const inconclusiveDetails = [
+      "the findprovs stream contained a query error for the CID (0 providers parsed); inconclusive",
+      "the findprovs stream contained a query error after a response; inconclusive",
+      "the response was not a recognisable, completed findprovs stream (0 providers parsed); inconclusive",
+      "the DHT returned 20 providers (the search limit) and the peer was not among them; inconclusive",
+    ];
+
+    for (const detail of inconclusiveDetails) {
+      const { service, feed } = buildService(
+        [assignment({ lastHeartbeatAt: stale })],
+        new FakeFindProvs({
+          [CID]: { advertising: false, providerCount: 0, conclusive: false, detail },
+        })
+      );
+
+      const summary = await service.runOnce();
+
+      expect(summary.unknown, `detail: ${detail}`).to.equal(1);
+      expect(summary.atRisk, `detail: ${detail}`).to.equal(0);
+      // The load-bearing assertion: with a stale heartbeat the deal *would* be
+      // at-risk if the answer were conclusive absence. Nothing was written, so an
+      // existing at-risk flag (or its absence) is untouched.
+      expect(feed.verdicts, `detail: ${detail}`).to.have.length(0);
+    }
+  });
+
   it("processes every assignment and counts each outcome", async () => {
     const stale = new Date(NOW.getTime() - STALE_MS - 1000).toISOString();
     const cid2 = "bafyOTHER0000000000000000000000000000000000000000000000000000000000";

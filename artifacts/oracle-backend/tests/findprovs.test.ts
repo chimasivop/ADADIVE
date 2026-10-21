@@ -83,7 +83,7 @@ describe("KuboFindProvsClient", () => {
 
   it("reports advertising when the assigned peer is among the providers", async () => {
     const { client } = makeClient({
-      responses: [ndjson([{ ID: OTHER, Type: 6 }, { ID: PEER, Type: 6 }])],
+      responses: [ndjson([{ ID: OTHER, Type: 4 }, { ID: PEER, Type: 4 }])],
     });
 
     const result = await client.isPeerAdvertising(CID, PEER);
@@ -99,7 +99,7 @@ describe("KuboFindProvsClient", () => {
     // peer's absence is a real answer.
     const { client } = makeClient({
       numProviders: 20,
-      responses: [ndjson([{ ID: OTHER, Type: 6 }])],
+      responses: [ndjson([{ ID: OTHER, Type: 4 }])],
     });
 
     const result = await client.isPeerAdvertising(CID, PEER);
@@ -206,19 +206,97 @@ describe("KuboFindProvsClient", () => {
     expect(result.detail).to.contain("inconclusive");
   });
 
-  it("is still conclusive absence for a recognised stream that names no providers", async () => {
-    // The boundary the check above must not swallow: a real stream (numeric event
-    // Types) that reports no providers *is* a trustworthy "nobody advertises it".
+  it("finds no providers in a clean search and reports conclusive absence", async () => {
+    // Codex case 1: the real "peer is gone" case. A completed search — the query
+    // ran (PeerResponse events) and reported nobody providing the CID — is a
+    // trustworthy absence and must still be conclusive, or the whole feature can
+    // never flag anything.
     const { client } = makeClient({
       numProviders: 20,
-      responses: [ndjson([{ Type: 1 }, { Type: 3 }])],
+      responses: [
+        ndjson([
+          { Type: 0, ID: OTHER }, // SendingQuery
+          { Type: 1, ID: OTHER, Responses: [] }, // PeerResponse: this peer had nobody
+        ]),
+      ],
     });
 
     const result = await client.isPeerAdvertising(CID, PEER);
 
     expect(result.advertising).to.equal(false);
     expect(result.conclusive).to.equal(true);
-    expect(result.providerCount).to.equal(0);
+    // providerCount counts ids seen in the stream (the queried peer's included),
+    // so it is not asserted to be 0 here; the load-bearing part is conclusive
+    // absence for the assigned peer.
+  });
+
+  it("is inconclusive when the stream is only a query error", async () => {
+    // Codex case 2. kad-dht reports a fatal lookup failure as a bare QueryError,
+    // which carries no providers — indistinguishable from "nobody has it" unless
+    // the error is treated as invalidating the answer.
+    const { client } = makeClient({
+      responses: [ndjson([{ Type: 3, Extra: "lookup failure" }])],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.advertising).to.equal(false);
+    expect(result.conclusive).to.equal(false);
+    expect(result.detail).to.contain("error");
+    expect(result.detail).to.contain("inconclusive");
+  });
+
+  it("is inconclusive for an unrecognised or unsupported event type", async () => {
+    // Codex case 3. A type that is neither a result nor the known error — a
+    // future/additional event this build does not understand — must not be read
+    // as a completed search. The id is the *queried* peer's (as SendingQuery and
+    // QueryError carry), not a provider, so it is not evidence either.
+    // (`FinalPeer`=2 and `AddingPeer`=6 are defined but never emitted by kad-dht;
+    // 99 stands for any unknown type.)
+    const { client } = makeClient({
+      numProviders: 20,
+      responses: [ndjson([{ Type: 99, ID: OTHER }])],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.advertising).to.equal(false);
+    expect(result.conclusive).to.equal(false);
+  });
+
+  it("is inconclusive when a successful event is followed by a query error", async () => {
+    // Codex case 4. The error marks the search as unfinished; it must not be
+    // overridden by the earlier success, so this is not a conclusive absence.
+    const { client } = makeClient({
+      numProviders: 20,
+      responses: [
+        ndjson([
+          { Type: 1, ID: OTHER, Responses: [] }, // success: a response came back
+          { Type: 3, Extra: "later failure" }, // then the query errored
+        ]),
+      ],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.advertising).to.equal(false);
+    expect(result.conclusive).to.equal(false);
+    expect(result.detail).to.contain("inconclusive");
+  });
+
+  it("is inconclusive for a truncated stream that named a peer but never answered", async () => {
+    // Codex case 5. A SendingQuery is a recognised line, but no response came
+    // back before the stream ended — a truncated search, not an empty one. The
+    // SendingQuery id is the queried peer, so it is not provider evidence.
+    const { client } = makeClient({
+      numProviders: 20,
+      responses: [ndjson([{ Type: 0, ID: OTHER }])],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.advertising).to.equal(false);
+    expect(result.conclusive).to.equal(false);
   });
 
   it("still finds the peer when the body is recognised", async () => {

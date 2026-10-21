@@ -248,17 +248,42 @@ Three traps worth knowing before touching this layer:
   from the library API; Kubo ignores it). Get this wrong and Kubo rejects the
   call for a missing `arg`, which the service records as `unknown`, so no
   verification or at-risk verdict is ever written.
-- **A `findprovs` body must be *recognised* before an absence is believed.**
-  Kubo closes the stream when the search ends — there is no final sentinel
-  object, so end-of-stream is EOF. That means an empty or truncated body, an
-  HTML error page served with HTTP 200, or an unrecognised framing all parse to
-  zero providers, which is indistinguishable from "the DHT answered: nobody has
-  it". The parser tracks a `recognized` flag (a numeric event `Type`, or a peer
-  id in `ID`/`Peer`/`id`, including inside `Responses`) and reports
-  `conclusive: false` when nothing was recognised, so it can never be misread as
-  a conclusive negative. A recognised stream that genuinely names no providers
-  *is* a trustworthy absence — that is the content-gone case the feature exists
-  to catch, so do not "fix" it into always-inconclusive.
+- **A `findprovs` body must be *recognised* before an absence is believed, and a
+  query error is not a completed search.** Kubo closes the stream when the search
+  ends — there is no final sentinel object, so end-of-stream is EOF. (`FinalPeer`
+  and `AddingPeer` exist in go-libp2p's `QueryEventType` enum but kad-dht never
+  emits them; real streams carry only `SendingQuery`=0, `PeerResponse`=1,
+  `QueryError`=3, `Provider`=4, `Value`=5, `DialingPeer`=7.) So an empty or
+  truncated body, an HTML error page served with HTTP 200, or an unrecognised
+  framing all parse to zero providers, which is indistinguishable from "the DHT
+  answered: nobody has it". The parser therefore tracks two flags rather than one
+  "recognised" bit, and they are decided by **event type**, not by whether an id
+  is present (`SendingQuery`, `PeerResponse` and `QueryError` all carry an `ID`,
+  but there it is the *queried* peer, not a provider):
+  - `sawResult` — a `Provider`/`PeerResponse`/`Value` event, or a bare record
+    with an id (the simple provider shape). This is the evidence a query ran and
+    reported. A `SendingQuery`-only body does *not* count: that is a truncated
+    search, not an empty one.
+  - `sawError` — a `QueryError` event. kad-dht emits this *per peer* on a failed
+    dial, including inside a lookup that otherwise completes, so it is a
+    step-level signal; but it is also how a fatal lookup failure is reported, so
+    it must not be overridden by an earlier success.
+
+  `isPeerAdvertising` reports `conclusive: false` unless `sawResult && !sawError`,
+  so an errors-only payload, a success-then-error payload, a truncated stream
+  that never got a response, an unknown event type, an empty body, an HTML page
+  or an unrecognised framing can none of them be misread as a conclusive
+  negative. A *clean* completed search that genuinely names no providers **is** a
+  trustworthy absence — that is the content-gone case the feature exists to
+  catch, so do not "fix" it into always-inconclusive. The cost of the
+  error-is-fatal rule is that a lookup that tolerated one unreachable peer will
+  not flag a vanished provider on that sweep; that is the fail-safe direction
+  (never a false at-risk), and the next clean sweep still flags it.
+
+  Ids are collected permissively (any `ID`/`Peer`/`id`, recursing into
+  `Responses`) so `providerCount` is "ids seen", not a strict provider count;
+  that errs toward `advertising: true`, i.e. toward *not* flagging. Only the
+  `sawResult`/`sawError` decision, not the id set, gates conclusiveness.
 
 `dev-up.sh` sets a shared dev `INTERNAL_API_TOKEN` and passes it to both
 services, so the internal-feed channel is never open. The oracle's findprovs

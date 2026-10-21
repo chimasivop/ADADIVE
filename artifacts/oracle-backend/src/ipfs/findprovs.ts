@@ -23,6 +23,25 @@
  * ordinary answer, so it comes back as `advertising: false`; only a transport
  * problem throws, and the caller decides whether that means "at-risk" or
  * "retry". That split is what keeps a Kubo outage from flagging every deal.
+ *
+ * ## What makes an answer conclusive
+ *
+ * `routing/findprovs` sends **no terminal sentinel**: kad-dht registers for
+ * routing query events and forwards each as it happens, then closes the stream
+ * when the lookup ends, so the end of a stream is just EOF. (`FinalPeer` is
+ * defined in go-libp2p but never emitted by kad-dht; real streams carry only
+ * `SendingQuery`/`PeerResponse`/`QueryError`/`Provider`/`Value`/`DialingPeer`.)
+ * A closed stream therefore cannot be told from a truncated one by a terminator.
+ *
+ * Conclusiveness is inferred from the events instead: an absence is believed only
+ * when a *result* event was seen (`Provider`/`PeerResponse`/`Value`) and *no*
+ * `QueryError` was seen. A `QueryError` is emitted per peer when a dial or
+ * message fails, including inside a lookup that otherwise completes — so
+ * treating any error as fatal is the fail-safe direction: a given sweep flags a
+ * vanished provider only when it got a clean answer, never on a partial or
+ * errored one. Anything unrecognised, empty, or truncated-with-no-response is
+ * likewise inconclusive. Detail is carried in `FindProvsResult.detail`, and an
+ * inconclusive answer never writes a verdict (see `ProviderVerificationService`).
  */
 
 import { safeErrorMessage, type SecretRegistry } from "../security/redact";
@@ -99,25 +118,40 @@ export class KuboFindProvsClient {
     }
 
     const providers = await this.#findProvs(cid);
+    const advertising = providers.peers.includes(peerId);
 
-    if (!providers.recognized) {
-      // The body parsed to nothing we recognise as a findprovs stream. We cannot
-      // tell "no provider" from "we did not understand the answer", so this is
-      // inconclusive — never a conclusive absence. Without this, any non-stream
-      // body (empty, truncated, an HTML error page served with HTTP 200, a future
-      // framing) would arrive here as an empty provider list and be read as
-      // "the peer is gone", flagging the deal at-risk on a non-answer.
+    // A result event is required before an absence is believed, AND any error
+    // event in the stream makes the whole response inconclusive — an error is not
+    // overridden by an earlier success. Three shapes land here and none may be
+    // read as "the peer is gone": a body we did not understand at all (empty,
+    // truncated before any response, an HTML error page served as 200, unknown
+    // framing); an error-only payload (kad-dht reports a fatal lookup failure as
+    // a bare `QueryError`, so an aborted search and a search that found nobody
+    // can both come back with zero providers); and a success followed by a query
+    // error, where the error marks the search as unfinished.
+    //
+    // Note the deliberate deviation from "errors never matter": kad-dht emits
+    // `QueryError` *per peer* when a dial fails, including inside a lookup that
+    // otherwise completes. Treating any such event as fatal means a search that
+    // tolerated one unreachable peer will not yield a conclusive absence, so a
+    // vanished provider is only flagged when the sweep saw a clean result. That
+    // is the fail-safe direction (never a false at-risk) and it is what makes the
+    // rule above satisfiable at all. See the module header.
+    if (!providers.sawResult || providers.sawError) {
+      const why = providers.sawError
+        ? "the findprovs stream contained a query error"
+        : "the response was not a recognisable, completed findprovs stream";
       return {
-        advertising: false,
-        providerCount: 0,
+        advertising,
+        providerCount: providers.peers.length,
         conclusive: false,
         detail:
-          `the response for ${cid} was not a recognisable findprovs stream ` +
+          `${why} for ${cid} ` +
           `(${providers.peers.length} providers parsed); inconclusive`,
       };
     }
 
-    if (providers.hitLimit && !providers.peers.includes(peerId)) {
+    if (providers.hitLimit && !advertising) {
       // The DHT returned the maximum number of providers and this peer was not
       // among them — but there may be more it did not report. Inconclusive:
       // do not flag the deal on an incomplete answer.
@@ -131,7 +165,6 @@ export class KuboFindProvsClient {
       };
     }
 
-    const advertising = providers.peers.includes(peerId);
     return {
       advertising,
       providerCount: providers.peers.length,
@@ -148,16 +181,28 @@ export class KuboFindProvsClient {
    * a wrapper with a `Responses` array; both shapes are handled so this does not
    * depend on one Kubo version's exact framing.
    *
-   * `recognized` records whether the body was a findprovs stream we understood
-   * at all. Kubo closes the stream when the search finishes — there is no final
-   * sentinel object — so the end of stream is EOF, and a body that parsed to
-   * nothing we recognise (an empty or truncated body, an HTML error page, a
-   * future framing we do not know) must not be read as "the DHT answered: no
-   * providers". See the caller: `recognized: false` becomes inconclusive.
+   * Two flags decide whether the stream is a *completed* search, because Kubo
+   * emits no terminal sentinel — the stream simply ends at EOF when the lookup
+   * finishes (kad-dht never publishes `FinalPeer`), so a closed stream is
+   * indistinguishable from a truncated one except by the events in it:
+   *
+   *   - `sawResult` — a result event was seen (`Provider`/`PeerResponse`, or the
+   *     `Value` of a non-provider routing lookup). This is the evidence that a
+   *     query actually ran and reported.
+   *   - `sawError` — an error event was seen (`QueryError`). In kad-dht this is
+   *     emitted *per peer* when a dial or message fails mid-query, and always
+   *     after a `DialingPeer` for it, so it is a step-level signal, not proof the
+   *     whole search failed.
+   *
+   * `isPeerAdvertising` combines them (see there). `sawResult` alone is not
+   * enough, because an errors-only payload is not a trustworthy "no providers".
    */
-  async #findProvs(
-    cid: string
-  ): Promise<{ peers: string[]; hitLimit: boolean; recognized: boolean }> {
+  async #findProvs(cid: string): Promise<{
+    peers: string[];
+    sawResult: boolean;
+    sawError: boolean;
+    hitLimit: boolean;
+  }> {
     // Kubo's HTTP RPC carries *arguments and options in the URL query*, not the
     // request body ([Kubo RPC bindings](https://github.com/ipfs/kubo/blob/master/docs/implement-api-bindings.md)).
     // `routing/findprovs` takes the CID as the `arg` positional and the limit as
@@ -186,7 +231,8 @@ export class KuboFindProvsClient {
 
     const text = await response.text();
     const peers = new Set<string>();
-    let recognized = false;
+    let sawResult = false;
+    let sawError = false;
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (trimmed.length === 0) continue;
@@ -198,52 +244,80 @@ export class KuboFindProvsClient {
         // rest of the stream can still name the peer.
         continue;
       }
-      if (collectIds(parsed, peers)) recognized = true;
+      const kinds = classify(parsed, peers);
+      sawResult = kinds.result || sawResult;
+      sawError = kinds.error || sawError;
     }
 
     return {
       peers: [...peers],
-      recognized,
+      sawResult,
+      sawError,
       hitLimit: this.options.numProviders > 0 && peers.size >= this.options.numProviders,
     };
   }
 }
 
 /**
- * Collect provider ids from one decoded line, and report whether the line was a
- * findprovs event we understood.
+ * Collect provider ids from one decoded line and classify what kind of
+ * findprovs event it was.
  *
- * Recurses into `Responses` (the wrapper shape) and reads `ID`/`Peer`/`id` (the
- * bare shape). Written defensively because the RPC framing has changed across
- * Kubo versions and a wrong guess here would silently produce "no providers".
+ * Ids are read from `ID`/`Peer`/`id`, recursing into `Responses` (the wrapper
+ * shape). Collection is deliberately *permissive*: any id in the line is kept,
+ * whatever the event type. That is the fail-safe direction, because an id we
+ * keep can only ever make `advertising` true, which suppresses an at-risk flag —
+ * whereas dropping one could help produce a wrongful flag. The cost is that a
+ * `PeerResponse`/`SendingQuery` id (the *queried* peer, not a provider) also
+ * lands in the set, so `providerCount` is "ids seen" rather than a strict
+ * provider count; it is only ever reported in the human-readable detail.
  *
- * "Understood" means either a numeric event `Type` (Kubo always sets it — even
- * `{"Type":3}` for a query error, which carries no provider) or a provider id we
- * could read. A line that is neither tells the caller the framing is unknown,
- * which is what keeps a garbage body from being read as an empty (and therefore
- * "peer absent") provider list.
+ * `result`/`error` are the load-bearing part and *are* decided by event type,
+ * because that is what distinguishes a completed search from an errored or
+ * truncated one. Event types are the `routing.QueryEventType` values Kubo emits
+ * (go-libp2p `core/routing`): `SendingQuery`=0, `PeerResponse`=1, `FinalPeer`=2,
+ * `QueryError`=3, `Provider`=4, `Value`=5, `AddingPeer`=6, `DialingPeer`=7.
+ * kad-dht actually publishes only 0, 1, 3, 4, 5 and 7 — `FinalPeer` and
+ * `AddingPeer` are defined but never emitted, which is exactly why a completed
+ * search cannot be detected by a terminator.
+ *
+ * `Provider`/`PeerResponse`/`Value` are result events; `QueryError` is the error
+ * event. A bare record with an id and no event Type is the simple provider shape
+ * older tooling emits and counts as a result. A line that is neither a result
+ * event nor an error event — unknown framing, or a type this build does not
+ * understand — contributes neither flag, so it cannot on its own make the stream
+ * look like a completed search. The caller requires a result event, and tolerates
+ * no error event, before it will trust an absence.
  */
-function collectIds(value: unknown, out: Set<string>): boolean {
+function classify(value: unknown, out: Set<string>): { result: boolean; error: boolean } {
   if (Array.isArray(value)) {
-    let any = false;
-    for (const item of value) any = collectIds(item, out) || any;
-    return any;
+    let result = false;
+    let error = false;
+    for (const item of value) {
+      const kinds = classify(item, out);
+      result = kinds.result || result;
+      error = kinds.error || error;
+    }
+    return { result, error };
   }
-  if (value === null || typeof value !== "object") return false;
+  if (value === null || typeof value !== "object") return { result: false, error: false };
 
   const record = value as Record<string, unknown>;
-  let recognized = typeof record.Type === "number";
+  const type = record.Type;
+  const typed = typeof type === "number";
 
   const id = record.ID ?? record.Peer ?? record.id;
-  if (typeof id === "string" && id.length > 0) {
-    out.add(id);
-    recognized = true;
-  }
+  const hasId = typeof id === "string" && id.length > 0;
+  if (hasId) out.add(id as string);
+
+  let result = type === 4 || type === 1 || type === 5 || (!typed && hasId);
+  let error = type === 3;
 
   if (record.Responses !== undefined) {
-    recognized = collectIds(record.Responses, out) || recognized;
+    const nested = classify(record.Responses, out);
+    result = nested.result || result;
+    error = nested.error || error;
   }
-  return recognized;
+  return { result, error };
 }
 
 /** True when `error` is a Kubo transport failure rather than an answer. */
