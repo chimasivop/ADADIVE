@@ -248,6 +248,17 @@ Three traps worth knowing before touching this layer:
   from the library API; Kubo ignores it). Get this wrong and Kubo rejects the
   call for a missing `arg`, which the service records as `unknown`, so no
   verification or at-risk verdict is ever written.
+- **A `findprovs` body must be *recognised* before an absence is believed.**
+  Kubo closes the stream when the search ends — there is no final sentinel
+  object, so end-of-stream is EOF. That means an empty or truncated body, an
+  HTML error page served with HTTP 200, or an unrecognised framing all parse to
+  zero providers, which is indistinguishable from "the DHT answered: nobody has
+  it". The parser tracks a `recognized` flag (a numeric event `Type`, or a peer
+  id in `ID`/`Peer`/`id`, including inside `Responses`) and reports
+  `conclusive: false` when nothing was recognised, so it can never be misread as
+  a conclusive negative. A recognised stream that genuinely names no providers
+  *is* a trustworthy absence — that is the content-gone case the feature exists
+  to catch, so do not "fix" it into always-inconclusive.
 
 `dev-up.sh` sets a shared dev `INTERNAL_API_TOKEN` and passes it to both
 services, so the internal-feed channel is never open. The oracle's findprovs

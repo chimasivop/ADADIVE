@@ -166,6 +166,72 @@ describe("KuboFindProvsClient", () => {
     expect(result.providerCount).to.equal(2);
   });
 
+  it("is inconclusive when the body is empty, not a stream we can read", async () => {
+    // An empty 200 body is not "the DHT says nobody has it" — read as absence it
+    // would flag the deal at-risk on a non-answer.
+    const { client } = makeClient({ responses: [new Response("", { status: 200 })] });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.advertising).to.equal(false);
+    expect(result.conclusive).to.equal(false);
+    expect(result.providerCount).to.equal(0);
+    expect(result.detail).to.contain("inconclusive");
+  });
+
+  it("is inconclusive when the body is an HTML error page served as 200", async () => {
+    // A proxy or misconfiguration can return 200 with a non-NDJSON body. None of
+    // its lines parse as JSON, so nothing is recognised.
+    const { client } = makeClient({
+      responses: [new Response("<html><body>gateway</body></html>", { status: 200 })],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.conclusive).to.equal(false);
+    expect(result.advertising).to.equal(false);
+  });
+
+  it("is inconclusive when the lines are JSON but not a findprovs framing", async () => {
+    // Valid JSON that carries neither a numeric event Type nor a peer id is a
+    // framing we do not understand. Treating it as an empty provider list would
+    // be the same misread as an empty body.
+    const { client } = makeClient({
+      responses: [ndjson([{ unexpected: "shape" }, { another: 42 }])],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.conclusive).to.equal(false);
+    expect(result.detail).to.contain("inconclusive");
+  });
+
+  it("is still conclusive absence for a recognised stream that names no providers", async () => {
+    // The boundary the check above must not swallow: a real stream (numeric event
+    // Types) that reports no providers *is* a trustworthy "nobody advertises it".
+    const { client } = makeClient({
+      numProviders: 20,
+      responses: [ndjson([{ Type: 1 }, { Type: 3 }])],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.advertising).to.equal(false);
+    expect(result.conclusive).to.equal(true);
+    expect(result.providerCount).to.equal(0);
+  });
+
+  it("still finds the peer when the body is recognised", async () => {
+    const { client } = makeClient({
+      responses: [ndjson([{ Type: 4, Responses: [{ ID: PEER }] }])],
+    });
+
+    const result = await client.isPeerAdvertising(CID, PEER);
+
+    expect(result.advertising).to.equal(true);
+    expect(result.conclusive).to.equal(true);
+  });
+
   it("throws FindProvsTransportError on a non-2xx response", async () => {
     // "We could not find out" must not be mistaken for "the peer is gone".
     const { client } = makeClient({

@@ -100,6 +100,23 @@ export class KuboFindProvsClient {
 
     const providers = await this.#findProvs(cid);
 
+    if (!providers.recognized) {
+      // The body parsed to nothing we recognise as a findprovs stream. We cannot
+      // tell "no provider" from "we did not understand the answer", so this is
+      // inconclusive — never a conclusive absence. Without this, any non-stream
+      // body (empty, truncated, an HTML error page served with HTTP 200, a future
+      // framing) would arrive here as an empty provider list and be read as
+      // "the peer is gone", flagging the deal at-risk on a non-answer.
+      return {
+        advertising: false,
+        providerCount: 0,
+        conclusive: false,
+        detail:
+          `the response for ${cid} was not a recognisable findprovs stream ` +
+          `(${providers.peers.length} providers parsed); inconclusive`,
+      };
+    }
+
     if (providers.hitLimit && !providers.peers.includes(peerId)) {
       // The DHT returned the maximum number of providers and this peer was not
       // among them — but there may be more it did not report. Inconclusive:
@@ -127,11 +144,20 @@ export class KuboFindProvsClient {
 
   /**
    * The raw query. Kubo's `routing/findprovs` streams newline-delimited JSON
-   * objects, each of which may be a bare provider (`{"ID":"12D3…","Type":…}`) or
+   * objects, each of which may be a bare provider (`{"ID":"12D3…","Type":4}`) or
    * a wrapper with a `Responses` array; both shapes are handled so this does not
    * depend on one Kubo version's exact framing.
+   *
+   * `recognized` records whether the body was a findprovs stream we understood
+   * at all. Kubo closes the stream when the search finishes — there is no final
+   * sentinel object — so the end of stream is EOF, and a body that parsed to
+   * nothing we recognise (an empty or truncated body, an HTML error page, a
+   * future framing we do not know) must not be read as "the DHT answered: no
+   * providers". See the caller: `recognized: false` becomes inconclusive.
    */
-  async #findProvs(cid: string): Promise<{ peers: string[]; hitLimit: boolean }> {
+  async #findProvs(
+    cid: string
+  ): Promise<{ peers: string[]; hitLimit: boolean; recognized: boolean }> {
     // Kubo's HTTP RPC carries *arguments and options in the URL query*, not the
     // request body ([Kubo RPC bindings](https://github.com/ipfs/kubo/blob/master/docs/implement-api-bindings.md)).
     // `routing/findprovs` takes the CID as the `arg` positional and the limit as
@@ -160,6 +186,7 @@ export class KuboFindProvsClient {
 
     const text = await response.text();
     const peers = new Set<string>();
+    let recognized = false;
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (trimmed.length === 0) continue;
@@ -171,35 +198,52 @@ export class KuboFindProvsClient {
         // rest of the stream can still name the peer.
         continue;
       }
-      collectIds(parsed, peers);
+      if (collectIds(parsed, peers)) recognized = true;
     }
 
     return {
       peers: [...peers],
+      recognized,
       hitLimit: this.options.numProviders > 0 && peers.size >= this.options.numProviders,
     };
   }
 }
 
 /**
- * Collect provider ids from one decoded line.
+ * Collect provider ids from one decoded line, and report whether the line was a
+ * findprovs event we understood.
  *
  * Recurses into `Responses` (the wrapper shape) and reads `ID`/`Peer`/`id` (the
  * bare shape). Written defensively because the RPC framing has changed across
  * Kubo versions and a wrong guess here would silently produce "no providers".
+ *
+ * "Understood" means either a numeric event `Type` (Kubo always sets it — even
+ * `{"Type":3}` for a query error, which carries no provider) or a provider id we
+ * could read. A line that is neither tells the caller the framing is unknown,
+ * which is what keeps a garbage body from being read as an empty (and therefore
+ * "peer absent") provider list.
  */
-function collectIds(value: unknown, out: Set<string>): void {
+function collectIds(value: unknown, out: Set<string>): boolean {
   if (Array.isArray(value)) {
-    for (const item of value) collectIds(item, out);
-    return;
+    let any = false;
+    for (const item of value) any = collectIds(item, out) || any;
+    return any;
   }
-  if (value === null || typeof value !== "object") return;
+  if (value === null || typeof value !== "object") return false;
 
   const record = value as Record<string, unknown>;
-  const id = record.ID ?? record.Peer ?? record.id;
-  if (typeof id === "string" && id.length > 0) out.add(id);
+  let recognized = typeof record.Type === "number";
 
-  if (record.Responses !== undefined) collectIds(record.Responses, out);
+  const id = record.ID ?? record.Peer ?? record.id;
+  if (typeof id === "string" && id.length > 0) {
+    out.add(id);
+    recognized = true;
+  }
+
+  if (record.Responses !== undefined) {
+    recognized = collectIds(record.Responses, out) || recognized;
+  }
+  return recognized;
 }
 
 /** True when `error` is a Kubo transport failure rather than an answer. */
