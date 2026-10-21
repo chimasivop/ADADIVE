@@ -166,6 +166,24 @@ wallet. It is opt-in, needs the frontend + oracle + api-server running, and is
 not part of `pnpm test`; report it on its own line, not folded into the unit
 count.
 
+## CI
+
+`.github/workflows/solana-ci.yml` runs on paths touching
+`programs/adadive_escrow/**` or `lib/solana-escrow/**`. Two jobs: `rust`
+(clippy `-D warnings` + `cargo test --workspace`) and `typescript`
+(`solana-escrow` tests + `oracle-backend`'s `test:ci`).
+
+`test:ci` is the oracle-backend subset that needs **no Postgres** —
+`oracleKeySecurity`, `pinStatus`, `scheduler`, `signature`. The DB-backed
+suites (`api`, `auth`, `challengeWindow`) are excluded there but still run in
+`pnpm test`, which needs a real database. Keep the two lists in sync when adding
+a suite: if it uses `makeTestPool`/`makeTestContext`, add an `--ignore` to
+`test:ci`; if it does not, leave it in.
+
+`test:e2e` and `test:cap` never run in CI — they need a validator and real time.
+The `rust` job gates on `cargo fmt --all --check` too, so run `cargo fmt` before
+pushing a Rust change.
+
 ## Escrow program keypair: run `dev-up.sh`, never `cargo build-sbf` first
 
 The escrow program id is fixed by `declare_id!`, and deploying needs the

@@ -11,6 +11,7 @@
     "dev": "tsx ./src/index.ts",
     "test": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts' --ignore 'tests/escrowCap.live.test.ts'",
     "test:unit": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/e2e.live.test.ts' --ignore 'tests/escrowCap.live.test.ts'",
+    "test:ci": "ts-mocha -p tsconfig.json -t 30000 'tests/*.test.ts' --ignore 'tests/api.test.ts' --ignore 'tests/auth.test.ts' --ignore 'tests/challengeWindow.test.ts' --ignore 'tests/e2e.live.test.ts' --ignore 'tests/escrowCap.live.test.ts'",
     "test:e2e": "ts-mocha -p tsconfig.json -t 120000 tests/e2e.live.test.ts",
     "auth:demo": "tsx ./scripts/auth-demo.ts",
     "setup:localnet": "tsx ./scripts/devnet-setup.ts",
