@@ -371,12 +371,16 @@ cmd_up() {
     echo
     echo "NOTE: the oracle's provider findprovs sweep is off. Every deal uses the"
     echo "      centralized Pinata path, which is the default. To exercise the"
-    echo "      provider-run path, start a Kubo node and re-run with:"
+    echo "      provider-run path, start a Kubo node on a port the oracle does not"
+    echo "      own and re-run with:"
     echo "        PROVIDER_VERIFICATION_ENABLED=true \\"
-    echo "        IPFS_API_URL=http://127.0.0.1:5001/api/v0 \\"
+    echo "        IPFS_API_URL=http://127.0.0.1:5002/api/v0 \\"
     echo "        pnpm dev:up"
-    echo "      (Kubo's default API port, 5001, collides with the oracle's port"
-    echo "      here — point ORACLE_PORT or IPFS_API_URL elsewhere if both run.)"
+    echo "      Kubo's default API port, 5001, is the oracle's port here, so the"
+    echo "      two cannot share it. Either run Kubo on another port"
+    echo "      (IPFS_API_URL=http://127.0.0.1:5002/api/v0, as above) or move the"
+    echo "      oracle with ORACLE_PORT=5003. The provider-agent refuses to start"
+    echo "      when its oracle and IPFS endpoints share an origin."
   fi
 }
 
