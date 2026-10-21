@@ -1,0 +1,93 @@
+name: Solana CI
+
+# Guards the Solana escrow stack: the Anchor program under
+# `programs/adadive_escrow` and the shared client library under
+# `lib/solana-escrow`. The Cardano/Aiken contract has its own workflow
+# (`contracts-ci.yml`).
+#
+# The live suites (`test:e2e`, `test:cap`) are deliberately NOT run here: they
+# need a running validator, real wall-clock challenge windows, and a deployed
+# program, which is not something a CI runner should fake. They stay opt-in and
+# manual. See AGENTS.md ("Test report taxonomy").
+on:
+  push:
+    paths:
+      - "programs/adadive_escrow/**"
+      - "lib/solana-escrow/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "tsconfig.base.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/solana-ci.yml"
+  pull_request:
+    paths:
+      - "programs/adadive_escrow/**"
+      - "lib/solana-escrow/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "tsconfig.base.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/solana-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust program
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # `rust-toolchain.toml` pins the same 1.89.0; naming it here too keeps the
+      # job working if that file is ever removed.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          components: clippy
+
+      - name: Cache cargo registry and build
+        uses: Swatinem/rust-cache@v2
+
+      # `-D warnings` turns a new lint into a failure rather than a note that
+      # scrolls past. `--locked` fails if `Cargo.lock` is out of date instead of
+      # silently resolving new versions.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # `--all-targets` above also lints the `#[cfg(test)]` modules; this runs
+      # them (the per-deal cap boundary tests live there).
+      - name: Unit tests
+        run: cargo test --workspace --locked
+
+  typescript:
+    name: TypeScript client and backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pinned `packageManager` field from package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Client library tests
+        run: pnpm --filter @workspace/solana-escrow run test
+
+      # Only the suites that need no Postgres. The DB-backed service tests
+      # (`api`, `auth`, `challengeWindow`) are excluded because they run against
+      # a real Postgres — a mock would test the mock — and standing one up is
+      # not worth it for a path filter that mostly guards the program and the
+      # client. Run the full unit suite locally with `pnpm test`.
+      - name: Oracle backend tests (no database)
+        run: pnpm --filter @workspace/oracle-backend run test:ci
