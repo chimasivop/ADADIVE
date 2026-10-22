@@ -72,6 +72,13 @@ ADMIN_PASSWORD="${ADMIN_PASSWORD:-localdev-admin-password}"
 # environment. The value below is not a secret; it is a local dev placeholder.
 SESSION_SECRET="${SESSION_SECRET:-localdev-session-signing-secret-not-for-production}"
 
+# Shared bearer token for the api-server's internal provider feed. The oracle
+# backend reads that feed over HTTP to run its findprovs sweep (the two services
+# own separate databases, so it cannot query `deal_assignments` directly). Both
+# sides must carry the same value; the api-server closes the feed with a 503 when
+# it is unset, so it is never an open channel. Not a secret outside this machine.
+INTERNAL_API_TOKEN="${INTERNAL_API_TOKEN:-localdev-internal-api-token-not-for-production}"
+
 if [[ -f "$ROOT/.env" ]]; then
   echo "==> Loading $ROOT/.env"
   set -a
@@ -314,6 +321,10 @@ cmd_up() {
     SESSION_SECRET="$SESSION_SECRET" \
     AUTH_REQUIRED=true \
     PINATA_JWT="${PINATA_JWT:-}" \
+    PROVIDER_VERIFICATION_ENABLED="${PROVIDER_VERIFICATION_ENABLED:-false}" \
+    INTERNAL_API_TOKEN="$INTERNAL_API_TOKEN" \
+    API_SERVER_BASE_URL="http://127.0.0.1:$API_PORT/api" \
+    IPFS_API_URL="${IPFS_API_URL:-http://127.0.0.1:5001/api/v0}" \
     node --enable-source-maps "$ROOT/artifacts/oracle-backend/dist/index.mjs"
 
   start_bg api-server env \
@@ -327,6 +338,7 @@ cmd_up() {
     ALLOWED_ORIGIN="$ALLOWED_ORIGIN" \
     PINATA_JWT="${PINATA_JWT:-}" \
     PINATA_GATEWAY="${PINATA_GATEWAY:-}" \
+    INTERNAL_API_TOKEN="$INTERNAL_API_TOKEN" \
     node --enable-source-maps "$ROOT/artifacts/api-server/dist/index.mjs"
 
   start_bg frontend env \
@@ -354,6 +366,21 @@ cmd_up() {
     echo
     echo "NOTE: PINATA_JWT is not set, so Pin Files will answer 503. Export it"
     echo "      (or put it in $ROOT/.env) and re-run to enable pinning."
+  fi
+  if [[ "${PROVIDER_VERIFICATION_ENABLED:-false}" != "true" ]]; then
+    echo
+    echo "NOTE: the oracle's provider findprovs sweep is off. Every deal uses the"
+    echo "      centralized Pinata path, which is the default. To exercise the"
+    echo "      provider-run path, start a Kubo node on a port the oracle does not"
+    echo "      own and re-run with:"
+    echo "        PROVIDER_VERIFICATION_ENABLED=true \\"
+    echo "        IPFS_API_URL=http://127.0.0.1:5002/api/v0 \\"
+    echo "        pnpm dev:up"
+    echo "      Kubo's default API port, 5001, is the oracle's port here, so the"
+    echo "      two cannot share it. Either run Kubo on another port"
+    echo "      (IPFS_API_URL=http://127.0.0.1:5002/api/v0, as above) or move the"
+    echo "      oracle with ORACLE_PORT=5003. The provider-agent refuses to start"
+    echo "      when its oracle and IPFS endpoints share an origin."
   fi
 }
 

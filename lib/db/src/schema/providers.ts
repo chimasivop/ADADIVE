@@ -17,6 +17,15 @@ export const providersTable = pgTable("providers", {
   uptimePercent: real("uptime_percent"),
   activeDeals: integer("active_deals").default(0),
   totalSolEarned: real("total_sol_earned").default(0),
+  // The provider's own IPFS (Kubo) node, when one is registered. NULL means the
+  // provider has no node and deals stay on the centralized Pinata path.
+  peerId: text("peer_id"),
+  // Last heartbeat reported by the provider-agent for that node.
+  lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+  // Wallet that registered/owns this row. The provider-agent authenticates by
+  // wallet signature, so this is how an authenticated wallet resolves to a
+  // provider. Nullable: rows predating the wallet flow have none.
+  walletAddress: text("wallet_address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

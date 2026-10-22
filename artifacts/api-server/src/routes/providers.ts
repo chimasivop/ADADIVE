@@ -1,8 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, gte } from "drizzle-orm";
 import { db, providersTable, dealsTable } from "@workspace/db";
-import { validate, schemas } from "@workspace/api-zod";
-import { requireWalletOrOidcAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -34,34 +32,6 @@ router.get("/providers", async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: msg });
   }
 });
-
-router.post(
-  "/providers",
-  requireWalletOrOidcAuth,
-  validate(schemas.createProvider),
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const body = req.body;
-      const [provider] = await db
-        .insert(providersTable)
-        .values({
-          name: body.name,
-          nodeId: body.nodeId,
-          totalStorageGb: body.totalStorageGb,
-          pricePerGbPerEpoch: body.pricePerGbPerEpoch,
-          region: body.region,
-          status: "active",
-          reputationScore: 100,
-        })
-        .returning();
-
-      res.status(201).json(provider);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: msg });
-    }
-  }
-);
 
 router.get(
   "/providers/:id",

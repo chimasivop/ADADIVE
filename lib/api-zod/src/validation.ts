@@ -133,6 +133,24 @@ export const ipfsCid = z
   );
 
 /**
+ * libp2p peer id of a provider's IPFS (Kubo) node — base58, e.g. `12D3Koo…`.
+ *
+ * Not decoded (peer ids embed a multihash whose length varies), only shape
+ * checked: base58 alphabet and a plausible length, so an obvious typo is
+ * rejected before it reaches the database. The length bounds cover both the
+ * 46-char Qm… (sha2-256) and longer inline-key forms.
+ */
+export const peerId = z
+  .string()
+  .trim()
+  .min(10, "Peer ID is too short to be valid")
+  .max(128, "Peer ID is too long to be valid")
+  .regex(
+    /^[1-9A-HJ-NP-Za-km-z]+$/,
+    "Peer ID must be a base58-encoded libp2p peer id"
+  );
+
+/**
  * Email — trimmed, lowercase, standard format
  */
 export const email = z
@@ -261,6 +279,43 @@ export const schemas = {
       totalStorageGb:     z.coerce.number().positive(),
       pricePerGbPerEpoch: z.coerce.number().positive(),
       region:             z.string().trim().min(1),
+      // Optional: linking a storage node at registration. Absent/null keeps the
+      // provider on the centralized Pinata path.
+      peerId:             peerId.nullish(),
+    }),
+  }),
+
+  // ── PATCH /api/providers/:id/node ───────────────────────────
+  // Set, change, or clear the provider's storage node after registration.
+  updateProviderNode: z.object({
+    params: z.object({
+      id: z.coerce.number().int().positive("Invalid provider ID"),
+    }),
+    body: z.object({
+      // Required field: `null` explicitly clears the node (back to the Pinata
+      // path). An omitted field fails validation, so "clear the node" is always
+      // an explicit act rather than the meaning of a malformed body.
+      peerId: peerId.nullable(),
+    }),
+  }),
+
+  // ── POST /api/provider/heartbeat ────────────────────────────
+  providerHeartbeat: z.object({
+    body: z.object({
+      peerId,
+    }),
+  }),
+
+  // ── POST /api/provider/confirm-pin ──────────────────────────
+  // The agent confirms the *assignment it was handed*, not "some deal with this
+  // CID". `deals.data_hash` is not unique (two deals can store the same bytes),
+  // so a CID lookup can resolve to the wrong row; the assignment id is the only
+  // unambiguous target.
+  providerConfirmPin: z.object({
+    body: z.object({
+      assignmentId: z.coerce.number().int().positive("Invalid assignment ID"),
+      cid:    ipfsCid,
+      peerId,
     }),
   }),
 
