@@ -15,6 +15,7 @@ import { expect } from "chai";
 import {
   FindProvsTransportError,
   KuboFindProvsClient,
+  isFindProvsTransportError,
 } from "../src/ipfs/findprovs";
 import { SilentTestLogger } from "./helpers/silentLogger";
 
@@ -299,6 +300,53 @@ describe("KuboFindProvsClient", () => {
     expect(result.conclusive).to.equal(false);
   });
 
+  it("throws FindProvsTransportError when the body read is aborted mid-stream", async () => {
+    // The one *reliable* transport-level signal for truncation: undici rejects a
+    // body read that is cut off before the terminating chunk (`TypeError:
+    // terminated`). It must become a transport error, not escape as a bare
+    // `TypeError` — the service re-throws anything that is not a transport error,
+    // which would abort the whole sweep instead of recording one `unknown`.
+    const aborted = {
+      ok: true,
+      status: 200,
+      text: async () => {
+        const err = new TypeError("terminated");
+        (err as { cause?: unknown }).cause = new Error("other side closed");
+        throw err;
+      },
+    } as unknown as Response;
+    const { client } = makeClient({ responses: [aborted] });
+
+    let threw: unknown = null;
+    try {
+      await client.isPeerAdvertising(CID, PEER);
+    } catch (err) {
+      threw = err;
+    }
+    expect(threw).to.be.instanceOf(FindProvsTransportError);
+    expect((threw as Error).message).to.contain("could not read the findprovs response body");
+    expect(isFindProvsTransportError(threw)).to.equal(true);
+  });
+
+  it("treats a stalled read (timeout abort) as a transport error too", async () => {
+    const stalled = {
+      ok: true,
+      status: 200,
+      text: async () => {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      },
+    } as unknown as Response;
+    const { client } = makeClient({ responses: [stalled] });
+
+    let threw: unknown = null;
+    try {
+      await client.isPeerAdvertising(CID, PEER);
+    } catch (err) {
+      threw = err;
+    }
+    expect(threw).to.be.instanceOf(FindProvsTransportError);
+  });
+
   it("still finds the peer when the body is recognised", async () => {
     const { client } = makeClient({
       responses: [ndjson([{ Type: 4, Responses: [{ ID: PEER }] }])],
@@ -326,7 +374,10 @@ describe("KuboFindProvsClient", () => {
     expect((threw as Error).message).to.contain("500");
   });
 
-  it("propagates a network error (ECONNREFUSED) rather than reporting an absence", async () => {
+  it("maps a network error (ECONNREFUSED) to a transport error, not an absence", async () => {
+    // Not just `instanceOf(Error)`: the specific type matters, because the service
+    // re-throws anything that is not a `FindProvsTransportError`. A bare
+    // `TypeError: fetch failed` escaping here would abort the whole sweep.
     const { client } = makeClient({
       responses: [new Error("ECONNREFUSED")],
     });
@@ -337,7 +388,8 @@ describe("KuboFindProvsClient", () => {
     } catch (err) {
       threw = err;
     }
-    expect(threw).to.be.instanceOf(Error);
+    expect(threw).to.be.instanceOf(FindProvsTransportError);
+    expect(isFindProvsTransportError(threw)).to.equal(true);
   });
 
   it("answers conclusively 'not advertising' for an invalid CID without calling Kubo", async () => {
@@ -372,5 +424,98 @@ describe("KuboFindProvsClient", () => {
     const result = await client.isPeerAdvertising(CID, PEER);
 
     expect(result.advertising).to.equal(true);
+  });
+});
+
+/**
+ * The transport-level question the streak exists to answer: can a truncated read
+ * be told apart from a completed one?
+ *
+ * These drive a *real* HTTP server (a real socket, real chunked framing) rather
+ * than a stub `Response`, because the distinction is made by undici's body
+ * reader, not by our code. The findings, which are the rationale for the streak
+ * in `providerVerification.ts`:
+ *
+ *   - A connection cut **mid-body** (before the terminating chunk) is detected:
+ *     `text()` rejects, and the client turns that into `FindProvsTransportError`.
+ *     The sweep records `unknown` and moves on.
+ *   - A stream that ends **cleanly but early** (a valid terminator, but the
+ *     search never completed) is *not* detectable here: `text()` resolves and the
+ *     bytes are indistinguishable from a finished search. Only app-level events
+ *     could know, and findprovs has no terminal sentinel — hence requiring a
+ *     sustained run of negatives instead of trusting one.
+ */
+describe("KuboFindProvsClient — truncation vs clean end (real socket)", () => {
+  /** Start a server that writes `body`, then either destroys or ends cleanly. */
+  async function withServer(
+    body: string,
+    mode: "abort" | "clean"
+  ): Promise<{ client: KuboFindProvsClient; close: () => Promise<void> }> {
+    const http = await import("node:http");
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (mode === "abort") {
+        // Send a partial body then cut the socket without the terminating chunk.
+        res.write(body);
+        res.socket?.destroy();
+      } else {
+        res.end(body);
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const client = new KuboFindProvsClient({
+      apiUrl: `http://127.0.0.1:${port}/api/v0`,
+      timeoutMs: 5000,
+      numProviders: 20,
+      logger: new SilentTestLogger(),
+    });
+    return {
+      client,
+      close: () =>
+        new Promise<void>((resolve) => {
+          server.close(() => resolve());
+          server.closeAllConnections?.();
+        }),
+    };
+  }
+
+  it("turns a mid-body connection cut into FindProvsTransportError", async () => {
+    // A response event *is* sent before the cut, so a naive "did we see a result?"
+    // check would call this conclusive. The transport rejects it, which is the
+    // signal the client converts to `unknown`.
+    const body = `${JSON.stringify({ Type: 4, Responses: [{ ID: PEER }] })}\n`;
+    const { client, close } = await withServer(body, "abort");
+    try {
+      let threw: unknown = null;
+      try {
+        await client.isPeerAdvertising(CID, PEER);
+      } catch (err) {
+        threw = err;
+      }
+      expect(threw).to.be.instanceOf(FindProvsTransportError);
+    } finally {
+      await close();
+    }
+  });
+
+  it("cannot tell a cleanly-ended-but-early stream from a completed search", async () => {
+    // This is the residual gap, pinned as a test so the mitigation is not
+    // mistaken for a fix: the bytes end with a valid terminator, so the read
+    // resolves. `findprovs` has no terminal event, so a search that stopped early
+    // is byte-identical to one that finished — which is exactly why the decision
+    // layer requires several consecutive negatives before flagging.
+    const body = `${JSON.stringify({ Type: 4, Responses: [{ ID: OTHER }] })}\n`;
+    const { client, close } = await withServer(body, "clean");
+    try {
+      const result = await client.isPeerAdvertising(CID, PEER);
+      // No error: it parsed as a completed search that simply did not list PEER.
+      expect(result.advertising).to.equal(false);
+      expect(result.conclusive).to.equal(true);
+    } finally {
+      await close();
+    }
   });
 });

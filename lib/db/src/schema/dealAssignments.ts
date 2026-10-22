@@ -34,6 +34,14 @@ export const dealAssignmentsTable = pgTable(
     // Set by the oracle's findprovs verification; `true` is the explicit
     // at-risk signal, never a silent failure.
     atRisk: boolean("at_risk").notNull().default(false),
+    // How many *consecutive* sweeps have returned a conclusive "peer not
+    // advertising" for this assignment. A single conclusive negative is not
+    // enough to flag a deal at-risk: a stream that ends cleanly but early is
+    // indistinguishable from a completed search (see ipfs/findprovs.ts), so only
+    // a sustained pattern is acted on. Reset to 0 by any conclusive positive.
+    consecutiveConclusiveNegatives: integer("consecutive_conclusive_negatives")
+      .notNull()
+      .default(0),
     verificationDetail: text("verification_detail"),
     lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
     createdAt: timestamp("created_at").defaultNow().notNull(),

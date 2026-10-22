@@ -61,12 +61,29 @@ export class InternalProviderFeed {
   async recordVerdict(
     assignmentId: number,
     atRisk: boolean,
-    detail: string
+    detail: string,
+    consecutiveConclusiveNegatives: number
   ): Promise<void> {
     await this.#request(
       "PATCH",
       `/internal/provider-assignments/${assignmentId}`,
-      { atRisk, verificationDetail: detail }
+      { atRisk, verificationDetail: detail, consecutiveConclusiveNegatives }
+    );
+  }
+
+  /**
+   * Advance only the streak, leaving the stored verdict alone. Used for a
+   * conclusive negative that is still below the at-risk threshold: the counter
+   * must move, but writing a verdict would clear an existing one.
+   */
+  async recordNegativeStreak(
+    assignmentId: number,
+    consecutiveConclusiveNegatives: number
+  ): Promise<void> {
+    await this.#request(
+      "PATCH",
+      `/internal/provider-assignments/${assignmentId}/streak`,
+      { consecutiveConclusiveNegatives }
     );
   }
 

@@ -187,6 +187,7 @@ export async function buildService(
       logger,
       registry,
       heartbeatStaleMs: config.providerVerification.heartbeatStaleMs,
+      consecutiveNegatives: config.providerVerification.consecutiveNegatives,
     });
     providerScheduler = new ProviderVerificationScheduler({
       runJob: () => providerVerification.runOnce(),

@@ -6,7 +6,8 @@
  *
  *   A deal assigned to a provider node is **at-risk** when
  *   (a) the provider's heartbeat is stale **and**
- *   (b) `findprovs` no longer shows the assigned peer id advertising the CID.
+ *   (b) `findprovs` has conclusively failed to show the assigned peer id
+ *       advertising the CID on `consecutiveNegatives` sweeps **in a row**.
  *
  * The two halves are deliberate:
  *
@@ -20,6 +21,17 @@
  *   - An **inconclusive** findprovs answer (e.g. the search hit its provider
  *     limit) never flags a deal. Flagging on an incomplete answer would turn a
  *     busy DHT into false positives across the whole network.
+ *
+ *   - A **single conclusive negative** is not enough either. `findprovs` has no
+ *     terminal sentinel, and a response that ends cleanly but early is
+ *     byte-identical to a completed search (see `ipfs/findprovs.ts`), so one
+ *     "nobody has it" cannot be trusted on its own. Requiring a run of them means
+ *     a one-off truncation — or any other transient that looks like an absence —
+ *     cannot flag a deal; only a *sustained* pattern does. The count is
+ *     `consecutiveNegatives` (config:
+ *     `PROVIDER_VERIFICATION_CONSECUTIVE_NEGATIVES`, default 3) and the running
+ *     streak lives on the assignment row, so it survives an oracle restart. A
+ *     conclusive *positive* resets it to zero.
  *
  * A transport failure querying the DHT is *not* a verdict either: it is
  * reported as `unknown`, and the caller leaves the deal's existing verification
@@ -45,6 +57,13 @@ export interface AssignmentView {
    * not read as liveness for a deal still bound to the old peer.
    */
   lastHeartbeatAt: string | null;
+  /**
+   * The streak of consecutive conclusive-negative sweeps recorded so far. The
+   * oracle reads this, adds one for the current negative, and writes the total
+   * back, so the at-risk flag needs `consecutiveNegatives` sightings rather than
+   * one (see `decideAssignment` for why one is not enough).
+   */
+  consecutiveConclusiveNegatives: number;
 }
 
 export type VerificationVerdict =
@@ -55,8 +74,26 @@ export type VerificationVerdict =
 export interface VerifyOptions {
   /** How old a heartbeat may be before the node is considered silent. */
   heartbeatStaleMs: number;
+  /**
+   * How many *consecutive* conclusive-negative sweeps are required before a deal
+   * is flagged at-risk. 1 restores "flag on the first negative".
+   */
+  consecutiveNegatives: number;
   /** Injectable clock, for tests that must not sleep. */
   now?: () => Date;
+}
+
+/**
+ * The streak to store after this sweep, and the verdict that follows from it.
+ *
+ * Exported so the service can persist the streak even when the outcome is
+ * `unknown` (below the threshold) — otherwise the counter would never advance.
+ */
+export interface StreakOutcome {
+  /** Consecutive conclusive negatives including this sweep. */
+  consecutiveConclusiveNegatives: number;
+  /** True when the threshold has been reached and the deal should be flagged. */
+  reachedThreshold: boolean;
 }
 
 /**
@@ -65,13 +102,20 @@ export interface VerifyOptions {
  * `findProvs` is the already-resolved DHT answer, or `null` when the query
  * could not be completed (transport error) — in which case the verdict is
  * `unknown` and the caller must not change the stored state.
+ *
+ * The returned value also carries the new consecutive-negative streak, which the
+ * caller must persist *even when the outcome is `unknown`* (below the
+ * threshold): otherwise the counter could never reach it. See the module header
+ * and `consecutiveNegatives` for why a single negative is not acted on.
  */
 export function decideAssignment(
   assignment: AssignmentView,
   findProvs: FindProvsResult | null,
   options: VerifyOptions
-): VerificationVerdict {
+): VerificationVerdict & StreakOutcome {
   const now = (options.now ?? (() => new Date()))();
+  const threshold = Math.max(1, options.consecutiveNegatives);
+  const previousStreak = assignment.consecutiveConclusiveNegatives ?? 0;
 
   if (findProvs === null) {
     return {
@@ -80,6 +124,9 @@ export function decideAssignment(
       detail:
         `could not query the DHT for ${assignment.cid}; ` +
         `leaving the previous verification state unchanged`,
+      // No evidence either way: the streak is carried forward untouched.
+      consecutiveConclusiveNegatives: previousStreak,
+      reachedThreshold: false,
     };
   }
 
@@ -96,7 +143,17 @@ export function decideAssignment(
   //    absence, so it can never contribute to an at-risk verdict.
   const peerMissing = findProvs.conclusive && !findProvs.advertising;
 
-  if (heartbeatStale && peerMissing) {
+  // The streak only moves on a *conclusive* answer: a conclusive negative
+  // advances it, a conclusive positive resets it, and an inconclusive answer
+  // leaves it alone (it is not evidence in either direction).
+  const streak = peerMissing
+    ? previousStreak + 1
+    : findProvs.conclusive
+      ? 0
+      : previousStreak;
+  const reachedThreshold = peerMissing && streak >= threshold;
+
+  if (heartbeatStale && peerMissing && reachedThreshold) {
     return {
       outcome: "at_risk",
       atRisk: true,
@@ -105,7 +162,27 @@ export function decideAssignment(
         (Number.isFinite(heartbeatAgeMs)
           ? `(${Math.round(heartbeatAgeMs / 1000)}s old) `
           : "(never reported) ") +
-        `and ${findProvs.detail}`,
+        `and ${findProvs.detail} ` +
+        `(conclusive negative ${streak}/${threshold} sweeps in a row)`,
+      consecutiveConclusiveNegatives: streak,
+      reachedThreshold,
+    };
+  }
+
+  if (heartbeatStale && peerMissing) {
+    // Below the threshold. This is the important case: one conclusive negative is
+    // not enough, because a cleanly-ended-but-early stream is indistinguishable
+    // from a completed search. Report `unknown` so the stored verdict is not
+    // overwritten, but the streak (above) is carried forward.
+    return {
+      outcome: "unknown",
+      atRisk: null,
+      detail:
+        `heartbeat is stale and ${findProvs.detail}, but that is only ` +
+        `${streak} of ${threshold} consecutive conclusive negatives ` +
+        `required; not flagging yet`,
+      consecutiveConclusiveNegatives: streak,
+      reachedThreshold,
     };
   }
 
@@ -116,6 +193,8 @@ export function decideAssignment(
       detail:
         `heartbeat is stale but the DHT answer was inconclusive ` +
         `(${findProvs.detail}); not flagging on a partial answer`,
+      consecutiveConclusiveNegatives: streak,
+      reachedThreshold,
     };
   }
 
@@ -129,6 +208,8 @@ export function decideAssignment(
           ? `(${Math.round(heartbeatAgeMs / 1000)}s old) `
           : "(never reported) ") +
         `but ${findProvs.detail}`,
+      consecutiveConclusiveNegatives: streak,
+      reachedThreshold,
     };
   }
 
@@ -139,5 +220,7 @@ export function decideAssignment(
     outcome: "verified",
     atRisk: false,
     detail: `heartbeat is fresh and ${findProvs.detail}`,
+    consecutiveConclusiveNegatives: streak,
+    reachedThreshold,
   };
 }

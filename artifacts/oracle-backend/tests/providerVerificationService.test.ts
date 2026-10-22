@@ -33,7 +33,14 @@ const STALE_MS = 3 * 60_000;
 
 /** A feed double that records what the service wrote. */
 class FakeFeed {
-  readonly verdicts: Array<{ assignmentId: number; atRisk: boolean; detail: string }> = [];
+  readonly verdicts: Array<{
+    assignmentId: number;
+    atRisk: boolean;
+    detail: string;
+    streak: number;
+  }> = [];
+  /** Streak-only writes, kept apart from full verdicts so tests can tell them apart. */
+  readonly streakWrites: Array<{ assignmentId: number; streak: number }> = [];
   private readonly assignments: AssignmentView[];
 
   constructor(assignments: AssignmentView[]) {
@@ -44,8 +51,17 @@ class FakeFeed {
     return this.assignments;
   }
 
-  async recordVerdict(assignmentId: number, atRisk: boolean, detail: string): Promise<void> {
-    this.verdicts.push({ assignmentId, atRisk, detail });
+  async recordVerdict(
+    assignmentId: number,
+    atRisk: boolean,
+    detail: string,
+    streak: number
+  ): Promise<void> {
+    this.verdicts.push({ assignmentId, atRisk, detail, streak });
+  }
+
+  async recordNegativeStreak(assignmentId: number, streak: number): Promise<void> {
+    this.streakWrites.push({ assignmentId, streak });
   }
 }
 
@@ -75,13 +91,19 @@ function assignment(overrides: Partial<AssignmentView> = {}): AssignmentView {
     peerId: PEER,
     status: "confirmed",
     lastHeartbeatAt: NOW.toISOString(),
+    consecutiveConclusiveNegatives: 0,
     ...overrides,
   };
 }
 
+/**
+ * Threshold 1 by default: the existing tests here isolate "is the verdict written
+ * or not", not the streak length. The streak suite below passes 3 explicitly.
+ */
 function buildService(
   assignments: AssignmentView[],
-  findProvs: FakeFindProvs
+  findProvs: FakeFindProvs,
+  consecutiveNegatives = 1
 ): { service: ProviderVerificationService; feed: FakeFeed } {
   const feed = new FakeFeed(assignments);
   const service = new ProviderVerificationService({
@@ -90,6 +112,7 @@ function buildService(
     logger: new SilentTestLogger(),
     registry: new SecretRegistry(),
     heartbeatStaleMs: STALE_MS,
+    consecutiveNegatives,
     now: () => NOW,
   });
   return { service, feed };
@@ -228,6 +251,7 @@ describe("ProviderVerificationService", () => {
       logger: new SilentTestLogger(),
       registry: new SecretRegistry(),
       heartbeatStaleMs: STALE_MS,
+      consecutiveNegatives: 1,
       now: () => NOW,
     });
 
@@ -256,6 +280,7 @@ describe("ProviderVerificationService", () => {
       logger: new SilentTestLogger(),
       registry: new SecretRegistry(),
       heartbeatStaleMs: STALE_MS,
+      consecutiveNegatives: 1,
       now: () => NOW,
     });
 
@@ -266,5 +291,154 @@ describe("ProviderVerificationService", () => {
     expect(summary.verified).to.equal(1);
     expect(feed.verdicts).to.have.length(1);
     expect(feed.verdicts[0].assignmentId).to.equal(2);
+  });
+});
+
+/**
+ * The consecutive-negative streak, end to end through the service.
+ *
+ * The headline behaviour: a *single* truncated-but-apparently-conclusive negative
+ * does NOT flag a deal at-risk. Only a sustained run does. This is the mitigation
+ * for the fact that a findprovs stream has no terminal sentinel, so a response
+ * that ends cleanly but early is indistinguishable from a completed search — one
+ * such answer must never be enough on its own.
+ *
+ * These drive the real `runOnce` loop and assert on what it writes, so they cover
+ * both the decision rule and the service's choice of *which* write to make.
+ */
+describe("ProviderVerificationService — consecutive-negative streak", () => {
+  const stale = new Date(NOW.getTime() - STALE_MS - 1000).toISOString();
+  const missing: FindProvsResult = {
+    advertising: false,
+    providerCount: 1,
+    conclusive: true,
+    detail: "not advertising",
+  };
+
+  /** Run `sweeps` sweeps, carrying the stored streak forward between them. */
+  async function runSweeps(
+    sweeps: number,
+    storedStreak: number,
+    consecutiveNegatives = 3
+  ): Promise<{ feed: FakeFeed; summaries: Awaited<ReturnType<ProviderVerificationService["runOnce"]>>[] }> {
+    // The assignment's stored streak is what the feed reports each tick; the
+    // service reads it, decides, and writes the new value back. Rebuild the
+    // service per sweep with the value the previous sweep wrote, mirroring the
+    // round-trip through the database.
+    const summaries = [];
+    let feed: FakeFeed | null = null;
+    let streak = storedStreak;
+    for (let i = 0; i < sweeps; i++) {
+      const built = buildService(
+        [assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: streak })],
+        new FakeFindProvs({ [CID]: missing }),
+        consecutiveNegatives
+      );
+      summaries.push(await built.service.runOnce());
+      feed = built.feed;
+      // Mirror the write back into the next sweep's stored value.
+      if (built.feed.verdicts.length > 0) {
+        streak = built.feed.verdicts[0].streak;
+      } else if (built.feed.streakWrites.length > 0) {
+        streak = built.feed.streakWrites[built.feed.streakWrites.length - 1].streak;
+      }
+    }
+    return { feed: feed as FakeFeed, summaries };
+  }
+
+  it("does NOT flag a deal on a single conclusive negative", async () => {
+    // The exact regression the review asked to prevent: one negative is not
+    // enough at the default threshold of 3.
+    const { service, feed } = buildService(
+      [assignment({ lastHeartbeatAt: stale })],
+      new FakeFindProvs({ [CID]: missing }),
+      3
+    );
+
+    const summary = await service.runOnce();
+
+    expect(summary.atRisk).to.equal(0);
+    expect(summary.unknown).to.equal(1);
+    // No verdict written at all — so an existing at-risk flag (or its absence) is
+    // untouched. This is the load-bearing assertion.
+    expect(feed.verdicts).to.have.length(0);
+    // But the counter advanced, so a later sweep can reach the threshold.
+    expect(feed.streakWrites).to.deep.equal([{ assignmentId: 1, streak: 1 }]);
+  });
+
+  it("does NOT flag on the second consecutive negative", async () => {
+    const { service, feed } = buildService(
+      [assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 1 })],
+      new FakeFindProvs({ [CID]: missing }),
+      3
+    );
+
+    const summary = await service.runOnce();
+
+    expect(summary.atRisk).to.equal(0);
+    expect(feed.verdicts).to.have.length(0);
+    expect(feed.streakWrites).to.deep.equal([{ assignmentId: 1, streak: 2 }]);
+  });
+
+  it("flags at-risk only once the third consecutive negative is seen", async () => {
+    const { service, feed } = buildService(
+      [assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 2 })],
+      new FakeFindProvs({ [CID]: missing }),
+      3
+    );
+
+    const summary = await service.runOnce();
+
+    expect(summary.atRisk).to.equal(1);
+    expect(feed.verdicts).to.have.length(1);
+    expect(feed.verdicts[0].atRisk).to.equal(true);
+    expect(feed.verdicts[0].streak).to.equal(3);
+    // The full verdict carries the streak, so no separate streak write.
+    expect(feed.streakWrites).to.have.length(0);
+  });
+
+  it("flags on the third sweep of a sustained run, not the first", async () => {
+    // The whole point, as a sequence: sweeps 1 and 2 write no verdict, sweep 3
+    // does. A single truncated-but-conclusive negative cannot flag a deal.
+    const { summaries } = await runSweeps(3, 0, 3);
+
+    expect(summaries.map((s) => s.atRisk)).to.deep.equal([0, 0, 1]);
+    expect(summaries.map((s) => s.unknown)).to.deep.equal([1, 1, 0]);
+  });
+
+  it("does not write a streak-only update on an inconclusive answer", async () => {
+    // An inconclusive answer carries the streak forward, so the service skips the
+    // write entirely rather than PATCHing the same value every sweep.
+    const { service, feed } = buildService(
+      [assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 2 })],
+      new FakeFindProvs({
+        [CID]: { advertising: false, providerCount: 20, conclusive: false, detail: "hit the limit" },
+      }),
+      3
+    );
+
+    await service.runOnce();
+
+    expect(feed.verdicts).to.have.length(0);
+    expect(feed.streakWrites).to.have.length(0);
+  });
+
+  it("resets the streak through the service when the peer reappears", async () => {
+    // Two negatives, then a positive: the verdict is `verified` and the streak is
+    // written back as 0, so a subsequent incident starts counting from scratch.
+    const { service, feed } = buildService(
+      [assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 2 })],
+      new FakeFindProvs({
+        [CID]: { advertising: true, providerCount: 3, conclusive: true, detail: "advertising" },
+      }),
+      3
+    );
+
+    const summary = await service.runOnce();
+
+    expect(summary.verified).to.equal(1);
+    expect(feed.verdicts).to.have.length(1);
+    expect(feed.verdicts[0].atRisk).to.equal(false);
+    expect(feed.verdicts[0].streak).to.equal(0);
   });
 });

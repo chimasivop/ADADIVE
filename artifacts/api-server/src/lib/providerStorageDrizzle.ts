@@ -41,6 +41,7 @@ const assignmentColumns = {
   peerId: dealAssignmentsTable.peerId,
   status: dealAssignmentsTable.status,
   atRisk: dealAssignmentsTable.atRisk,
+  consecutiveConclusiveNegatives: dealAssignmentsTable.consecutiveConclusiveNegatives,
   verificationDetail: dealAssignmentsTable.verificationDetail,
   lastVerifiedAt: dealAssignmentsTable.lastVerifiedAt,
   lastHeartbeatAt: dealAssignmentsTable.lastHeartbeatAt,
@@ -182,11 +183,32 @@ export const drizzleProviderStorageStore: ProviderStorageStore = {
     id: number,
     atRisk: boolean,
     detail: string | null,
-    at: Date
+    at: Date,
+    consecutiveConclusiveNegatives: number
   ): Promise<AssignmentRecord | null> {
     const [row] = await db
       .update(dealAssignmentsTable)
-      .set({ atRisk, verificationDetail: detail, lastVerifiedAt: at })
+      .set({
+        atRisk,
+        verificationDetail: detail,
+        lastVerifiedAt: at,
+        consecutiveConclusiveNegatives,
+      })
+      .where(eq(dealAssignmentsTable.id, id))
+      .returning(assignmentColumns);
+    return row ?? null;
+  },
+
+  async recordNegativeStreak(
+    id: number,
+    consecutiveConclusiveNegatives: number
+  ): Promise<AssignmentRecord | null> {
+    // Only the counter: `at_risk`, `verification_detail` and `last_verified_at`
+    // are deliberately left alone, so a below-threshold negative cannot clear an
+    // existing verdict or fabricate one.
+    const [row] = await db
+      .update(dealAssignmentsTable)
+      .set({ consecutiveConclusiveNegatives })
       .where(eq(dealAssignmentsTable.id, id))
       .returning(assignmentColumns);
     return row ?? null;

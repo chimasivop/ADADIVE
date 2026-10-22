@@ -500,6 +500,27 @@ describe("provider storage endpoints", () => {
       expect(res.body.assignments[0].cid).to.equal(CID);
       expect(res.body.assignments[0].peerId).to.equal(PEER);
       expect(res.body.assignments[0].lastHeartbeatAt).to.equal("2024-06-01T11:00:00.000Z");
+      // The streak travels with the feed so the oracle can add to it rather than
+      // restart from zero each sweep.
+      expect(res.body.assignments[0].consecutiveConclusiveNegatives).to.equal(0);
+    });
+
+    it("reports the stored consecutive-negative streak to the oracle", async () => {
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const deal = store.seedDeal({ dataHash: CID });
+      store.seedAssignment({
+        dealId: deal.id,
+        providerId: a.id,
+        peerId: PEER,
+        consecutiveConclusiveNegatives: 2,
+      });
+
+      const res = await request(buildApp(store))
+        .get("/api/internal/provider-assignments")
+        .set("Authorization", `Bearer ${TOKEN}`);
+
+      expect(res.status).to.equal(200);
+      expect(res.body.assignments[0].consecutiveConclusiveNegatives).to.equal(2);
     });
 
     it("accepts a verdict only with the internal token", async () => {
@@ -513,18 +534,24 @@ describe("provider storage endpoints", () => {
 
       const unauthorized = await request(buildApp(store))
         .patch(`/api/internal/provider-assignments/${assignment.id}`)
-        .send({ atRisk: true });
+        .send({ atRisk: true, consecutiveConclusiveNegatives: 1 });
       expect(unauthorized.status).to.equal(401);
 
       const res = await request(buildApp(store))
         .patch(`/api/internal/provider-assignments/${assignment.id}`)
         .set("Authorization", `Bearer ${TOKEN}`)
-        .send({ atRisk: true, verificationDetail: "stale and not advertising" });
+        .send({
+          atRisk: true,
+          verificationDetail: "stale and not advertising",
+          consecutiveConclusiveNegatives: 3,
+        });
 
       expect(res.status).to.equal(200);
       expect(assignment.atRisk).to.equal(true);
       expect(assignment.verificationDetail).to.equal("stale and not advertising");
       expect(assignment.lastVerifiedAt).to.not.equal(null);
+      expect(assignment.consecutiveConclusiveNegatives).to.equal(3);
+      expect(res.body.consecutiveConclusiveNegatives).to.equal(3);
     });
 
     it("requires atRisk to be a boolean", async () => {
@@ -539,16 +566,123 @@ describe("provider storage endpoints", () => {
       const res = await request(buildApp(store))
         .patch(`/api/internal/provider-assignments/${assignment.id}`)
         .set("Authorization", `Bearer ${TOKEN}`)
-        .send({ atRisk: "yes" });
+        .send({ atRisk: "yes", consecutiveConclusiveNegatives: 1 });
       expect(res.status).to.equal(400);
+    });
+
+    it("rejects a verdict with a missing or invalid streak", async () => {
+      // The oracle computes the streak, so an omitted or negative value is a bug
+      // in the caller, not a reason to silently reset the counter to zero.
+      const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+      const deal = store.seedDeal({ dataHash: CID });
+      const assignment = store.seedAssignment({
+        dealId: deal.id,
+        providerId: a.id,
+        peerId: PEER,
+        consecutiveConclusiveNegatives: 2,
+      });
+
+      for (const bad of [undefined, -1, 1.5, "3"]) {
+        const res = await request(buildApp(store))
+          .patch(`/api/internal/provider-assignments/${assignment.id}`)
+          .set("Authorization", `Bearer ${TOKEN}`)
+          .send({ atRisk: false, consecutiveConclusiveNegatives: bad });
+        expect(res.status, `streak: ${String(bad)}`).to.equal(400);
+      }
+      // And the stored counter was not disturbed by any of them.
+      expect(assignment.consecutiveConclusiveNegatives).to.equal(2);
     });
 
     it("answers 404 for a verdict on a missing assignment", async () => {
       const res = await request(buildApp(store))
         .patch("/api/internal/provider-assignments/4242")
         .set("Authorization", `Bearer ${TOKEN}`)
-        .send({ atRisk: false });
+        .send({ atRisk: false, consecutiveConclusiveNegatives: 0 });
       expect(res.status).to.equal(404);
+    });
+
+    describe("streak-only advance (PATCH /internal/provider-assignments/:id/streak)", () => {
+      it("advances the counter without touching the stored verdict", async () => {
+        // The below-threshold case: the counter moves, but there is no verdict to
+        // write. `at_risk` and `last_verified_at` must be left exactly as they
+        // were — writing them here is what would clear an existing flag.
+        const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+        const deal = store.seedDeal({ dataHash: CID });
+        const verifiedAt = new Date("2024-05-01T00:00:00.000Z");
+        const assignment = store.seedAssignment({
+          dealId: deal.id,
+          providerId: a.id,
+          peerId: PEER,
+          atRisk: false,
+          verificationDetail: "previous detail",
+          lastVerifiedAt: verifiedAt,
+          consecutiveConclusiveNegatives: 1,
+        });
+
+        const res = await request(buildApp(store))
+          .patch(`/api/internal/provider-assignments/${assignment.id}/streak`)
+          .set("Authorization", `Bearer ${TOKEN}`)
+          .send({ consecutiveConclusiveNegatives: 2 });
+
+        expect(res.status).to.equal(200);
+        expect(res.body.consecutiveConclusiveNegatives).to.equal(2);
+        expect(assignment.consecutiveConclusiveNegatives).to.equal(2);
+        // The load-bearing assertions: the verdict is untouched.
+        expect(assignment.atRisk).to.equal(false);
+        expect(assignment.verificationDetail).to.equal("previous detail");
+        expect(assignment.lastVerifiedAt).to.equal(verifiedAt);
+      });
+
+      it("does not clear an existing at-risk flag", async () => {
+        const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+        const deal = store.seedDeal({ dataHash: CID });
+        const assignment = store.seedAssignment({
+          dealId: deal.id,
+          providerId: a.id,
+          peerId: PEER,
+          atRisk: true,
+          consecutiveConclusiveNegatives: 3,
+        });
+
+        await request(buildApp(store))
+          .patch(`/api/internal/provider-assignments/${assignment.id}/streak`)
+          .set("Authorization", `Bearer ${TOKEN}`)
+          .send({ consecutiveConclusiveNegatives: 4 });
+
+        expect(assignment.atRisk).to.equal(true);
+        expect(assignment.consecutiveConclusiveNegatives).to.equal(4);
+      });
+
+      it("requires the internal token", async () => {
+        const res = await request(buildApp(store))
+          .patch("/api/internal/provider-assignments/1/streak")
+          .send({ consecutiveConclusiveNegatives: 1 });
+        expect(res.status).to.equal(401);
+      });
+
+      it("rejects an invalid streak", async () => {
+        const a = store.seedProvider({ walletAddress: WALLET_A, peerId: PEER });
+        const deal = store.seedDeal({ dataHash: CID });
+        const assignment = store.seedAssignment({
+          dealId: deal.id,
+          providerId: a.id,
+          peerId: PEER,
+        });
+
+        const res = await request(buildApp(store))
+          .patch(`/api/internal/provider-assignments/${assignment.id}/streak`)
+          .set("Authorization", `Bearer ${TOKEN}`)
+          .send({ consecutiveConclusiveNegatives: -1 });
+        expect(res.status).to.equal(400);
+      });
+
+      it("answers 404 for a missing assignment", async () => {
+        const res = await request(buildApp(store))
+          .patch("/api/internal/provider-assignments/4242/streak")
+          .set("Authorization", `Bearer ${TOKEN}`)
+          .send({ consecutiveConclusiveNegatives: 1 });
+        expect(res.status).to.equal(404);
+      });
     });
   });
 });

@@ -2,10 +2,16 @@
  * `decideAssignment` — the at-risk rule, in isolation.
  *
  * This is the core of the oracle upgrade: at-risk is "heartbeat stale AND the
- * peer is no longer advertising the CID", both halves together. The tests pin
- * down each single-signal case, because the tempting bug is to flag on either
- * one alone ("stale heartbeat" or "peer not seen"), and an inconclusive DHT
- * answer or a transport failure must never flag a deal.
+ * peer has conclusively failed to advertise the CID on enough sweeps in a row",
+ * both halves together. The tests pin down each single-signal case, because the
+ * tempting bug is to flag on either one alone ("stale heartbeat" or "peer not
+ * seen"), and an inconclusive DHT answer or a transport failure must never flag
+ * a deal.
+ *
+ * The threshold is `consecutiveNegatives`. Most of the combination tests below
+ * set it to 1 (flag on the first conclusive negative) so they isolate the
+ * stale-AND-missing rule; the streak suite then covers the default of 3, where a
+ * single negative is deliberately *not* enough.
  *
  * Pure function: no clock, no HTTP, no database. `now` is injected.
  */
@@ -31,6 +37,7 @@ function assignment(overrides: Partial<AssignmentView> = {}): AssignmentView {
     peerId: PEER,
     status: "confirmed",
     lastHeartbeatAt: NOW.toISOString(),
+    consecutiveConclusiveNegatives: 0,
     ...overrides,
   };
 }
@@ -52,8 +59,13 @@ const inconclusive: FindProvsResult = {
   detail: "the DHT returned 20 providers (the search limit); inconclusive",
 };
 
-function decide(a: AssignmentView, f: FindProvsResult | null) {
-  return decideAssignment(a, f, { heartbeatStaleMs: STALE_MS, now: () => NOW });
+/** Threshold 1 by default here: these tests isolate the stale-AND-missing rule. */
+function decide(a: AssignmentView, f: FindProvsResult | null, consecutiveNegatives = 1) {
+  return decideAssignment(a, f, {
+    heartbeatStaleMs: STALE_MS,
+    consecutiveNegatives,
+    now: () => NOW,
+  });
 }
 
 describe("decideAssignment", () => {
@@ -124,5 +136,136 @@ describe("decideAssignment", () => {
     const verdict = decide(assignment({ lastHeartbeatAt: atThreshold }), answer(false));
 
     expect(verdict.outcome).to.equal("verified");
+  });
+});
+
+/**
+ * The consecutive-negative streak — the mitigation for "a cleanly-ended-but-early
+ * findprovs stream is indistinguishable from a completed search".
+ *
+ * The point of these tests: a *single* conclusive negative must never flag a deal
+ * on its own, only a sustained run of them. The streak is carried on the
+ * assignment (injected here as `consecutiveConclusiveNegatives`) and returned by
+ * `decideAssignment` so the caller can persist it.
+ */
+describe("decideAssignment — consecutive-negative streak", () => {
+  const stale = new Date(NOW.getTime() - STALE_MS - 60_000).toISOString();
+
+  it("does NOT flag on a single conclusive negative at the default threshold of 3", () => {
+    // The exact case the review raised: one truncated-but-apparently-conclusive
+    // negative is not enough.
+    const verdict = decide(assignment({ lastHeartbeatAt: stale }), answer(false), 3);
+
+    expect(verdict.outcome).to.equal("unknown");
+    expect(verdict.atRisk).to.equal(null);
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(1);
+    expect(verdict.reachedThreshold).to.equal(false);
+    expect(verdict.detail).to.contain("1 of 3");
+  });
+
+  it("does NOT flag on the second of three, and advances the streak", () => {
+    const verdict = decide(
+      assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 1 }),
+      answer(false),
+      3
+    );
+
+    expect(verdict.outcome).to.equal("unknown");
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(2);
+    expect(verdict.reachedThreshold).to.equal(false);
+  });
+
+  it("flags at-risk on the third consecutive conclusive negative", () => {
+    const verdict = decide(
+      assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 2 }),
+      answer(false),
+      3
+    );
+
+    expect(verdict.outcome).to.equal("at_risk");
+    expect(verdict.atRisk).to.equal(true);
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(3);
+    expect(verdict.reachedThreshold).to.equal(true);
+  });
+
+  it("keeps flagging on the fourth and beyond", () => {
+    const verdict = decide(
+      assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 3 }),
+      answer(false),
+      3
+    );
+
+    expect(verdict.outcome).to.equal("at_risk");
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(4);
+  });
+
+  it("resets the streak to zero when the peer is advertising again", () => {
+    // A conclusive positive is proof the earlier negatives were spurious, so the
+    // counter must not carry over into the next incident.
+    const verdict = decide(
+      assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 2 }),
+      answer(true),
+      3
+    );
+
+    expect(verdict.outcome).to.equal("verified");
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(0);
+  });
+
+  it("leaves the streak untouched on an inconclusive answer", () => {
+    // Inconclusive is not evidence in either direction: it must neither advance
+    // the streak (which would let a flaky DHT manufacture a verdict) nor reset it
+    // (which would let a flaky DHT hide a real disappearance).
+    const verdict = decide(
+      assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 2 }),
+      inconclusive,
+      3
+    );
+
+    expect(verdict.outcome).to.equal("unknown");
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(2);
+  });
+
+  it("leaves the streak untouched on a transport failure", () => {
+    const verdict = decide(
+      assignment({ lastHeartbeatAt: stale, consecutiveConclusiveNegatives: 2 }),
+      null,
+      3
+    );
+
+    expect(verdict.outcome).to.equal("unknown");
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(2);
+  });
+
+  it("advances the streak even when the heartbeat is fresh, but does not flag", () => {
+    // The streak counts the *DHT* signal, independent of liveness: a fresh
+    // heartbeat does not change the fact that the DHT conclusively says the peer
+    // is not advertising. So the counter advances, but the verdict is `verified`
+    // because the both-signals rule needs the heartbeat stale too. The payoff is
+    // that a node which has been missing from the DHT for the threshold sweeps is
+    // flagged on the first sweep *after* its heartbeat goes stale, rather than
+    // needing the threshold to elapse a second time.
+    const verdict = decide(assignment({ consecutiveConclusiveNegatives: 2 }), answer(false), 3);
+
+    expect(verdict.outcome).to.equal("verified");
+    expect(verdict.atRisk).to.equal(false);
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(3);
+    expect(verdict.reachedThreshold).to.equal(true);
+  });
+
+  it("flags on the first negative when configured with threshold 1", () => {
+    // The escape hatch: an operator who trusts their Kubo setup can restore the
+    // old behaviour without a code change.
+    const verdict = decide(assignment({ lastHeartbeatAt: stale }), answer(false), 1);
+
+    expect(verdict.outcome).to.equal("at_risk");
+    expect(verdict.consecutiveConclusiveNegatives).to.equal(1);
+  });
+
+  it("clamps a non-positive threshold to 1 rather than never flagging", () => {
+    // A misconfigured 0 must not disable the at-risk path entirely.
+    const verdict = decide(assignment({ lastHeartbeatAt: stale }), answer(false), 0);
+
+    expect(verdict.outcome).to.equal("at_risk");
   });
 });

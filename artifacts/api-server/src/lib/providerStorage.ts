@@ -38,6 +38,13 @@ export interface AssignmentRecord {
   peerId: string;
   status: string;
   atRisk: boolean;
+  /**
+   * How many consecutive sweeps have concluded "peer not advertising". A single
+   * conclusive negative is not acted on (a cleanly-ended-but-early stream is
+   * indistinguishable from a completed search), so the oracle tracks this streak
+   * and only flags a deal once it reaches the configured threshold.
+   */
+  consecutiveConclusiveNegatives: number;
   verificationDetail: string | null;
   lastVerifiedAt: Date | null;
   createdAt: Date;
@@ -100,7 +107,26 @@ export interface ProviderStorageStore {
     id: number,
     atRisk: boolean,
     detail: string | null,
-    at: Date
+    at: Date,
+    /**
+     * The assignment's new consecutive-negative streak. The oracle computes it
+     * (it is the one that knows the previous value from the feed it just read),
+     * so this is the value to store, not a delta.
+     */
+    consecutiveConclusiveNegatives: number
+  ): Promise<AssignmentRecord | null>;
+  /**
+   * Advance only the consecutive-negative streak, leaving the stored verdict
+   * (`at_risk`, `verification_detail`, `last_verified_at`) untouched.
+   *
+   * Needed for the below-threshold case: a conclusive negative that has not yet
+   * been seen enough times in a row must move the counter forward, but must not
+   * be written as a verdict — there is no verdict yet. Reusing `recordVerdict`
+   * for it would either clear an existing `at_risk` or invent a detail.
+   */
+  recordNegativeStreak(
+    id: number,
+    consecutiveConclusiveNegatives: number
   ): Promise<AssignmentRecord | null>;
 }
 

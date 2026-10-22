@@ -63,6 +63,7 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
       peerId: row.peerId,
       status: row.status ?? "assigned",
       atRisk: row.atRisk ?? false,
+      consecutiveConclusiveNegatives: row.consecutiveConclusiveNegatives ?? 0,
       verificationDetail: row.verificationDetail ?? null,
       lastVerifiedAt: row.lastVerifiedAt ?? null,
       createdAt: row.createdAt ?? new Date("2024-06-01T00:00:00.000Z"),
@@ -142,13 +143,25 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
     id: number,
     atRisk: boolean,
     detail: string | null,
-    at: Date
+    at: Date,
+    consecutiveConclusiveNegatives: number
   ): Promise<AssignmentRecord | null> {
     const assignment = this.assignments.find((a) => a.id === id);
     if (!assignment) return null;
     assignment.atRisk = atRisk;
     assignment.verificationDetail = detail;
     assignment.lastVerifiedAt = at;
+    assignment.consecutiveConclusiveNegatives = consecutiveConclusiveNegatives;
+    return assignment;
+  }
+
+  async recordNegativeStreak(
+    id: number,
+    consecutiveConclusiveNegatives: number
+  ): Promise<AssignmentRecord | null> {
+    const assignment = this.assignments.find((a) => a.id === id);
+    if (!assignment) return null;
+    assignment.consecutiveConclusiveNegatives = consecutiveConclusiveNegatives;
     return assignment;
   }
 }

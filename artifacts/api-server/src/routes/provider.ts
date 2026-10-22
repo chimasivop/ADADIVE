@@ -319,6 +319,7 @@ export function createProviderStorageRouter(
             peerId: assignment.peerId,
             status: assignment.status,
             atRisk: assignment.atRisk,
+            consecutiveConclusiveNegatives: assignment.consecutiveConclusiveNegatives,
             verificationDetail: assignment.verificationDetail,
             lastVerifiedAt: assignment.lastVerifiedAt?.toISOString() ?? null,
             // Per-peer liveness, not the provider row's: the assignment is bound
@@ -345,7 +346,11 @@ export function createProviderStorageRouter(
           res.status(400).json({ error: "Invalid assignment ID" });
           return;
         }
-        const body = req.body as { atRisk?: unknown; verificationDetail?: unknown };
+        const body = req.body as {
+          atRisk?: unknown;
+          verificationDetail?: unknown;
+          consecutiveConclusiveNegatives?: unknown;
+        };
         if (typeof body.atRisk !== "boolean") {
           res.status(400).json({ error: "atRisk must be a boolean" });
           return;
@@ -354,8 +359,18 @@ export function createProviderStorageRouter(
           typeof body.verificationDetail === "string"
             ? body.verificationDetail.slice(0, 2000)
             : null;
+        // The oracle computes the streak (it read the previous value from the
+        // feed); this validates rather than deriving, so a bad value is rejected
+        // instead of silently resetting the counter.
+        const streak = body.consecutiveConclusiveNegatives;
+        if (typeof streak !== "number" || !Number.isInteger(streak) || streak < 0) {
+          res
+            .status(400)
+            .json({ error: "consecutiveConclusiveNegatives must be a non-negative integer" });
+          return;
+        }
 
-        const updated = await store.recordVerdict(id, body.atRisk, detail, new Date());
+        const updated = await store.recordVerdict(id, body.atRisk, detail, new Date(), streak);
         if (!updated) {
           res.status(404).json({ error: "Assignment not found" });
           return;
@@ -364,8 +379,49 @@ export function createProviderStorageRouter(
           ok: true,
           assignmentId: updated.id,
           atRisk: updated.atRisk,
+          consecutiveConclusiveNegatives: updated.consecutiveConclusiveNegatives,
           verificationDetail: updated.verificationDetail,
           lastVerifiedAt: updated.lastVerifiedAt?.toISOString() ?? null,
+        });
+      } catch (err) {
+        fail(res, err);
+      }
+    }
+  );
+
+  // ── PATCH /internal/provider-assignments/:id/streak ────────────────────────
+  // Advance only the consecutive-negative streak, leaving the stored verdict
+  // alone. The oracle calls this for a conclusive negative that has not yet
+  // reached the threshold: the counter must move, but there is no verdict to
+  // write yet, and reusing the verdict route would clear an existing `at_risk`.
+  router.patch(
+    "/internal/provider-assignments/:id/streak",
+    async (req: Request, res: Response): Promise<void> => {
+      if (!internalAuth(req, res)) return;
+      try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          res.status(400).json({ error: "Invalid assignment ID" });
+          return;
+        }
+        const body = req.body as { consecutiveConclusiveNegatives?: unknown };
+        const streak = body.consecutiveConclusiveNegatives;
+        if (typeof streak !== "number" || !Number.isInteger(streak) || streak < 0) {
+          res
+            .status(400)
+            .json({ error: "consecutiveConclusiveNegatives must be a non-negative integer" });
+          return;
+        }
+        const updated = await store.recordNegativeStreak(id, streak);
+        if (!updated) {
+          res.status(404).json({ error: "Assignment not found" });
+          return;
+        }
+        res.json({
+          ok: true,
+          assignmentId: updated.id,
+          atRisk: updated.atRisk,
+          consecutiveConclusiveNegatives: updated.consecutiveConclusiveNegatives,
         });
       } catch (err) {
         fail(res, err);

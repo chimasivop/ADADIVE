@@ -8,12 +8,20 @@
  *   2. For each, ask the DHT whether the assigned peer is advertising the CID.
  *   3. Apply the decision rule (`decideAssignment`) and write the verdict back.
  *
- * Two properties matter more than the loop:
+ * Three properties matter more than the loop:
  *
  *   - **A DHT transport failure leaves the stored state alone.** Reporting
  *     `unknown` must not overwrite a previous good or bad verdict — otherwise a
- *     Kubo restart would blank every deal's status. So the write is skipped for
- *     `unknown` verdicts; only `verified`/`at_risk` are persisted.
+ *     Kubo restart would blank every deal's status. So the *verdict* (the
+ *     at-risk flag and detail) is skipped for `unknown`; only
+ *     `verified`/`at_risk` verdicts are persisted.
+ *
+ *   - **The negative streak is persisted even for `unknown`.** This is the one
+ *     thing that must be written on a below-threshold `unknown`, and it is the
+ *     whole point of the streak: the counter has to advance across sweeps or it
+ *     can never reach the threshold. A DHT transport failure carries the streak
+ *     forward unchanged (`decideAssignment` returns the previous value), so a
+ *     transient error neither advances nor resets it.
  *
  *   - **One failing assignment does not abort the tick.** Each is wrapped, and a
  *     throw is logged and recorded as `unknown` for that assignment only.
@@ -40,6 +48,12 @@ export interface ProviderVerificationDeps {
   registry: SecretRegistry;
   /** A heartbeat older than this marks the node silent (one half of at-risk). */
   heartbeatStaleMs: number;
+  /**
+   * How many consecutive conclusive-negative sweeps are required before a deal
+   * is flagged at-risk. Default 3; see `decideAssignment` for why one is not
+   * enough.
+   */
+  consecutiveNegatives: number;
   now?: () => Date;
 }
 
@@ -116,24 +130,42 @@ export class ProviderVerificationService {
 
     const verdict = decideAssignment(assignment, findProvs, {
       heartbeatStaleMs: this.deps.heartbeatStaleMs,
+      consecutiveNegatives: this.deps.consecutiveNegatives,
       now: this.deps.now,
     });
 
-    // Only persist a real verdict. An `unknown` leaves last_verified_at and the
-    // at-risk flag exactly as they were.
-    if (verdict.outcome !== "unknown") {
-      try {
+    // Two different writes, deliberately:
+    //
+    //   - A real verdict (`verified`/`at_risk`) writes at_risk + detail + the
+    //     streak, and only then is `last_verified_at` touched.
+    //   - A below-threshold conclusive negative is `unknown` — there is no verdict
+    //     — but its streak must still advance, or the counter could never reach
+    //     the threshold. That write touches *only* the counter, so it cannot
+    //     clear a stored `at_risk`.
+    //
+    // The streak write is skipped when the value is unchanged, which is the case
+    // for every inconclusive answer and every transport failure: those carry the
+    // previous streak forward, so writing would be a pointless PATCH per sweep.
+    const previousStreak = assignment.consecutiveConclusiveNegatives ?? 0;
+    try {
+      if (verdict.outcome !== "unknown") {
         await this.deps.feed.recordVerdict(
           assignment.assignmentId,
           verdict.atRisk,
-          verdict.detail
+          verdict.detail,
+          verdict.consecutiveConclusiveNegatives
         );
-      } catch (err) {
-        this.deps.logger.error("could not record provider verification verdict", {
-          assignmentId: assignment.assignmentId,
-          error: describeFindProvsError(err, this.deps.registry),
-        });
+      } else if (verdict.consecutiveConclusiveNegatives !== previousStreak) {
+        await this.deps.feed.recordNegativeStreak(
+          assignment.assignmentId,
+          verdict.consecutiveConclusiveNegatives
+        );
       }
+    } catch (err) {
+      this.deps.logger.error("could not record provider verification verdict", {
+        assignmentId: assignment.assignmentId,
+        error: describeFindProvsError(err, this.deps.registry),
+      });
     }
 
     if (verdict.outcome === "at_risk") {

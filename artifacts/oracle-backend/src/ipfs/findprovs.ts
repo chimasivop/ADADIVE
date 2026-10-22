@@ -42,6 +42,32 @@
  * errored one. Anything unrecognised, empty, or truncated-with-no-response is
  * likewise inconclusive. Detail is carried in `FindProvsResult.detail`, and an
  * inconclusive answer never writes a verdict (see `ProviderVerificationService`).
+ *
+ * ## Transport completion vs truncation, and why a streak is still needed
+ *
+ * There *is* one reliable transport-level signal, and this client uses it: a
+ * chunked response that is cut off before its terminating chunk makes undici
+ * reject the body read (`TypeError: terminated`; a stalled one gives
+ * `TimeoutError`), whereas a clean end resolves. That difference is exactly what
+ * the terminating chunk exists to express, and the read is wrapped below so an
+ * aborted body becomes a `FindProvsTransportError` (→ `unknown`) instead of a
+ * bare `TypeError` that the service would re-throw.
+ *
+ * That signal does not close the hole the review described, though. It only
+ * catches a body cut off *mid-transfer*. A server that ends the response cleanly
+ * but early — Kubo's query channel closing after the first event, a proxy
+ * flushing a partial stream with a valid terminator — produces a byte stream
+ * identical to a completed search. At the HTTP layer there is nothing to detect,
+ * and there is no application-level sentinel to fall back on (above). So a
+ * `conclusive` answer here means only "a well-formed, cleanly-ended stream named
+ * no providers", not "the search provably finished".
+ *
+ * Because that residual ambiguity cannot be resolved at this layer, a single
+ * conclusive negative is deliberately *not* enough to flag a deal: the
+ * verification service requires `consecutiveConclusiveNegatives` in a row before
+ * it will act (see `decideAssignment`). Do not "fix" this by trying to detect
+ * completion here — it is not detectable, and a future reviewer should not have
+ * to re-derive that.
  */
 
 import { safeErrorMessage, type SecretRegistry } from "../security/redact";
@@ -217,10 +243,25 @@ export class KuboFindProvsClient {
 
     this.options.logger.debug("findprovs request", { url: url.toString(), cid });
 
-    const response = await this.fetchImpl(url.toString(), {
-      method: "POST",
-      signal: AbortSignal.timeout(this.options.timeoutMs),
-    });
+    // The request itself can fail before any body exists: a connection refused,
+    // or a socket torn down at (or just after) the response. undici surfaces that
+    // as a bare `TypeError: fetch failed`, and the abort signal as a
+    // `TimeoutError`. Both are transport failures — "we did not get an answer" —
+    // so they are mapped here too. Letting either escape unwrapped is the same
+    // bug as the body-read case below: the service re-throws anything that is not
+    // a `FindProvsTransportError`, aborting the whole sweep for one dead socket.
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url.toString(), {
+        method: "POST",
+        signal: AbortSignal.timeout(this.options.timeoutMs),
+      });
+    } catch (err) {
+      throw new FindProvsTransportError(
+        `could not reach Kubo routing/findprovs: ` +
+          `${safeErrorMessage(err, this.options.registry)}`
+      );
+    }
 
     if (!response.ok) {
       throw new FindProvsTransportError(
@@ -229,7 +270,30 @@ export class KuboFindProvsClient {
       );
     }
 
-    const text = await response.text();
+    // Reading the body can itself fail *after* a 200: a truncated response makes
+    // undici reject the read with `TypeError: terminated` (its socket closed
+    // before the terminating chunk), and a stalled one rejects with a
+    // `TimeoutError` from the abort signal. Both mean "we did not get a whole
+    // answer", so they are mapped to the transport error rather than escaping as
+    // a bare `TypeError` — which `ProviderVerificationService` would re-throw,
+    // aborting the whole sweep instead of recording one `unknown` and moving on.
+    //
+    // This is also the one *reliable* transport signal available: a clean chunked
+    // end is distinguishable from an aborted one (that is exactly what the
+    // terminating chunk is for). It is not sufficient on its own, though — a
+    // stream that is ended cleanly but early is byte-identical to a completed
+    // search, which is why the caller also requires a sustained pattern (see
+    // `decideAssignment`).
+    let text: string;
+    try {
+      text = await response.text();
+    } catch (err) {
+      throw new FindProvsTransportError(
+        `could not read the findprovs response body: ` +
+          `${safeErrorMessage(err, this.options.registry)}`
+      );
+    }
+
     const peers = new Set<string>();
     let sawResult = false;
     let sawError = false;

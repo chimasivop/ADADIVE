@@ -114,6 +114,13 @@ export interface ProviderVerificationConfig {
   intervalMs: number;
   /** A heartbeat older than this marks the node silent (half of at-risk). */
   heartbeatStaleMs: number;
+  /**
+   * How many *consecutive* conclusive-negative sweeps are required before a deal
+   * is flagged at-risk. A single conclusive negative is not trusted, because a
+   * findprovs stream that ends cleanly but early is indistinguishable from a
+   * completed search (see the oracle's `ipfs/findprovs.ts`). Default 3.
+   */
+  consecutiveNegatives: number;
   /** Providers to request from the DHT; a small number suffices. */
   numProviders: number;
   timeoutMs: number;
@@ -321,6 +328,15 @@ function loadProviderVerificationConfig(
       env,
       "PROVIDER_HEARTBEAT_STALE_MS",
       3 * 60_000
+    ),
+    // 3 by default: one conclusive negative is not trusted (a cleanly-ended-but-
+    // early findprovs stream is indistinguishable from a completed search), so a
+    // deal needs a *sustained* absence before it is flagged. Values below 1 are
+    // clamped to 1 by `decideAssignment`, which restores flag-on-first-negative.
+    consecutiveNegatives: intFromEnv(
+      env,
+      "PROVIDER_VERIFICATION_CONSECUTIVE_NEGATIVES",
+      3
     ),
     numProviders: intFromEnv(env, "FINDPROVS_NUM_PROVIDERS", 20),
     timeoutMs: intFromEnv(env, "FINDPROVS_TIMEOUT_MS", 15_000),
