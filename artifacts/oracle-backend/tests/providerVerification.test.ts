@@ -114,6 +114,19 @@ describe("decideAssignment", () => {
     expect(verdict.detail).to.contain("inconclusive");
   });
 
+  it("reports unknown, not verified, on an inconclusive answer with a FRESH heartbeat", async () => {
+    // Regression: the inconclusive check used to be gated behind `heartbeatStale`,
+    // so a fresh heartbeat fell through to the final `verified` return and wrote
+    // `atRisk: false` on a partial answer — silently clearing a stored at-risk
+    // flag although nothing had been confirmed. An inconclusive answer must be
+    // decided before the heartbeat is consulted, exactly like a transport failure.
+    const verdict = decide(assignment({ lastHeartbeatAt: NOW.toISOString() }), inconclusive);
+
+    expect(verdict.outcome).to.equal("unknown");
+    expect(verdict.atRisk).to.equal(null);
+    expect(verdict.detail).to.contain("inconclusive");
+  });
+
   it("reports unknown (not at-risk) when the DHT could not be queried", async () => {
     // A transport failure must leave the stored state alone rather than blank a
     // previous good verdict on a Kubo blip.

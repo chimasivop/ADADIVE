@@ -20,7 +20,10 @@
  *
  *   - An **inconclusive** findprovs answer (e.g. the search hit its provider
  *     limit) never flags a deal. Flagging on an incomplete answer would turn a
- *     busy DHT into false positives across the whole network.
+ *     busy DHT into false positives across the whole network. It is also not a
+ *     *positive* result: an inconclusive answer is decided **before** the
+ *     heartbeat is consulted, so it can neither flag a deal nor clear a stored
+ *     flag. See `decideAssignment`.
  *
  *   - A **single conclusive negative** is not enough either. `findprovs` has no
  *     terminal sentinel, and a response that ends cleanly but early is
@@ -100,8 +103,11 @@ export interface StreakOutcome {
  * Decide a single assignment's state.
  *
  * `findProvs` is the already-resolved DHT answer, or `null` when the query
- * could not be completed (transport error) — in which case the verdict is
- * `unknown` and the caller must not change the stored state.
+ * could not be completed (transport error). **Anything that is not a conclusive
+ * answer** — a transport error (`null`) or an inconclusive result — yields
+ * `unknown`, and the caller must not change the stored verdict. Both are
+ * checked *before* the heartbeat, so a fresh heartbeat can never turn a partial
+ * answer into a `verified`/`atRisk: false` write that clears a stored flag.
  *
  * The returned value also carries the new consecutive-negative streak, which the
  * caller must persist *even when the outcome is `unknown`* (below the
@@ -130,6 +136,26 @@ export function decideAssignment(
     };
   }
 
+  // An inconclusive answer is not evidence in *either* direction, so it is
+  // decided before the heartbeat is even consulted — exactly like a transport
+  // failure above, and for the same reason: the stored verdict must not be
+  // overwritten by a guess. This has to come first. Gating it behind
+  // `heartbeatStale` used to let a fresh heartbeat fall through to the
+  // `verified` return below, writing `atRisk: false` on a partial answer and
+  // silently clearing a previously-stored at-risk flag even though nothing was
+  // confirmed. The streak is carried forward untouched.
+  if (!findProvs.conclusive) {
+    return {
+      outcome: "unknown",
+      atRisk: null,
+      detail:
+        `the DHT answer for ${assignment.cid} was inconclusive ` +
+        `(${findProvs.detail}); not flagging on a partial answer`,
+      consecutiveConclusiveNegatives: previousStreak,
+      reachedThreshold: false,
+    };
+  }
+
   // 1. Is the heartbeat stale? No heartbeat at all is treated as stale: a node
   //    that has never reported in cannot be assumed alive.
   const heartbeatAgeMs =
@@ -139,18 +165,13 @@ export function decideAssignment(
   const heartbeatStale =
     !Number.isFinite(heartbeatAgeMs) || heartbeatAgeMs > options.heartbeatStaleMs;
 
-  // 2. Is the peer still advertising? An inconclusive answer is not evidence of
-  //    absence, so it can never contribute to an at-risk verdict.
-  const peerMissing = findProvs.conclusive && !findProvs.advertising;
+  // 2. Is the peer still advertising? From here the answer is conclusive, so a
+  //    non-advertising result *is* evidence of absence.
+  const peerMissing = !findProvs.advertising;
 
   // The streak only moves on a *conclusive* answer: a conclusive negative
-  // advances it, a conclusive positive resets it, and an inconclusive answer
-  // leaves it alone (it is not evidence in either direction).
-  const streak = peerMissing
-    ? previousStreak + 1
-    : findProvs.conclusive
-      ? 0
-      : previousStreak;
+  // advances it, a conclusive positive resets it.
+  const streak = peerMissing ? previousStreak + 1 : 0;
   const reachedThreshold = peerMissing && streak >= threshold;
 
   if (heartbeatStale && peerMissing && reachedThreshold) {
@@ -181,18 +202,6 @@ export function decideAssignment(
         `heartbeat is stale and ${findProvs.detail}, but that is only ` +
         `${streak} of ${threshold} consecutive conclusive negatives ` +
         `required; not flagging yet`,
-      consecutiveConclusiveNegatives: streak,
-      reachedThreshold,
-    };
-  }
-
-  if (heartbeatStale && !findProvs.conclusive) {
-    return {
-      outcome: "unknown",
-      atRisk: null,
-      detail:
-        `heartbeat is stale but the DHT answer was inconclusive ` +
-        `(${findProvs.detail}); not flagging on a partial answer`,
       consecutiveConclusiveNegatives: streak,
       reachedThreshold,
     };

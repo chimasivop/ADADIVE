@@ -235,6 +235,15 @@ before; the provider-agent path only engages once a `peer_id` exists.
   `unknown` and leaves the stored state untouched. The flag is explicit
   (`deal_assignments.at_risk` + `verification_detail`), never a silent failure.
 
+  **Order matters in `decideAssignment`.** A transport failure (`null`) and an
+  inconclusive answer are both decided *before* the heartbeat is read, because
+  neither is a verdict in either direction. Do not fold the inconclusive case
+  into the heartbeat branches: gating it on `heartbeatStale` lets a *fresh*
+  heartbeat fall through to the `verified` return, writing `atRisk: false` on a
+  partial answer and silently clearing a stored at-risk flag. Two tests pin this
+  (`providerVerification`/`providerVerificationService`, "…FRESH heartbeat…");
+  both fail against the gated ordering, and nothing else does.
+
   The streak is not belt-and-braces: it is the mitigation for a gap that cannot
   be closed at the transport level. See the findprovs trap below.
 

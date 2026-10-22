@@ -41,10 +41,26 @@ class FakeFeed {
   }> = [];
   /** Streak-only writes, kept apart from full verdicts so tests can tell them apart. */
   readonly streakWrites: Array<{ assignmentId: number; streak: number }> = [];
+  /**
+   * The verdict currently "stored" in the api-server's row, so a test can assert
+   * a pre-existing at-risk flag *survived* a sweep, not merely that no write
+   * method was called. Seeded via the constructor.
+   */
+  readonly stored = new Map<number, { atRisk: boolean; detail: string; streak: number }>();
   private readonly assignments: AssignmentView[];
 
-  constructor(assignments: AssignmentView[]) {
+  constructor(
+    assignments: AssignmentView[],
+    stored?: Array<{ assignmentId: number; atRisk: boolean; detail: string; streak: number }>
+  ) {
     this.assignments = assignments;
+    for (const row of stored ?? []) {
+      this.stored.set(row.assignmentId, {
+        atRisk: row.atRisk,
+        detail: row.detail,
+        streak: row.streak,
+      });
+    }
   }
 
   async listAssignments(): Promise<AssignmentView[]> {
@@ -58,10 +74,15 @@ class FakeFeed {
     streak: number
   ): Promise<void> {
     this.verdicts.push({ assignmentId, atRisk, detail, streak });
+    this.stored.set(assignmentId, { atRisk, detail, streak });
   }
 
   async recordNegativeStreak(assignmentId: number, streak: number): Promise<void> {
     this.streakWrites.push({ assignmentId, streak });
+    const existing = this.stored.get(assignmentId);
+    // Mirrors the streak-only route: the counter moves, the verdict does not.
+    if (existing) existing.streak = streak;
+    else this.stored.set(assignmentId, { atRisk: false, detail: "", streak });
   }
 }
 
@@ -103,9 +124,10 @@ function assignment(overrides: Partial<AssignmentView> = {}): AssignmentView {
 function buildService(
   assignments: AssignmentView[],
   findProvs: FakeFindProvs,
-  consecutiveNegatives = 1
+  consecutiveNegatives = 1,
+  stored?: Array<{ assignmentId: number; atRisk: boolean; detail: string; streak: number }>
 ): { service: ProviderVerificationService; feed: FakeFeed } {
-  const feed = new FakeFeed(assignments);
+  const feed = new FakeFeed(assignments, stored);
   const service = new ProviderVerificationService({
     feed: feed as unknown as InternalProviderFeed,
     findProvs: findProvs as unknown as KuboFindProvsClient,
@@ -215,6 +237,40 @@ describe("ProviderVerificationService", () => {
       // existing at-risk flag (or its absence) is untouched.
       expect(feed.verdicts, `detail: ${detail}`).to.have.length(0);
     }
+  });
+
+  it("leaves a stored at-risk verdict untouched when a FRESH heartbeat meets an inconclusive answer", async () => {
+    // Regression for the review finding: the inconclusive check used to be gated
+    // behind `heartbeatStale`, so a *fresh* heartbeat plus an inconclusive answer
+    // fell through to the `verified` return and wrote `atRisk: false`, silently
+    // clearing a stored at-risk flag although nothing had been confirmed. The
+    // verdict must be decided before the heartbeat is consulted, exactly like a
+    // transport failure.
+    const { service, feed } = buildService(
+      // Fresh heartbeat: not stale, so the old code took the `verified` branch.
+      [assignment({ lastHeartbeatAt: NOW.toISOString(), consecutiveConclusiveNegatives: 3 })],
+      new FakeFindProvs({
+        [CID]: { advertising: false, providerCount: 20, conclusive: false, detail: "hit the limit" },
+      }),
+      3,
+      // A previous sweep flagged this deal; the flag must survive.
+      [{ assignmentId: 1, atRisk: true, detail: "stale and not advertising", streak: 3 }]
+    );
+
+    const summary = await service.runOnce();
+
+    expect(summary.unknown).to.equal(1);
+    expect(summary.verified).to.equal(0);
+    // Neither write happens: no verdict (which would clear the flag) and no
+    // streak-only PATCH (the streak is unchanged at 3).
+    expect(feed.verdicts).to.have.length(0);
+    expect(feed.streakWrites).to.have.length(0);
+    // And the stored verdict is literally the same row.
+    expect(feed.stored.get(1)).to.deep.equal({
+      atRisk: true,
+      detail: "stale and not advertising",
+      streak: 3,
+    });
   });
 
   it("processes every assignment and counts each outcome", async () => {
