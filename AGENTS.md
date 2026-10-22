@@ -199,6 +199,9 @@ before; the provider-agent path only engages once a `peer_id` exists.
   database — an unguarded `ALTER TABLE providers` fails there with
   `relation "providers" does not exist`. Use `SERIAL`, not `BIGSERIAL`: `push`
   diffs against the Drizzle schema and would "correct" a type mismatch.
+  `0003_assignment_negative_streak.sql` adds
+  `deal_assignments.consecutive_conclusive_negatives` (`INTEGER NOT NULL
+  DEFAULT 0`) and is guarded the same way, for the same reason.
 - **api-server** — `routes/provider.ts` exports
   `createProviderStorageRouter(store)`. The handlers depend on the
   `ProviderStorageStore` seam (`lib/providerStorage.ts`), not on `db`, so they
@@ -206,7 +209,10 @@ before; the provider-agent path only engages once a `peer_id` exists.
   from `routes/index.ts`. Endpoints: `GET /api/provider/assignments`,
   `POST /api/provider/confirm-pin`, `POST /api/provider/heartbeat`,
   `POST /api/providers` (now also sets `peerId`), `PATCH /api/providers/:id/node`,
-  plus the token-guarded `GET|PATCH /api/internal/provider-assignments`.
+  plus the token-guarded `GET|PATCH /api/internal/provider-assignments` and
+  `PATCH /api/internal/provider-assignments/:id/streak`. The streak route exists
+  so a below-threshold conclusive negative can advance the counter *without*
+  writing a verdict — the full-verdict route would clear a stored `at_risk`.
 - **oracle-backend** — `ipfs/findprovs.ts` (hand-written Kubo client: the oracle
   is CJS and `kubo-rpc-client` is ESM-only), `provider/providerVerification.ts`
   (the pure decision rule), `provider/providerVerificationService.ts`,
@@ -221,10 +227,16 @@ before; the provider-agent path only engages once a `peer_id` exists.
   local Kubo node through `kubo-rpc-client`, confirms, and heartbeats. `--once`
   runs a single cycle and exits.
 - **The at-risk rule**: a deal is flagged only when the heartbeat is stale
-  **and** `findprovs` conclusively no longer shows the peer. An inconclusive DHT
-  answer (search hit its limit) never flags; a transport failure is `unknown`
-  and leaves the stored state untouched. The flag is explicit
+  **and** `findprovs` has conclusively failed to show the peer on
+  `consecutiveNegatives` sweeps **in a row** (config
+  `PROVIDER_VERIFICATION_CONSECUTIVE_NEGATIVES`, default 3; the running count
+  lives on `deal_assignments.consecutive_conclusive_negatives`). An inconclusive
+  DHT answer (search hit its limit) never flags; a transport failure is
+  `unknown` and leaves the stored state untouched. The flag is explicit
   (`deal_assignments.at_risk` + `verification_detail`), never a silent failure.
+
+  The streak is not belt-and-braces: it is the mitigation for a gap that cannot
+  be closed at the transport level. See the findprovs trap below.
 
 Three traps worth knowing before touching this layer:
 
@@ -284,6 +296,37 @@ Three traps worth knowing before touching this layer:
   `Responses`) so `providerCount` is "ids seen", not a strict provider count;
   that errs toward `advertising: true`, i.e. toward *not* flagging. Only the
   `sawResult`/`sawError` decision, not the id set, gates conclusiveness.
+
+- **A truncated read is not the same as a completed search — but only *some*
+  truncations are visible.** Measured against a real socket (a real chunked
+  response, not a stub `Response`), because the distinction is made by undici's
+  body reader:
+  - A connection cut **mid-body** (before the terminating chunk) *is* detected:
+    `response.text()` rejects with `TypeError: terminated`, and the client maps
+    that — and a `TimeoutError` from the abort signal, and a `fetch` rejection
+    like `TypeError: fetch failed` when the socket dies at the response — to
+    `FindProvsTransportError`. This matters beyond tidiness: the service
+    re-throws anything that is *not* a transport error, so a bare `TypeError`
+    escaping here would abort the whole sweep instead of recording one
+    `unknown`. Both the request call and the body read are wrapped for this
+    reason; do not unwrap them.
+  - A stream that ends **cleanly but early** (a valid terminator, but the search
+    never completed) is *not* detectable. The bytes are byte-identical to a
+    finished search, and `findprovs` has no terminal sentinel to check, so no
+    amount of parser hardening closes this. It is pinned as a test
+    (`findprovs.test.ts`, "cannot tell a cleanly-ended-but-early stream…") so it
+    is not mistaken for a fix.
+
+  That residual gap is why a *single* conclusive negative is not trusted and the
+  decision layer requires `consecutiveNegatives` of them in a row. The streak
+  advances only on a conclusive negative, resets to 0 on a conclusive positive,
+  and is left untouched by an inconclusive answer or a transport failure (so
+  neither a flaky DHT nor a Kubo blip can manufacture or hide a verdict). It is
+  persisted even when the verdict is `unknown` (below threshold) via the
+  streak-only route, which cannot clear a stored `at_risk`; the full-verdict
+  route writes `at_risk` + detail + streak together. Setting
+  `PROVIDER_VERIFICATION_CONSECUTIVE_NEGATIVES=1` restores
+  flag-on-first-negative for an operator who trusts their Kubo setup.
 
 `dev-up.sh` sets a shared dev `INTERNAL_API_TOKEN` and passes it to both
 services, so the internal-feed channel is never open. The oracle's findprovs
