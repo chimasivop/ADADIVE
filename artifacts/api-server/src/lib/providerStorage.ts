@@ -64,6 +64,30 @@ export interface AssignmentView {
   provider: ProviderRecord;
 }
 
+/**
+ * The provider metadata the reliability evidence needs.
+ *
+ * Deliberately a *superset* of `ProviderRecord` (adds name/status/region/
+ * reputation/uptime), and deliberately without `walletAddress`: the advisor has
+ * no business knowing who owns the row, only how reliable it looks.
+ */
+export interface ReliabilityProviderRecord {
+  id: number;
+  name: string;
+  status: string;
+  region: string;
+  reputationScore: number | null;
+  uptimePercent: number | null;
+  peerId: string | null;
+  lastHeartbeatAt: Date | null;
+}
+
+/** A provider's metadata plus every assignment it owns, ready to format. */
+export interface ProviderReliabilitySnapshot {
+  provider: ReliabilityProviderRecord;
+  assignments: AssignmentView[];
+}
+
 export interface NewProviderInput {
   name: string;
   nodeId: string;
@@ -85,6 +109,15 @@ export interface ProviderStorageStore {
   listPendingAssignments(providerId: number): Promise<AssignmentView[]>;
   /** Every assignment, for the oracle's verification sweep. */
   listAllAssignments(): Promise<AssignmentView[]>;
+
+  /**
+   * A provider's metadata plus every assignment it owns, for the read-only
+   * reliability evidence the advisor consumes. Read-only: no method here
+   * mutates, and none returns wallet keys or file contents.
+   */
+  getProviderReliabilitySnapshot(
+    providerId: number
+  ): Promise<ProviderReliabilitySnapshot | null>;
 
   /** The deal with this id, to check a confirm's CID matches the assignment. */
   findDealById(id: number): Promise<DealRecord | null>;

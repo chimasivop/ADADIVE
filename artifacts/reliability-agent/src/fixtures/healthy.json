@@ -1,0 +1,17 @@
+{
+  "id": "chatcmpl-fixture-healthy",
+  "object": "chat.completion",
+  "created": 1750000000,
+  "model": "muse-spark-1.3",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"low\",\"reasons\":[\"The node reported a heartbeat recently, so it is currently live.\",\"No assignment is flagged at-risk and the consecutive-negative streak is zero.\",\"Reputation and uptime are high.\"],\"evidence_cited\":[\"heartbeatAgeMs=42000\",\"heartbeatStale=false\",\"summary.atRiskCount=0\",\"summary.maxConsecutiveConclusiveNegatives=0\"],\"uncertain\":[\"The evidence carries only the latest heartbeat, not a history, so a past outage would not be visible.\"],\"recommended_action\":\"No action needed; keep monitoring the heartbeat.\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 }
+}

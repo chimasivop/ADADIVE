@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    // Standalone, like the api-server's test config: ts-node runs CommonJS, and
+    // the base's `moduleResolution: bundler` + `customConditions` cannot be used
+    // with it. `moduleResolution: node` does not read `package.json` `exports`,
+    // so `@workspace/db`'s subpath is mapped explicitly.
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["mocha", "node"],
+    "paths": {
+      "@workspace/db": ["../lib/db/src/index.ts"],
+      "@workspace/db/schema": ["../lib/db/src/schema/index.ts"]
+    }
+  },
+  "include": ["seed-demo-providers.ts", "tests/**/*.ts"]
+}

@@ -801,6 +801,43 @@ importers:
         specifier: ~5.9.3
         version: 5.9.3
 
+  artifacts/reliability-agent:
+    dependencies:
+      zod:
+        specifier: 'catalog:'
+        version: 3.25.76
+    devDependencies:
+      '@types/chai':
+        specifier: ^4.3.0
+        version: 4.3.20
+      '@types/mocha':
+        specifier: ^9.1.0
+        version: 9.1.1
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.4
+      chai:
+        specifier: ^4.5.0
+        version: 4.5.0
+      esbuild:
+        specifier: 0.27.3
+        version: 0.27.3
+      mocha:
+        specifier: ^10.8.2
+        version: 10.8.2
+      ts-mocha:
+        specifier: ^10.0.0
+        version: 10.1.0(mocha@10.8.2)
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@25.9.4)(typescript@5.9.3)
+      tsx:
+        specifier: 'catalog:'
+        version: 4.22.4
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+
   lib/api-client-react:
     dependencies:
       '@tanstack/react-query':
@@ -917,13 +954,44 @@ importers:
         version: 5.9.3
 
   scripts:
+    dependencies:
+      '@workspace/db':
+        specifier: workspace:*
+        version: link:../lib/db
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@types/pg@8.20.0)(pg@8.22.0)
+      pg:
+        specifier: ^8.20.0
+        version: 8.22.0
     devDependencies:
+      '@types/chai':
+        specifier: ^4.3.0
+        version: 4.3.20
+      '@types/mocha':
+        specifier: ^9.1.0
+        version: 9.1.1
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.4
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
+      chai:
+        specifier: ^4.5.0
+        version: 4.5.0
+      mocha:
+        specifier: ^10.8.2
+        version: 10.8.2
+      ts-mocha:
+        specifier: ^10.0.0
+        version: 10.1.0(mocha@10.8.2)
       tsx:
         specifier: 'catalog:'
         version: 4.22.4
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
 packages:
 

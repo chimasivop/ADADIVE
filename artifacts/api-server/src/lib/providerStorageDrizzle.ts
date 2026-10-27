@@ -18,6 +18,7 @@ import type {
   DealRecord,
   NewProviderInput,
   ProviderRecord,
+  ProviderReliabilitySnapshot,
   ProviderStorageStore,
 } from "./providerStorage";
 
@@ -130,6 +131,44 @@ export const drizzleProviderStorageStore: ProviderStorageStore = {
         eq(dealAssignmentsTable.providerId, providersTable.id)
       );
     return rows;
+  },
+
+  async getProviderReliabilitySnapshot(
+    providerId: number
+  ): Promise<ProviderReliabilitySnapshot | null> {
+    // The provider row is read on its own, not inner-joined: a provider with no
+    // assignments still has a reliability snapshot (all-zero counts), whereas
+    // `listAllAssignments` only returns providers that have assignments.
+    const [provider] = await db
+      .select({
+        id: providersTable.id,
+        name: providersTable.name,
+        status: providersTable.status,
+        region: providersTable.region,
+        reputationScore: providersTable.reputationScore,
+        uptimePercent: providersTable.uptimePercent,
+        peerId: providersTable.peerId,
+        lastHeartbeatAt: providersTable.lastHeartbeatAt,
+      })
+      .from(providersTable)
+      .where(eq(providersTable.id, providerId));
+    if (!provider) return null;
+
+    const rows = await db
+      .select({
+        assignment: assignmentColumns,
+        deal: dealColumns,
+        provider: providerColumns,
+      })
+      .from(dealAssignmentsTable)
+      .innerJoin(dealsTable, eq(dealAssignmentsTable.dealId, dealsTable.id))
+      .innerJoin(
+        providersTable,
+        eq(dealAssignmentsTable.providerId, providersTable.id)
+      )
+      .where(eq(dealAssignmentsTable.providerId, providerId));
+
+    return { provider, assignments: rows };
   },
 
   async findDealById(id: number): Promise<DealRecord | null> {
