@@ -14,13 +14,28 @@ import type {
   DealRecord,
   NewProviderInput,
   ProviderRecord,
+  ProviderReliabilitySnapshot,
   ProviderStorageStore,
 } from "../../src/lib/providerStorage";
+
+/**
+ * A provider's reliability metadata. Seeded separately from `ProviderRecord`
+ * because the reliability snapshot reads columns (name, status, region, …) the
+ * other endpoints do not.
+ */
+interface SeededReliability {
+  name: string;
+  status: string;
+  region: string;
+  reputationScore: number | null;
+  uptimePercent: number | null;
+}
 
 export class InMemoryProviderStorage implements ProviderStorageStore {
   readonly providers: ProviderRecord[] = [];
   readonly deals: DealRecord[] = [];
   readonly assignments: AssignmentRecord[] = [];
+  readonly reliability = new Map<number, SeededReliability>();
 
   private providerSeq = 1;
   private dealSeq = 1;
@@ -35,7 +50,30 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
     };
     this.providers.push(provider);
     if (provider.id >= this.providerSeq) this.providerSeq = provider.id + 1;
+    // Give it reliability metadata by default, so the snapshot method works for
+    // every seeded provider without the caller having to remember.
+    if (!this.reliability.has(provider.id)) {
+      this.reliability.set(provider.id, {
+        name: `Provider ${provider.id}`,
+        status: "active",
+        region: "us-east",
+        reputationScore: 100,
+        uptimePercent: 99.9,
+      });
+    }
     return provider;
+  }
+
+  /** Override the reliability metadata for a seeded provider. */
+  seedReliability(providerId: number, row: Partial<SeededReliability>): void {
+    const current = this.reliability.get(providerId) ?? {
+      name: `Provider ${providerId}`,
+      status: "active",
+      region: "us-east",
+      reputationScore: 100,
+      uptimePercent: 99.9,
+    };
+    this.reliability.set(providerId, { ...current, ...row });
   }
 
   seedDeal(row: Partial<DealRecord> = {}): DealRecord {
@@ -111,6 +149,37 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
     return this.assignments
       .map((a) => this.view(a))
       .filter((v): v is AssignmentView => v !== null);
+  }
+
+  async getProviderReliabilitySnapshot(
+    providerId: number
+  ): Promise<ProviderReliabilitySnapshot | null> {
+    const provider = this.providers.find((p) => p.id === providerId);
+    if (!provider) return null;
+    const meta = this.reliability.get(providerId) ?? {
+      name: `Provider ${providerId}`,
+      status: "active",
+      region: "us-east",
+      reputationScore: null,
+      uptimePercent: null,
+    };
+    const assignments = this.assignments
+      .filter((a) => a.providerId === providerId)
+      .map((a) => this.view(a))
+      .filter((v): v is AssignmentView => v !== null);
+    return {
+      provider: {
+        id: provider.id,
+        name: meta.name,
+        status: meta.status,
+        region: meta.region,
+        reputationScore: meta.reputationScore,
+        uptimePercent: meta.uptimePercent,
+        peerId: provider.peerId,
+        lastHeartbeatAt: provider.lastHeartbeatAt,
+      },
+      assignments,
+    };
   }
 
   async findDealById(id: number): Promise<DealRecord | null> {

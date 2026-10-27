@@ -1,0 +1,17 @@
+{
+  "id": "chatcmpl-fixture-flaky",
+  "object": "chat.completion",
+  "created": 1750000001,
+  "model": "muse-spark-1.3",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"risk_level\":\"high\",\"reasons\":[\"The node's heartbeat is stale, so it has stopped reporting.\",\"At least one assignment is already flagged at-risk by the oracle.\",\"The consecutive conclusive-negative streak has reached the threshold.\"],\"evidence_cited\":[\"heartbeatStale=true\",\"heartbeatAgeMs=1800000\",\"summary.atRiskCount=1\",\"summary.maxConsecutiveConclusiveNegatives=3\"],\"uncertain\":[\"Whether the node is fully offline or merely not advertising the pinned content.\"],\"recommended_action\":\"Contact the provider about the stale node and the at-risk assignment before assigning new deals.\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 }
+}

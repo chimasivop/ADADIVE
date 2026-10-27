@@ -1,0 +1,45 @@
+{
+  "provider": {
+    "id": 4,
+    "name": "Demo Flaky One",
+    "status": "active",
+    "region": "eu-central",
+    "reputationScore": 62,
+    "uptimePercent": 87.2,
+    "peerId": "12D3KooW9yC5fg3vzipwvPps1VAzoUgS2MQ2BHZc6Bbi5TatRAZBHhJj3kLm",
+    "lastHeartbeatAt": "2025-01-01T00:00:00.000Z",
+    "heartbeatAgeMs": 1800000,
+    "heartbeatStale": true
+  },
+  "heartbeatStaleThresholdMs": 180000,
+  "consecutiveNegativesThreshold": 3,
+  "assignments": [
+    {
+      "assignmentId": 4,
+      "dealId": 4,
+      "dealStatus": "pending",
+      "cid": "bafybeigdyrzt5k5c5w3z2s4o5tq7vw3h4k5r6m7n8p9q0r1s2t3u4v5w6x7y",
+      "peerId": "12D3KooW9yC5fg3vzipwvPps1VAzoUgS2MQ2BHZc6Bbi5TatRAZBHhJj3kLm",
+      "status": "assigned",
+      "atRisk": true,
+      "consecutiveConclusiveNegatives": 3,
+      "verificationDetail": "heartbeat is stale (1800s old) and the DHT shows no provider for the CID (conclusive negative 3/3 sweeps in a row)",
+      "lastVerifiedAt": "2025-01-01T00:04:00.000Z",
+      "lastHeartbeatAt": "2025-01-01T00:00:00.000Z",
+      "heartbeatAgeMs": 1800000,
+      "heartbeatStale": true,
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "confirmedAt": null
+    }
+  ],
+  "summary": {
+    "assignmentCount": 1,
+    "confirmedCount": 0,
+    "pendingCount": 1,
+    "atRiskCount": 1,
+    "maxConsecutiveConclusiveNegatives": 3,
+    "neverHeartbeated": false,
+    "noRegisteredNode": false
+  },
+  "generatedAt": "2025-01-01T00:05:00.000Z"
+}

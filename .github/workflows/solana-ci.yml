@@ -19,6 +19,8 @@ on:
       - "artifacts/oracle-backend/**"
       - "artifacts/api-server/**"
       - "artifacts/provider-agent/**"
+      - "artifacts/reliability-agent/**"
+      - "scripts/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -35,6 +37,8 @@ on:
       - "artifacts/oracle-backend/**"
       - "artifacts/api-server/**"
       - "artifacts/provider-agent/**"
+      - "artifacts/reliability-agent/**"
+      - "scripts/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -121,3 +125,12 @@ jobs:
       # sign-in it reuses, all against fakes — no live IPFS node.
       - name: Provider agent tests
         run: pnpm --filter @workspace/provider-agent run test
+
+      # The reliability advisor: schema/validation, the fail-safe path, and mock
+      # mode. No network, no Meta key — every model call is a stub or a fixture.
+      - name: Reliability agent tests
+        run: pnpm --filter @workspace/reliability-agent run test
+
+      # The demo seeder's guards and provider specs. Pure — no database.
+      - name: Scripts tests
+        run: pnpm --filter @workspace/scripts run test

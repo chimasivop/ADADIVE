@@ -1,9 +1,20 @@
 {
-  "extends": "../tsconfig.base.json",
+  // Standalone, not extending tsconfig.base.json: the base sets
+  // `moduleResolution: bundler`, which cannot resolve the `@workspace/db`
+  // package subpaths this script imports at typecheck time. Mirrors
+  // artifacts/provider-agent/tsconfig.json.
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "types": ["node"]
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "customConditions": ["workspace"]
   },
-  "include": ["src"]
+  "include": ["seed-demo-providers.ts"]
 }
