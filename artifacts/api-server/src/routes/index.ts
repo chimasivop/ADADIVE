@@ -14,8 +14,10 @@ import { authMiddleware } from "../middlewares/authMiddleware";
 import { logger } from "../lib/logger";
 import {
   ADVISORY_DISCLAIMER,
+  assessFromFixture,
   createAdvisoryServiceFromEnv,
 } from "@workspace/reliability-agent";
+import { createDailyBudgetFromEnv, createRateLimitFromEnv } from "../lib/advisoryBudget";
 
 const router: IRouter = Router();
 
@@ -34,10 +36,10 @@ router.use(
 );
 
 // The read-only AI advisory surface. Built here too, so the Meta client, the
-// cache TTL and the concurrency cap are chosen once. `available` is false when
-// no Meta key is set and mock mode is off, and the route says so rather than
-// erroring — the UI hides the panel. Advisory only: this never signs, releases
-// funds, or changes a deal.
+// cache TTL, the concurrency cap and the demo's daily live-call budget are
+// chosen once. `available` is false when no Meta key is set and mock mode is
+// off, and the route says so rather than erroring — the UI hides the panel.
+// Advisory only: this never signs, releases funds, or changes a deal.
 const advisor = createAdvisoryServiceFromEnv(process.env);
 if (!advisor.available) {
   logger.info(
@@ -45,11 +47,20 @@ if (!advisor.available) {
     "reliability advisor is not configured; the advisory endpoint will report unavailable"
   );
 }
+// The daily live-call budget and the per-IP limit only bound *paid* calls, so a
+// mock advisor needs neither. They are still wired for a live advisor: the cap
+// is the global backstop on spend, and the fixture fallback keeps the panel
+// useful (with a clear "demo limit reached" note) once the cap is hit.
+const advisoryBudget = createDailyBudgetFromEnv(process.env);
 router.use(
   createAdvisoryRouter({
     store: drizzleProviderStorageStore,
     advisor: advisor.available ? advisor.service : null,
     disclaimer: ADVISORY_DISCLAIMER,
+    budget: advisor.available && !advisor.mock ? advisoryBudget : null,
+    rateLimit: createRateLimitFromEnv(process.env),
+    fallbackAssessment: (providerId, evidence) =>
+      assessFromFixture(evidence, advisor.model, logger),
   })
 );
 

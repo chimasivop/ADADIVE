@@ -7,6 +7,7 @@ import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Shell } from "@/components/layout/Shell";
+import { DevnetDemoBanner } from "@/components/DevnetDemoBanner";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RPC_ENDPOINT } from "@/lib/chain";
@@ -76,6 +77,7 @@ function App() {
             <WalletProvider>
               <TooltipProvider>
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <DevnetDemoBanner />
                   <Router />
                 </WouterRouter>
                 <Toaster />

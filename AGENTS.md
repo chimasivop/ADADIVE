@@ -461,8 +461,34 @@ it that way — that is what makes "only provider status data is sent" checkable
 rather than a claim.
 
 **Seed guard.** `scripts/seed-demo-providers.ts` writes rows, so it refuses
-`NODE_ENV=production` (no override) and any non-local database host
-(`ALLOW_DEMO_SEED=1` unlocks the latter only). It imports `@workspace/db`
-*type-only* and dynamically at call time, because `@workspace/db` requires
-`DATABASE_URL` at module load; a static import would make the guard tests need a
-database.
+`NODE_ENV=production` (no override) and any non-local database host. A host the
+repo docs name as production (`PRODUCTION_HOSTS`: the Supabase pooler/direct
+hosts from `artifacts/api-server/E2E_STATUS.md`, the Railway production
+api-server, `adadive.xyz`) is refused with **no** override. A deliberately
+disposable *remote* demo database needs a two-part confirmation —
+`DEMO_SEED_ALLOW_REMOTE=1` **and** `DEMO_SEED_CONFIRM_HOST` equal to the exact
+database host (the host echo stops a copy-pasted command being redirected by
+editing only the connection string). `ALLOW_DEMO_SEED=1` remains the blunt
+escape hatch for a local-but-not-loopback dev database; neither override unlocks
+a production host. It imports `@workspace/db` *type-only* and dynamically at
+call time, because `@workspace/db` requires `DATABASE_URL` at module load; a
+static import would make the guard tests need a database.
+
+**Hosted devnet demo.** `DEPLOY.md` stands up a *separate* Railway project (own
+Postgres, two logical databases, fresh demo-only oracle/authority keys, Solana
+devnet). `VITE_DEVNET_DEMO=1` on the frontend build shows a "Devnet demo"
+banner (`components/DevnetDemoBanner.tsx` via `lib/demo.ts`); it changes no
+behaviour. `META_API_KEY` is server-only — never a `VITE_*` value.
+
+**Advisory cost controls.** The public `GET /providers/:id/advisory` route is
+bounded three ways: the `AdvisoryService` cache TTL, a per-IP
+`express-rate-limit` (`ADVISORY_RATE_LIMIT_MAX` / `ADVISORY_RATE_LIMIT_WINDOW_MS`,
+default 30/min), and a global daily cap on *live* model calls
+(`ADVISORY_DAILY_CALL_CAP`, default 200 per UTC day). The daily cap is the
+backstop the per-IP limit cannot be (an attacker multiplies IPs). When it is
+spent the route does **not** fail: it serves a fresh cache entry, else the
+fixture fallback (`assessFromFixture`), else an `unknown` assessment, and sets
+`demoLimitReached: true` with `DEMO_LIMIT_NOTE`. Only a *live* call consumes
+budget — a mock advisor and the inconclusive short-circuit spend nothing, so a
+no-key demo keeps working past the cap. Both env readers fall back to the safe
+default on an unparseable/non-positive value rather than removing the limit.

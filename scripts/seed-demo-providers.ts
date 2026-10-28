@@ -13,10 +13,16 @@
  *   - `NODE_ENV=production` is refused outright.
  *   - a non-local database host is refused (only `localhost`, `127.0.0.1` and
  *     `::1` are accepted).
+ *   - a host the repo docs name as production is refused outright, with no
+ *     override.
  *
- * Both guards can be overridden together with `ALLOW_DEMO_SEED=1`, and only for
- * the *local* host check — the production guard cannot be overridden, because a
- * demo seeder that can be pointed at production is a foot-gun, not a feature.
+ * Seeding a deliberately disposable *remote* demo database (the hosted demo) is
+ * possible, but only through an explicit, two-part confirmation: set BOTH
+ * `DEMO_SEED_ALLOW_REMOTE=1` AND `DEMO_SEED_CONFIRM_HOST` to exactly the
+ * database host. The host echo is deliberate: a copy-pasted command cannot be
+ * redirected to a different database by editing only the connection string.
+ * `ALLOW_DEMO_SEED=1` remains as the blunt escape hatch for a local-but-not-
+ * loopback dev database; neither override unlocks a production host.
  *
  * ## Idempotence
  *
@@ -80,26 +86,71 @@ export class SeedGuardError extends Error {
   }
 }
 
-/** `localhost`, `127.0.0.1` and `::1` are local; nothing else is. */
-export function isLocalDatabaseUrl(databaseUrl: string): boolean {
+/**
+ * The bare hostname of a database URL, or `null` when it cannot be parsed.
+ *
+ * Node keeps the brackets on an IPv6 literal, so `[::1]` is unwrapped; an empty
+ * host (a URL with no host at all) also returns `null`.
+ */
+export function databaseHost(databaseUrl: string): string | null {
   let host: string;
   try {
     host = new URL(databaseUrl).hostname;
   } catch {
-    return false;
+    return null;
   }
-  // Node keeps the brackets on an IPv6 literal, so `[::1]` must be unwrapped;
-  // an empty host means the URL had no host at all, which is not local either.
   const bare = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
-  return bare === "localhost" || bare === "127.0.0.1" || bare === "::1";
+  return bare.length > 0 ? bare : null;
 }
 
 /**
- * Refuse anything that is not an obvious local development database.
+ * Hosts the repo's own documentation names as production. Seeding any of these
+ * is refused with no override: they are the deployed demo/production database,
+ * and a demo seeder pointed at one is a foot-gun, not a feature.
  *
- * `NODE_ENV=production` is refused with no override. A non-local host is refused
- * unless `ALLOW_DEMO_SEED=1`, which is the escape hatch for a deliberate remote
- * dev database; it does not unlock production.
+ * Source: `artifacts/api-server/E2E_STATUS.md` (the Supabase session pooler) and
+ * the Railway production api-server host. Keep this list in sync when the
+ * deployment moves.
+ */
+export const PRODUCTION_HOSTS: readonly string[] = [
+  "aws-0-eu-west-1.pooler.supabase.com",
+  "db.knaigsdfjfeuaucozoba.supabase.co",
+  "workspaceapi-server-production-c05a.up.railway.app",
+  "adadive.xyz",
+];
+
+/** Is this host one the docs name as production? */
+export function isProductionHost(host: string | null): boolean {
+  if (host === null) return false;
+  return PRODUCTION_HOSTS.some(
+    (prod) => host === prod || host.endsWith(`.${prod}`)
+  );
+}
+
+/** `localhost`, `127.0.0.1` and `::1` are local; nothing else is. */
+export function isLocalDatabaseUrl(databaseUrl: string): boolean {
+  const bare = databaseHost(databaseUrl);
+  return bare === "localhost" || bare === "127.0.0.1" || bare === "::1";
+}
+
+/** True for `1`/`true`/`yes` (any case); anything else is false. */
+function flagEnabled(raw: string | undefined): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+/**
+ * Refuse anything that is not an obvious local development database, unless the
+ * caller proves it means a specific remote demo database.
+ *
+ * Guards, in order:
+ *
+ *   1. `NODE_ENV=production` is refused with no override.
+ *   2. A host named as production in the repo docs is refused with no override.
+ *   3. A local host is allowed.
+ *   4. A remote host needs EITHER the two-part demo override
+ *      (`DEMO_SEED_ALLOW_REMOTE=1` AND `DEMO_SEED_CONFIRM_HOST` equal to the
+ *      database host) OR the blunt `ALLOW_DEMO_SEED=1` escape hatch.
  */
 export function assertSeedable(env: NodeJS.ProcessEnv, databaseUrl: string): void {
   if (env.NODE_ENV === "production") {
@@ -108,14 +159,44 @@ export function assertSeedable(env: NodeJS.ProcessEnv, databaseUrl: string): voi
         "writes rows and is for local development only"
     );
   }
-  if (!isLocalDatabaseUrl(databaseUrl)) {
-    if (env.ALLOW_DEMO_SEED === "1") return;
+
+  const host = databaseHost(databaseUrl);
+  if (isProductionHost(host)) {
     throw new SeedGuardError(
-      "refusing to seed demo providers against a non-local database " +
-        `(${safeHost(databaseUrl)}); set ALLOW_DEMO_SEED=1 only if you are sure ` +
-        "this is a disposable development database"
+      `refusing to seed demo providers against a production host (${host}); ` +
+        "this is a documented production database and cannot be seeded, with " +
+        "or without an override"
     );
   }
+
+  if (isLocalDatabaseUrl(databaseUrl)) return;
+
+  const confirmHost = (env.DEMO_SEED_CONFIRM_HOST ?? "").trim();
+  if (flagEnabled(env.DEMO_SEED_ALLOW_REMOTE)) {
+    if (confirmHost.length === 0) {
+      throw new SeedGuardError(
+        "DEMO_SEED_ALLOW_REMOTE=1 also requires DEMO_SEED_CONFIRM_HOST to be " +
+          `set to exactly the database host (${safeHost(databaseUrl)})`
+      );
+    }
+    if (host === null || confirmHost !== host) {
+      throw new SeedGuardError(
+        "refusing to seed a remote database: DEMO_SEED_CONFIRM_HOST " +
+          `(${confirmHost}) does not match the database host (${host ?? "unknown"})`
+      );
+    }
+    return;
+  }
+
+  if (flagEnabled(env.ALLOW_DEMO_SEED)) return;
+
+  throw new SeedGuardError(
+    "refusing to seed demo providers against a non-local database " +
+      `(${safeHost(databaseUrl)}); for the hosted demo set both ` +
+      "DEMO_SEED_ALLOW_REMOTE=1 and DEMO_SEED_CONFIRM_HOST=<database host>, or " +
+      "set ALLOW_DEMO_SEED=1 only if you are sure this is a disposable " +
+      "development database"
+  );
 }
 
 function safeHost(databaseUrl: string): string {
