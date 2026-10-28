@@ -1,4 +1,4 @@
-# ADADIVE — agent notes
+# ADADIVE — Agent notes
 
 ## Wallet connect (Solana)
 
