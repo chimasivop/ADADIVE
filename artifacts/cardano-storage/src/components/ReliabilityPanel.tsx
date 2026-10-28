@@ -148,6 +148,19 @@ export function ReliabilityPanel({ providerId }: ReliabilityPanelProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {data?.demoLimitReached && data?.note && (
+          <p
+            className="font-mono text-xs rounded-sm px-3 py-2"
+            style={{
+              color: "#c9a96e",
+              background: "rgba(201,169,110,0.08)",
+              border: "1px solid rgba(201,169,110,0.28)",
+            }}
+          >
+            {data.note}
+          </p>
+        )}
+
         {data?.inconclusive && (
           <p className="font-mono text-xs text-muted-foreground">
             Not enough evidence to judge yet. This is not a failure — the advisor reports{" "}

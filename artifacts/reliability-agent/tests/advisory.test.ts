@@ -163,6 +163,37 @@ describe("AdvisoryService", () => {
     assert.equal(client.calls, 2);
   });
 
+  it("peek returns a fresh cached assessment without a model call, and null otherwise", async () => {
+    const client = new CountingClient();
+    let now = 1_000;
+    const service = new AdvisoryService({
+      client,
+      model: "m",
+      mock: false,
+      cacheTtlMs: DEFAULT_CACHE_TTL_MS,
+      now: () => now,
+      logger: silentLogger,
+    });
+
+    // Nothing cached yet.
+    assert.isNull(service.peek(1));
+
+    await service.assess(1, evidence());
+    assert.equal(client.calls, 1);
+
+    // A fresh entry is returned, marked cached, with no extra call.
+    const hit = service.peek(1);
+    assert.isNotNull(hit);
+    assert.isTrue(hit!.cached);
+    assert.equal(hit!.assessment.risk_level, "high");
+    assert.equal(client.calls, 1);
+
+    // Past the TTL the peeked entry is gone; still no model call.
+    now += DEFAULT_CACHE_TTL_MS + 1;
+    assert.isNull(service.peek(1));
+    assert.equal(client.calls, 1);
+  });
+
   it("collapses concurrent calls for the same provider (single-flight)", async () => {
     let release: (() => void) | null = null;
     const gate = new Promise<void>((resolve) => {

@@ -188,8 +188,10 @@ export const GetProviderAdvisoryResponse = zod.object({
   "inconclusive": zod.boolean().describe('True when the evidence was too thin to judge and no model call was made.'),
   "generatedAt": zod.string().nullable(),
   "model": zod.string().nullable(),
-  "mock": zod.boolean()
-}).describe('Advisory only. The reliability advisor\'s structured assessment for one provider. `available` is false (and `assessment` null) when the advisor is not configured or no model could be reached.\n')
+  "mock": zod.boolean(),
+  "demoLimitReached": zod.boolean().describe('True when the demo\'s daily live-call budget is spent and this result is cached or sample-based.'),
+  "note": zod.string().nullable().describe('A human-readable explanation shown when demoLimitReached is true.')
+}).describe('Advisory only. The reliability advisor\'s structured assessment for one provider. `available` is false (and `assessment` null) when the advisor is not configured or no model could be reached. `demoLimitReached` is true when the hosted demo\'s daily live-call budget is spent, so the assessment is a cached or sample result rather than a fresh model call; `note` then explains it.\n')
 
 
 /**

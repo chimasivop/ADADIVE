@@ -136,7 +136,7 @@ export interface ProviderAssessment {
 }
 
 /**
- * Advisory only. The reliability advisor's structured assessment for one provider. `available` is false (and `assessment` null) when the advisor is not configured or no model could be reached.
+ * Advisory only. The reliability advisor's structured assessment for one provider. `available` is false (and `assessment` null) when the advisor is not configured or no model could be reached. `demoLimitReached` is true when the hosted demo's daily live-call budget is spent, so the assessment is a cached or sample result rather than a fresh model call; `note` then explains it.
  */
 export interface ProviderAdvisory {
   available: boolean;
@@ -151,6 +151,13 @@ export interface ProviderAdvisory {
   /** @nullable */
   model: string | null;
   mock: boolean;
+  /** True when the demo's daily live-call budget is spent and this result is cached or sample-based. */
+  demoLimitReached: boolean;
+  /**
+     * A human-readable explanation shown when demoLimitReached is true.
+     * @nullable
+     */
+  note: string | null;
 }
 
 export type DealStatus = typeof DealStatus[keyof typeof DealStatus];

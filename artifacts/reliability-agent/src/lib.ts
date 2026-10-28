@@ -40,6 +40,7 @@ export { HttpMetaClient, MetaApiError, extractAssistantContent, type ModelClient
 export {
   FIXTURES,
   FixtureMetaClient,
+  assessFromFixture,
   chooseFixtureName,
   parseEvidenceFromPayload,
 } from "./mockClient";

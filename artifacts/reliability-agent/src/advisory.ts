@@ -130,7 +130,8 @@ export interface AdvisoryServiceDeps {
 export class AdvisoryService {
   private readonly client: ModelClient | null;
   private readonly model: string;
-  private readonly mock: boolean;
+  /** True when the service replays fixtures and spends no live model call. */
+  readonly mock: boolean;
   private readonly ttlMs: number;
   private readonly now: () => number;
   private readonly logger: Logger;
@@ -235,6 +236,20 @@ export class AdvisoryService {
 
   private store(providerId: number, outcome: AdvisorySuccess): void {
     this.cache.set(providerId, { outcome, expiresAt: this.now() + this.ttlMs });
+  }
+
+  /**
+   * A fresh cached assessment, without ever touching the model.
+   *
+   * This is what the api-server uses when its demo budget is spent: it can serve
+   * an assessment the advisor already computed for free, and only fall back to a
+   * fixture when there is nothing cached. Unlike `assess` it does not start a
+   * computation, so it can never spend a call.
+   */
+  peek(providerId: number): AdvisorySuccess | null {
+    const hit = this.cache.get(providerId);
+    if (hit && hit.expiresAt > this.now()) return { ...hit.outcome, cached: true };
+    return null;
   }
 
   /** Drop one provider's cached assessment, or all of them. */

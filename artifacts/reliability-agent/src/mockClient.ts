@@ -20,6 +20,8 @@ import type { ModelRequestPayload } from "./evidence";
 import type { ReliabilityEvidence } from "./evidence";
 import type { Logger } from "./logger";
 import { extractAssistantContent, MetaApiError, type ModelClient } from "./metaClient";
+import { assessProvider } from "./assess";
+import type { Assessment } from "./schema";
 
 import healthy from "./fixtures/healthy.json";
 import flaky from "./fixtures/flaky.json";
@@ -91,4 +93,23 @@ export class FixtureMetaClient implements ModelClient {
     this.deps.logger.debug("mock mode: replayed fixture", { fixture: name });
     return content;
   }
+}
+
+/**
+ * Produce an assessment from a recorded fixture, with no network and no key.
+ *
+ * This runs the *same* `assessProvider` path a live call does — the fixture is a
+ * recorded response, parsed and Zod-validated exactly like a real one — so it is
+ * a genuine fallback and not a shortcut around validation. The api-server uses it
+ * when the demo's live-call budget is spent: the caller gets a real assessment
+ * (marked with the demo note by the route) rather than an error.
+ */
+export async function assessFromFixture(
+  evidence: ReliabilityEvidence,
+  model: string,
+  logger: Logger
+): Promise<Assessment> {
+  const client = new FixtureMetaClient({ logger });
+  const { assessment } = await assessProvider(evidence, { model, client, logger });
+  return assessment;
 }

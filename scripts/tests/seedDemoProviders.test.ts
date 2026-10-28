@@ -14,14 +14,25 @@ import { assert } from "chai";
 
 import {
   assertSeedable,
+  databaseHost,
   demoSpecs,
   isLocalDatabaseUrl,
+  isProductionHost,
+  PRODUCTION_HOSTS,
   SeedGuardError,
 } from "../seed-demo-providers";
 
 const LOCAL = "postgres://postgres:postgres@127.0.0.1:5432/adadive";
 const LOCALHOST = "postgres://postgres:postgres@localhost:5432/adadive";
 const REMOTE = "postgres://user:pw@db.prod.example.com:5432/adadive";
+const REMOTE_HOST = "db.prod.example.com";
+// A real Railway demo database host, shaped like the ones the platform mints.
+const RAILWAY_DEMO =
+  "postgres://postgres:pw@roundhouse.proxy.rlwy.net:41234/railway";
+const RAILWAY_DEMO_HOST = "roundhouse.proxy.rlwy.net";
+// The production Supabase host named in artifacts/api-server/E2E_STATUS.md.
+const PROD_SUPABASE =
+  "postgresql://postgres.knaigsdfjfeuaucozoba:pw@aws-0-eu-west-1.pooler.supabase.com:5432/postgres";
 
 describe("isLocalDatabaseUrl", () => {
   it("accepts localhost and loopback literals", () => {
@@ -65,6 +76,114 @@ describe("assertSeedable", () => {
   it("allows a local development database", () => {
     assert.doesNotThrow(() => assertSeedable({ NODE_ENV: "development" }, LOCAL));
     assert.doesNotThrow(() => assertSeedable({}, LOCALHOST));
+  });
+});
+
+describe("databaseHost / isProductionHost", () => {
+  it("extracts the bare host, unwrapping an IPv6 literal", () => {
+    assert.equal(databaseHost(LOCAL), "127.0.0.1");
+    assert.equal(databaseHost("postgres://u:p@[::1]:5432/db"), "::1");
+    assert.isNull(databaseHost("not a url"));
+  });
+
+  it("names the documented production hosts", () => {
+    assert.isTrue(isProductionHost("aws-0-eu-west-1.pooler.supabase.com"));
+    assert.isTrue(isProductionHost("adadive.xyz"));
+    // A subdomain of a production host is still production.
+    assert.isTrue(isProductionHost("api.adadive.xyz"));
+    assert.isFalse(isProductionHost("roundhouse.proxy.rlwy.net"));
+    assert.isFalse(isProductionHost(null));
+  });
+});
+
+describe("assertSeedable — remote demo override", () => {
+  it("still refuses a remote database with no override", () => {
+    assert.throws(() => assertSeedable({}, REMOTE), /non-local database/);
+  });
+
+  it("refuses a documented production host with no override at all", () => {
+    assert.throws(
+      () => assertSeedable({}, PROD_SUPABASE),
+      /production host/
+    );
+  });
+
+  it("refuses a production host even with the full demo override", () => {
+    assert.throws(
+      () =>
+        assertSeedable(
+          {
+            DEMO_SEED_ALLOW_REMOTE: "1",
+            DEMO_SEED_CONFIRM_HOST: "aws-0-eu-west-1.pooler.supabase.com",
+          },
+          PROD_SUPABASE
+        ),
+      /production host/
+    );
+  });
+
+  it("refuses a production host even with ALLOW_DEMO_SEED=1", () => {
+    assert.throws(
+      () => assertSeedable({ ALLOW_DEMO_SEED: "1" }, PROD_SUPABASE),
+      /production host/
+    );
+  });
+
+  it("requires the host echo when DEMO_SEED_ALLOW_REMOTE=1", () => {
+    assert.throws(
+      () => assertSeedable({ DEMO_SEED_ALLOW_REMOTE: "1" }, REMOTE),
+      /requires DEMO_SEED_CONFIRM_HOST/
+    );
+  });
+
+  it("refuses when the confirmed host does not match", () => {
+    assert.throws(
+      () =>
+        assertSeedable(
+          { DEMO_SEED_ALLOW_REMOTE: "1", DEMO_SEED_CONFIRM_HOST: "other.host" },
+          REMOTE
+        ),
+      /does not match/
+    );
+  });
+
+  it("allows a remote demo database when both parts are present and match", () => {
+    assert.doesNotThrow(() =>
+      assertSeedable(
+        {
+          DEMO_SEED_ALLOW_REMOTE: "1",
+          DEMO_SEED_CONFIRM_HOST: RAILWAY_DEMO_HOST,
+        },
+        RAILWAY_DEMO
+      )
+    );
+  });
+
+  it("matches the host exactly, not as a suffix", () => {
+    // A confirmation of the bare domain must not unlock a differently-named host.
+    assert.throws(
+      () =>
+        assertSeedable(
+          { DEMO_SEED_ALLOW_REMOTE: "1", DEMO_SEED_CONFIRM_HOST: "proxy.rlwy.net" },
+          RAILWAY_DEMO
+        ),
+      /does not match/
+    );
+  });
+
+  it("still refuses NODE_ENV=production with the demo override set", () => {
+    assert.throws(
+      () =>
+        assertSeedable(
+          {
+            NODE_ENV: "production",
+            DEMO_SEED_ALLOW_REMOTE: "1",
+            DEMO_SEED_CONFIRM_HOST: REMOTE_HOST,
+          },
+          REMOTE
+        ),
+      /NODE_ENV=production/
+    );
   });
 });
 

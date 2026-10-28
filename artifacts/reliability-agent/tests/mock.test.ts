@@ -18,6 +18,7 @@ import { loadConfig } from "../src/config";
 import {
   FixtureMetaClient,
   FIXTURES,
+  assessFromFixture,
   chooseFixtureName,
   parseEvidenceFromPayload,
 } from "../src/mockClient";
@@ -139,5 +140,24 @@ describe("mock mode end to end", () => {
       logger: silentLogger,
     });
     assert.equal(assessment.risk_level, "unknown");
+  });
+});
+
+describe("assessFromFixture", () => {
+  it("returns a validated assessment from the recorded fixture, with no network", async () => {
+    // Healthy evidence selects the healthy fixture; the assessment is the real
+    // parsed-and-validated one, not a hand-built stub.
+    const assessment = await assessFromFixture(evidence(), "muse-spark-1.3", silentLogger);
+    assert.equal(assessment.risk_level, "low");
+    assert.isAbove(assessment.reasons.length, 0);
+  });
+
+  it("returns the flaky fixture's high-risk assessment for stale evidence", async () => {
+    const assessment = await assessFromFixture(
+      evidence({ atRiskCount: 1, maxConsecutiveConclusiveNegatives: 3 }, true),
+      "muse-spark-1.3",
+      silentLogger
+    );
+    assert.equal(assessment.risk_level, "high");
   });
 });
