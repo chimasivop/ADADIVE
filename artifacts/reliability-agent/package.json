@@ -4,6 +4,10 @@
   "private": true,
   "description": "ADADIVE provider reliability advisor: turns read-only provider evidence into a structured risk assessment via the Meta Model API (Muse Spark). Advisory only — never signs, releases funds, or changes a deal.",
   "type": "module",
+  "exports": {
+    ".": "./src/lib.ts",
+    "./advisory": "./src/advisory.ts"
+  },
   "scripts": {
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",

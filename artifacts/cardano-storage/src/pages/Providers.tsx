@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { RegisterProviderDialog } from "@/components/RegisterProviderDialog";
 import { HardDrive, Search, ArrowRight, Shield, Globe, Plus } from "lucide-react";
+import { ReliabilityBadge } from "@/components/ReliabilityBadge";
 
 export default function Providers() {
   const [search, setSearch] = useState("");
@@ -133,6 +134,7 @@ export default function Providers() {
                               >
                                 {provider.status}
                               </Badge>
+                              <ReliabilityBadge providerId={provider.id} />
                             </div>
                             <p
                               style={{

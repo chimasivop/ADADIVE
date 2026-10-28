@@ -199,6 +199,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/reliability-agent':
+        specifier: workspace:*
+        version: link:../reliability-agent
       '@workspace/solana-escrow':
         specifier: workspace:*
         version: link:../../lib/solana-escrow

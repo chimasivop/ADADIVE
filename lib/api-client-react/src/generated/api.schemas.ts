@@ -117,6 +117,42 @@ export interface ProviderNodeInput {
   peerId: string | null;
 }
 
+export type ProviderAssessmentRiskLevel = typeof ProviderAssessmentRiskLevel[keyof typeof ProviderAssessmentRiskLevel];
+
+
+export const ProviderAssessmentRiskLevel = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  unknown: 'unknown',
+} as const;
+
+export interface ProviderAssessment {
+  risk_level: ProviderAssessmentRiskLevel;
+  reasons: string[];
+  evidence_cited: string[];
+  uncertain: string[];
+  recommended_action: string;
+}
+
+/**
+ * Advisory only. The reliability advisor's structured assessment for one provider. `available` is false (and `assessment` null) when the advisor is not configured or no model could be reached.
+ */
+export interface ProviderAdvisory {
+  available: boolean;
+  providerId: number;
+  disclaimer: string;
+  assessment: ProviderAssessment | null;
+  cached: boolean;
+  /** True when the evidence was too thin to judge and no model call was made. */
+  inconclusive: boolean;
+  /** @nullable */
+  generatedAt: string | null;
+  /** @nullable */
+  model: string | null;
+  mock: boolean;
+}
+
 export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
 
 
@@ -282,6 +318,24 @@ export const ListProvidersStatus = {
   active: 'active',
   inactive: 'inactive',
   all: 'all',
+} as const;
+
+export type GetProviderAdvisoryParams = {
+/**
+ * Set to 1/true/yes to bypass a fresh cached assessment.
+ */
+refresh?: GetProviderAdvisoryRefresh;
+};
+
+export type GetProviderAdvisoryRefresh = typeof GetProviderAdvisoryRefresh[keyof typeof GetProviderAdvisoryRefresh];
+
+
+export const GetProviderAdvisoryRefresh = {
+  NUMBER_0: '0',
+  NUMBER_1: '1',
+  true: 'true',
+  false: 'false',
+  yes: 'yes',
 } as const;
 
 export type ListDealsParams = {
