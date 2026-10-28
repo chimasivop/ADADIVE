@@ -29,6 +29,7 @@ import type {
   EconomyStats,
   ErrorEnvelope,
   ErrorResponse,
+  GetProviderAdvisoryParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   ListDealsParams,
@@ -38,6 +39,7 @@ import type {
   MobileTokenExchangeSuccess,
   NetworkStats,
   Provider,
+  ProviderAdvisory,
   ProviderInput,
   WaitlistEntry,
   WaitlistInput
@@ -444,6 +446,96 @@ export function useGetProviderDeals<TData = Awaited<ReturnType<typeof getProvide
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetProviderDealsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProviderAdvisoryUrl = (id: number,
+    params?: GetProviderAdvisoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/providers/${id}/advisory?${stringifiedParams}` : `/api/providers/${id}/advisory`
+}
+
+/**
+ * Advisory only. Returns the reliability advisor's structured assessment derived from provider status data. Never signs, releases funds or changes a deal. `available` is false when the advisor is not configured.
+ * @summary Get the read-only AI reliability advisory for a provider
+ */
+export const getProviderAdvisory = async (id: number,
+    params?: GetProviderAdvisoryParams, options?: RequestInit): Promise<ProviderAdvisory> => {
+
+  return customFetch<ProviderAdvisory>(getGetProviderAdvisoryUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProviderAdvisoryQueryKey = (id: number,
+    params?: GetProviderAdvisoryParams,) => {
+    return [
+    `/api/providers/${id}/advisory`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetProviderAdvisoryQueryOptions = <TData = Awaited<ReturnType<typeof getProviderAdvisory>>, TError = ErrorType<void>>(id: number,
+    params?: GetProviderAdvisoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProviderAdvisory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProviderAdvisoryQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProviderAdvisory>>> = ({ signal }) => getProviderAdvisory(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProviderAdvisory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProviderAdvisoryQueryResult = NonNullable<Awaited<ReturnType<typeof getProviderAdvisory>>>
+export type GetProviderAdvisoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the read-only AI reliability advisory for a provider
+ */
+
+export function useGetProviderAdvisory<TData = Awaited<ReturnType<typeof getProviderAdvisory>>, TError = ErrorType<void>>(
+ id: number,
+    params?: GetProviderAdvisoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProviderAdvisory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProviderAdvisoryQueryOptions(id,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

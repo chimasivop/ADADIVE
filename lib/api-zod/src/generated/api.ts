@@ -121,6 +121,37 @@ export const GetProviderDealsResponse = zod.array(GetProviderDealsResponseItem)
 
 
 /**
+ * Advisory only. Returns the reliability advisor's structured assessment derived from provider status data. Never signs, releases funds or changes a deal. `available` is false when the advisor is not configured.
+ * @summary Get the read-only AI reliability advisory for a provider
+ */
+export const GetProviderAdvisoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetProviderAdvisoryQueryParams = zod.object({
+  "refresh": zod.enum(['0', '1', 'true', 'false', 'yes']).optional().describe('Set to 1\/true\/yes to bypass a fresh cached assessment.')
+})
+
+export const GetProviderAdvisoryResponse = zod.object({
+  "available": zod.boolean(),
+  "providerId": zod.number(),
+  "disclaimer": zod.string(),
+  "assessment": zod.union([zod.object({
+  "risk_level": zod.enum(['low', 'medium', 'high', 'unknown']),
+  "reasons": zod.array(zod.string()),
+  "evidence_cited": zod.array(zod.string()),
+  "uncertain": zod.array(zod.string()),
+  "recommended_action": zod.string()
+}),zod.null()]),
+  "cached": zod.boolean(),
+  "inconclusive": zod.boolean().describe('True when the evidence was too thin to judge and no model call was made.'),
+  "generatedAt": zod.string().nullable(),
+  "model": zod.string().nullable(),
+  "mock": zod.boolean()
+}).describe('Advisory only. The reliability advisor\'s structured assessment for one provider. `available` is false (and `assessment` null) when the advisor is not configured or no model could be reached.\n')
+
+
+/**
  * @summary List storage deals
  */
 export const ListDealsQueryParams = zod.object({

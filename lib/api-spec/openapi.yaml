@@ -120,6 +120,38 @@ paths:
                 items:
                   $ref: "#/components/schemas/Deal"
 
+  /providers/{id}/advisory:
+    get:
+      operationId: getProviderAdvisory
+      tags: [providers]
+      summary: Get the read-only AI reliability advisory for a provider
+      description: >
+        Advisory only. Returns the reliability advisor's structured assessment
+        derived from provider status data. Never signs, releases funds or changes
+        a deal. `available` is false when the advisor is not configured.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+        - in: query
+          name: refresh
+          schema:
+            type: string
+            enum: ["0", "1", "true", "false", "yes"]
+          required: false
+          description: Set to 1/true/yes to bypass a fresh cached assessment.
+      responses:
+        "200":
+          description: Advisory result (assessment is null when unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderAdvisory"
+        "404":
+          description: Not found
+
   /deals:
     get:
       operationId: listDeals
@@ -546,6 +578,58 @@ components:
         pricePerGbPerEpoch:
           type: number
         region:
+          type: string
+
+    ProviderAdvisory:
+      type: object
+      required: [available, providerId, disclaimer, assessment, cached, inconclusive, generatedAt, model, mock]
+      description: >
+        Advisory only. The reliability advisor's structured assessment for one
+        provider. `available` is false (and `assessment` null) when the advisor is
+        not configured or no model could be reached.
+      properties:
+        available:
+          type: boolean
+        providerId:
+          type: integer
+        disclaimer:
+          type: string
+        assessment:
+          oneOf:
+            - $ref: "#/components/schemas/ProviderAssessment"
+            - type: "null"
+        cached:
+          type: boolean
+        inconclusive:
+          type: boolean
+          description: True when the evidence was too thin to judge and no model call was made.
+        generatedAt:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        mock:
+          type: boolean
+
+    ProviderAssessment:
+      type: object
+      required: [risk_level, reasons, evidence_cited, uncertain, recommended_action]
+      properties:
+        risk_level:
+          type: string
+          enum: [low, medium, high, unknown]
+        reasons:
+          type: array
+          items:
+            type: string
+        evidence_cited:
+          type: array
+          items:
+            type: string
+        uncertain:
+          type: array
+          items:
+            type: string
+        recommended_action:
           type: string
 
     Deal:

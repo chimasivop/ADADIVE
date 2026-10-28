@@ -59,8 +59,10 @@ and can even fail over to `unknown` on an invalid fixture.
 
 ```bash
 # Assess a provider by id, from the CLI, with no api-server and no key:
+# (pnpm --filter runs the script inside the package, so --evidence is
+#  package-relative.)
 META_MOCK=1 pnpm --filter @workspace/reliability-agent run assess -- \
-  --evidence artifacts/reliability-agent/examples/evidence.sample.json
+  --evidence examples/evidence.sample.json
 
 # Or, with the api-server running (evidence fetched over HTTP):
 META_MOCK=1 PROVIDER_ID=1 INTERNAL_API_TOKEN=dev-internal-token \
@@ -137,7 +139,9 @@ Endpoint, auth and model id come from the official Meta Model API docs
 | `src/evidenceClient.ts` | read-only GET client (internal token or wallet session) |
 | `src/run.ts` | one cycle: fetch evidence → assess |
 | `src/index.ts` | CLI entry point |
-| `tests/*.test.ts` | schema, fail-safe, mock mode, config, client, run |
+| `src/advisory.ts` | the embeddable `AdvisoryService`: per-provider TTL cache, single-flight, concurrency cap, inconclusive short-circuit; `createAdvisoryServiceFromEnv` |
+| `src/lib.ts` | the side-effect-free library entry point `package.json#exports` points at (the CLI `index.ts` must never be imported) |
+| `tests/*.test.ts` | schema, fail-safe, mock mode, config, client, run, advisory service |
 
 **`artifacts/api-server/`** — the read-only evidence source.
 
@@ -147,8 +151,19 @@ Endpoint, auth and model id come from the official Meta Model API docs
 | `src/lib/providerStorage.ts` | new store types + `getProviderReliabilitySnapshot` |
 | `src/lib/providerStorageDrizzle.ts` | Drizzle implementation of that method |
 | `src/routes/provider.ts` | `GET /provider/reliability` (wallet) + `GET /internal/provider-reliability/:id` (shared token) |
+| `src/routes/advisory.ts` | **new** — `GET /providers/:id/advisory`, the read-only public route the directory renders; injects the store + advisor so it is testable over HTTP |
 | `tests/helpers/memoryStore.ts` | in-memory implementation for the new method |
-| `tests/reliabilityEndpoints.test.ts` | **new** — the endpoint tests |
+| `tests/reliabilityEndpoints.test.ts` | **new** — the evidence-endpoint tests |
+| `tests/advisoryEndpoints.test.ts` | **new** — the advisory-endpoint tests |
+
+**`artifacts/cardano-storage/`** — the advisory UI (advisory only, read-only).
+
+| File | Change |
+| ---- | ------ |
+| `src/components/ReliabilityBadge.tsx` | **new** — per-provider risk badge for the directory + detail header |
+| `src/components/ReliabilityPanel.tsx` | **new** — the full advisory panel (reasons, evidence cited, uncertain, action, disclaimer) |
+| `src/lib/reliability.ts` | **new** — presentation helpers (labels/tones per risk level) |
+| `src/pages/Providers.tsx`, `src/pages/ProviderDetail.tsx` | render the badge / panel |
 
 **`scripts/`**
 
@@ -171,9 +186,11 @@ Reported in three separate categories, per the repo's test taxonomy.
 ### 1. Unit tests — `pnpm test` (no live Meta call, no live Pinata)
 
 - `artifacts/reliability-agent` — schema/validation, the fail-safe path, mock
-  mode, config, the HTTP client against a stubbed transport, `runOnce`.
-- `artifacts/api-server` — the reliability endpoints over HTTP with `supertest`
-  (real router, real auth middleware, in-memory store).
+  mode, config, the HTTP client against a stubbed transport, `runOnce`, and the
+  `AdvisoryService` (cache TTL, single-flight, concurrency cap, inconclusive
+  short-circuit).
+- `artifacts/api-server` — the evidence and advisory endpoints over HTTP with
+  `supertest` (real router, real auth middleware, in-memory store).
 - `scripts` — the seed guards and provider specs (pure, no database).
 
 ### 2. Tests that stub an external boundary
@@ -191,14 +208,41 @@ validation and fail-safe logic, but **no request reaches `api.meta.ai`**.
 - **Live Pinata E2E and the on-chain E2E / cap checks: not run** (unchanged by
   this work).
 
+### What was run locally (mock mode, real Postgres)
+
+A **mock-mode** end-to-end run *was* performed against a real Postgres and a
+running api-server, so the composition over a real socket is verified — with the
+model call replayed from fixtures, not sent to Meta:
+
+- Postgres 17 on `:5433`, `migrate.mjs` + `drizzle-kit push`, then
+  `seed:demo-providers` (which really wrote the six providers).
+- api-server started with `META_MOCK=1`; `GET /api/providers/:id/advisory`
+  answered `low` for a healthy provider, `high` for a flaky one and `unknown`
+  (inconclusive) for the new one; a second call within the TTL returned
+  `cached: true`; `?refresh=1` bypassed it; `404` for an unknown id, `400` for a
+  malformed one; the wallet address never appeared in the payload.
+- The **UI was driven in a real browser** (Chromium against `vite preview`): the
+  provider directory rendered all six seeded providers with the correct
+  `ReliabilityBadge` (3 × Low risk, 2 × High risk, 1 × Unknown), and the detail
+  page rendered the full `ReliabilityPanel` — risk level, reasons, evidence
+  cited, uncertain, recommended action and the disclaimer — for a flaky provider
+  and the inconclusive (new) provider.
+
+> **Build gotcha (pre-existing, not from this work).** `vite build` reads
+> `artifacts/cardano-storage/.env.production`, which pins
+> `VITE_API_URL` to the deployed Railway api-server. A local build therefore
+> calls production, not the local api-server, so the directory shows
+> `0 providers` even though the local API answers. Build for local UI work with
+> an empty override (`VITE_API_URL="" pnpm run build`) so the app uses the
+> same-origin `/api` proxy. This file predates the branch and was left untouched.
+
 ### Not verified
 
-- The **live** request/response against `api.meta.ai` (no key).
-- A **live** end-to-end run against a seeded Postgres + running api-server
-  (no Postgres in this environment). The endpoint and the advisor are each
-  covered separately; their composition over a real socket was not exercised.
-- The `seed-demo-providers.ts` **database writes** (its guards and specs are
-  unit-tested; the inserts need a live Postgres).
+- The **live** request/response against `api.meta.ai` (no key). Every model
+  response so far came from a fixture.
+- The `seed-demo-providers.ts` **guards against a non-local host / production**
+  are unit-tested *and* were run by hand (both refuse with a non-zero exit); the
+  happy-path inserts were exercised against the local database above.
 
 ---
 

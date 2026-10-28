@@ -6,6 +6,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HardDrive, ArrowLeft, Globe, Shield, Database, Coins, Clock } from "lucide-react";
 import { format } from "date-fns";
+import { ReliabilityPanel } from "@/components/ReliabilityPanel";
+import { ReliabilityBadge } from "@/components/ReliabilityBadge";
 
 export default function ProviderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -52,6 +54,7 @@ export default function ProviderDetail() {
                 <Badge variant={provider.status === "active" ? "default" : "secondary"} className="font-mono">
                   {provider.status}
                 </Badge>
+                <ReliabilityBadge providerId={provider.id} />
               </div>
               <p style={{ fontFamily: "'DM Mono', monospace", fontSize: "10px", color: "hsl(var(--muted-foreground))", letterSpacing: "0.05em", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {provider.nodeId}
@@ -140,6 +143,8 @@ export default function ProviderDetail() {
               </CardContent>
             </Card>
           </div>
+
+          <ReliabilityPanel providerId={provider.id} />
 
           <Card className="bg-card/50 border-primary/20">
             <CardHeader>
