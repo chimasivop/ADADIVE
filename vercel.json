@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/backend/:path*",
+      "destination": "https://adadive-oracle-backend.onrender.com/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://adadive-api-server.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
