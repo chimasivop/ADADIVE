@@ -185,6 +185,34 @@ export const safeText = z
 // ROUTE SCHEMAS
 // ============================================================
 
+/**
+ * GET /api/providers/recommend — the deal-creation recommendation query.
+ *
+ * Exported on its own rather than only through `schemas`, because Express 5
+ * defines `req.query` as a getter with no setter: the generic `validate`
+ * middleware (which overwrites `req.query` with the parsed value) would throw
+ * under it. The recommendation route therefore parses this schema itself with
+ * `safeParse` and reads the *parsed* result, leaving `req.query` alone.
+ *
+ * `region` is optional (no preference); `refresh` mirrors the advisory route's
+ * "bypass a fresh cache entry" switch.
+ */
+export const providerRecommendationQuery = z.object({
+  storageGb: z.coerce
+    .number()
+    .positive("storageGb must be a positive number")
+    .max(1_000_000, "storageGb is implausibly large"),
+  durationEpochs: z.coerce
+    .number()
+    .int("durationEpochs must be a whole number")
+    .positive("durationEpochs must be a positive whole number")
+    .max(100_000, "durationEpochs is implausibly large"),
+  region: z.string().trim().min(1).max(64).optional(),
+  refresh: z.enum(["0", "1", "true", "false", "yes"]).optional(),
+});
+
+export type ProviderRecommendationQuery = z.infer<typeof providerRecommendationQuery>;
+
 export const schemas = {
 
   // ── POST /api/storage/pin ─────────────────────────────────

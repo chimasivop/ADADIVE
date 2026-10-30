@@ -45,13 +45,58 @@ export {
   parseEvidenceFromPayload,
 } from "./mockClient";
 
-export { buildModelRequest, SYSTEM_PROMPT } from "./prompt";
+export {
+  buildModelRequest,
+  buildRecommendationRequest,
+  RECOMMENDATION_FIXTURE_NAME,
+  RECOMMENDATION_SYSTEM_PROMPT,
+  SYSTEM_PROMPT,
+} from "./prompt";
+
+export {
+  AI_EXPLANATION_UNAVAILABLE_NOTE,
+  DEFAULT_RECOMMENDATION_CACHE_TTL_MS,
+  DEFAULT_RECOMMENDATION_MAX_CONCURRENCY,
+  deterministicRecommendation,
+  NOT_ENOUGH_EVIDENCE_LABEL,
+  RECOMMENDATION_DISCLAIMER,
+  RecommendationService,
+  recommendationCacheKey,
+  createRecommendationServiceFromEnv,
+  type RecommendationEnvHandle,
+  type RecommendationOutcome,
+  type RecommendationServiceDeps,
+  type RecommendationSuccess,
+  type RecommendationUnavailable,
+  type RecommendedCandidate,
+} from "./recommendation";
+
+export {
+  availableCapacityGb,
+  DEFAULT_RECOMMENDATION_LIMIT,
+  DEFAULT_REFERENCE_PRICE_PER_GB_PER_EPOCH,
+  humanizeAge,
+  passesHardFilters,
+  rankCandidates,
+  SCORE_WEIGHTS,
+  type CandidateFacts,
+  type RankedCandidate,
+  type RankingOptions,
+  type RankingResult,
+  type RecommendationCandidateInput,
+  type RecommendationQuery,
+} from "./ranking";
 
 export {
   ASSESSMENT_JSON_SCHEMA,
+  candidateExplanationSchema,
+  RECOMMENDATION_JSON_SCHEMA,
+  recommendationExplanationSchema,
   RISK_LEVELS,
   assessmentSchema,
   unknownAssessment,
   type Assessment,
+  type CandidateExplanation,
+  type RecommendationExplanation,
   type RiskLevel,
 } from "./schema";

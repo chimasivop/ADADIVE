@@ -160,6 +160,99 @@ export interface ProviderAdvisory {
   note: string | null;
 }
 
+export type ProviderRecommendationExplanationSource = typeof ProviderRecommendationExplanationSource[keyof typeof ProviderRecommendationExplanationSource];
+
+
+export const ProviderRecommendationExplanationSource = {
+  ai: 'ai',
+  deterministic: 'deterministic',
+} as const;
+
+export interface RecommendationQuery {
+  storageGb: number;
+  durationEpochs: number;
+  /** @nullable */
+  region: string | null;
+}
+
+/**
+ * Always "unknown" whenever sufficientEvidence is false.
+ */
+export type RecommendedProviderRiskLevel = typeof RecommendedProviderRiskLevel[keyof typeof RecommendedProviderRiskLevel];
+
+
+export const RecommendedProviderRiskLevel = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  unknown: 'unknown',
+} as const;
+
+export type RecommendedProviderExplanationSource = typeof RecommendedProviderExplanationSource[keyof typeof RecommendedProviderExplanationSource];
+
+
+export const RecommendedProviderExplanationSource = {
+  ai: 'ai',
+  deterministic: 'deterministic',
+} as const;
+
+export interface RecommendedProvider {
+  rank: number;
+  providerId: number;
+  name: string;
+  region: string;
+  /** 0-100 deterministic score. Higher is better. */
+  score: number;
+  /** The evidence-derived part of the score (0-90), before price fit. */
+  reliabilityScore: number;
+  /** Always "unknown" whenever sufficientEvidence is false. */
+  riskLevel: RecommendedProviderRiskLevel;
+  /** False for the "no node, no assignments" case; never ranked best. */
+  sufficientEvidence: boolean;
+  /** The badge label; "Not enough evidence" when sufficientEvidence is false. */
+  label: string;
+  availableGb: number;
+  pricePerGbPerEpoch: number;
+  estimatedCostSol: number;
+  reasons: string[];
+  uncertain: string[];
+  explanationSource: RecommendedProviderExplanationSource;
+}
+
+/**
+ * Advisory only. The deterministic provider ranking for a described deal, with a plain-language explanation per candidate. The ranking and its order come from the deterministic ranker; the model only writes the explanations and cannot reorder or add candidates. `available` is false when the advisor is not configured (the ranking is still returned). `explanationSource` is "ai" when the model wrote the reasons, otherwise "deterministic". `demoLimitReached` is true when the daily live-call budget is spent, so the result is cached or deterministic; `note` then explains it.
+ */
+export interface ProviderRecommendation {
+  available: boolean;
+  disclaimer: string;
+  query: RecommendationQuery;
+  candidates: RecommendedProvider[];
+  /**
+     * The top candidate's provider id, or null when nothing is recommended.
+     * @nullable
+     */
+  bestProviderId: number | null;
+  /** True when every returned candidate lacks sufficient evidence. */
+  allInsufficientEvidence: boolean;
+  consideredCount: number;
+  filteredOut: number;
+  cached: boolean;
+  explanationSource: ProviderRecommendationExplanationSource;
+  /**
+     * Why the explanations are deterministic, or null when they are from the model.
+     * @nullable
+     */
+  aiUnavailableReason: string | null;
+  demoLimitReached: boolean;
+  /** @nullable */
+  note: string | null;
+  /** @nullable */
+  generatedAt: string | null;
+  /** @nullable */
+  model: string | null;
+  mock: boolean;
+}
+
 export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
 
 
@@ -325,6 +418,38 @@ export const ListProvidersStatus = {
   active: 'active',
   inactive: 'inactive',
   all: 'all',
+} as const;
+
+export type GetProviderRecommendationsParams = {
+/**
+ * The deal's storage size in GB.
+ * @exclusiveMinimum 0
+ */
+storageGb: number;
+/**
+ * The deal's duration in epochs.
+ * @minimum 1
+ */
+durationEpochs: number;
+/**
+ * Preferred region; omit for any region.
+ */
+region?: string;
+/**
+ * Set to 1/true/yes to bypass a fresh cached result.
+ */
+refresh?: GetProviderRecommendationsRefresh;
+};
+
+export type GetProviderRecommendationsRefresh = typeof GetProviderRecommendationsRefresh[keyof typeof GetProviderRecommendationsRefresh];
+
+
+export const GetProviderRecommendationsRefresh = {
+  NUMBER_0: '0',
+  NUMBER_1: '1',
+  true: 'true',
+  false: 'false',
+  yes: 'yes',
 } as const;
 
 export type GetProviderAdvisoryParams = {

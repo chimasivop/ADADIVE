@@ -30,6 +30,7 @@ import type {
   ErrorEnvelope,
   ErrorResponse,
   GetProviderAdvisoryParams,
+  GetProviderRecommendationsParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   ListDealsParams,
@@ -42,6 +43,7 @@ import type {
   ProviderAdvisory,
   ProviderInput,
   ProviderNodeInput,
+  ProviderRecommendation,
   WaitlistEntry,
   WaitlistInput
 } from './api.schemas';
@@ -305,6 +307,91 @@ export const useCreateProvider = <TError = ErrorType<unknown>,
       return useMutation(getCreateProviderMutationOptions(options));
     }
 
+export const getGetProviderRecommendationsUrl = (params: GetProviderRecommendationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/providers/recommend?${stringifiedParams}` : `/api/providers/recommend`
+}
+
+/**
+ * Advisory only. Returns the top providers for a deal the customer is describing, as a deterministic ranking (a score over provider status data, with a hard capacity/region/price-fit filter) plus a plain-language explanation per candidate. The Meta model only writes the explanation for the already-ranked candidates and never reorders them or adds a provider. It never selects a provider, signs, releases funds or changes a deal - the customer still picks the provider and signs. Only provider status data is sent to the model: never file contents, wallet keys, secrets or customer wallet addresses. Providers with insufficient evidence (sufficientEvidence: false) are labelled "Not enough evidence" and are never the best choice. available is false when the advisor is not configured; the deterministic ranking is still returned.
+ * @summary Recommend providers for a deal (read-only AI advisory)
+ */
+export const getProviderRecommendations = async (params: GetProviderRecommendationsParams, options?: RequestInit): Promise<ProviderRecommendation> => {
+
+  return customFetch<ProviderRecommendation>(getGetProviderRecommendationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProviderRecommendationsQueryKey = (params?: GetProviderRecommendationsParams,) => {
+    return [
+    `/api/providers/recommend`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetProviderRecommendationsQueryOptions = <TData = Awaited<ReturnType<typeof getProviderRecommendations>>, TError = ErrorType<void>>(params: GetProviderRecommendationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProviderRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProviderRecommendationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProviderRecommendations>>> = ({ signal }) => getProviderRecommendations(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProviderRecommendations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProviderRecommendationsQueryResult = NonNullable<Awaited<ReturnType<typeof getProviderRecommendations>>>
+export type GetProviderRecommendationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Recommend providers for a deal (read-only AI advisory)
+ */
+
+export function useGetProviderRecommendations<TData = Awaited<ReturnType<typeof getProviderRecommendations>>, TError = ErrorType<void>>(
+ params: GetProviderRecommendationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProviderRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProviderRecommendationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetProviderUrl = (id: number,) => {
 
 
@@ -483,36 +570,6 @@ export const updateProviderNode = async (id: number,
   }
 );}
 
-export const getGetProviderAdvisoryUrl = (id: number,
-    params?: GetProviderAdvisoryParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/providers/${id}/advisory?${stringifiedParams}` : `/api/providers/${id}/advisory`
-}
-
-/**
- * Advisory only. Returns the reliability advisor's structured assessment derived from provider status data. Never signs, releases funds or changes a deal. `available` is false when the advisor is not configured.
- * @summary Get the read-only AI reliability advisory for a provider
- */
-export const getProviderAdvisory = async (id: number,
-    params?: GetProviderAdvisoryParams, options?: RequestInit): Promise<ProviderAdvisory> => {
-
-  return customFetch<ProviderAdvisory>(getGetProviderAdvisoryUrl(id,params),
-  {
-    ...options,
-    method: 'GET'
-  }
-);}
-
 
 
 
@@ -560,6 +617,41 @@ export const useUpdateProviderNode = <TError = ErrorType<void>,
       > => {
       return useMutation(getUpdateProviderNodeMutationOptions(options));
     }
+
+export const getGetProviderAdvisoryUrl = (id: number,
+    params?: GetProviderAdvisoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/providers/${id}/advisory?${stringifiedParams}` : `/api/providers/${id}/advisory`
+}
+
+/**
+ * Advisory only. Returns the reliability advisor's structured assessment derived from provider status data. Never signs, releases funds or changes a deal. `available` is false when the advisor is not configured.
+ * @summary Get the read-only AI reliability advisory for a provider
+ */
+export const getProviderAdvisory = async (id: number,
+    params?: GetProviderAdvisoryParams, options?: RequestInit): Promise<ProviderAdvisory> => {
+
+  return customFetch<ProviderAdvisory>(getGetProviderAdvisoryUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 
 
 export const getGetProviderAdvisoryQueryKey = (id: number,
@@ -609,6 +701,12 @@ export function useGetProviderAdvisory<TData = Awaited<ReturnType<typeof getProv
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
 
 export const getListDealsUrl = (params?: ListDealsParams,) => {
   const normalizedParams = new URLSearchParams();

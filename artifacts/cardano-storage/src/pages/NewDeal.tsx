@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Database, Loader2 } from "lucide-react";
 import { useWallet } from "@/contexts/WalletContext";
+import { RecommendedProviders } from "@/components/RecommendedProviders";
 
 export default function NewDeal() {
   const [, navigate] = useLocation();
@@ -19,6 +20,7 @@ export default function NewDeal() {
   const [clientAddress, setClientAddress] = useState("");
   const [storageGb, setStorageGb] = useState("");
   const [durationEpochs, setDurationEpochs] = useState("");
+  const [region, setRegion] = useState("");
   const [dataHash, setDataHash] = useState("");
 
   const { data: providers } = useListProviders(
@@ -90,6 +92,17 @@ export default function NewDeal() {
           <CardTitle className="font-mono text-sm uppercase tracking-wider text-muted-foreground">Deal Parameters</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Advisory recommendations, above the picker. They are read-only and
+              optional: "Use this provider" only pre-fills the select below. */}
+          <div className="mb-5">
+            <RecommendedProviders
+              storageGb={parseFloat(storageGb)}
+              durationEpochs={parseInt(durationEpochs, 10)}
+              region={region}
+              onUseProvider={(id) => setProviderId(String(id))}
+            />
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <Label className="font-mono text-xs uppercase text-muted-foreground">Storage Provider</Label>
@@ -145,6 +158,22 @@ export default function NewDeal() {
                   className="font-mono bg-background/50 border-primary/20"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-mono text-xs uppercase text-muted-foreground">
+                Region (optional)
+              </Label>
+              <Input
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                placeholder="any region — e.g. eu-west"
+                className="font-mono bg-background/50 border-primary/20"
+              />
+              <p className="font-mono text-xs text-muted-foreground">
+                Optional. Only filters the advisory recommendations above; it does not restrict the
+                provider list below.
+              </p>
             </div>
 
             <div className="space-y-2">

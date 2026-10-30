@@ -78,7 +78,13 @@ describe("FixtureMetaClient", () => {
   it("needs no network: every fixture is a recorded response", () => {
     // Nothing in the client touches `fetch`; if it did, this would hang or throw
     // in an environment with no network. `complete` is synchronous in effect.
-    assert.deepEqual(Object.keys(FIXTURES).sort(), ["flaky", "healthy", "invalid", "no-node"]);
+    assert.deepEqual(Object.keys(FIXTURES).sort(), [
+      "flaky",
+      "healthy",
+      "invalid",
+      "no-node",
+      "recommendation",
+    ]);
   });
 
   it("replays the healthy fixture for healthy evidence", async () => {

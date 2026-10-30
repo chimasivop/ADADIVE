@@ -16,6 +16,7 @@ import {
   assertSeedable,
   databaseHost,
   demoSpecs,
+  hasConfirmFlag,
   isLocalDatabaseUrl,
   isProductionHost,
   PRODUCTION_HOSTS,
@@ -187,6 +188,22 @@ describe("assertSeedable — remote demo override", () => {
   });
 });
 
+describe("hasConfirmFlag", () => {
+  it("is false with no arguments", () => {
+    assert.isFalse(hasConfirmFlag([]));
+  });
+
+  it("is false for unrelated flags", () => {
+    assert.isFalse(hasConfirmFlag(["--dry-run", "--verbose"]));
+  });
+
+  it("is true only for the exact --confirm flag", () => {
+    assert.isTrue(hasConfirmFlag(["--confirm"]));
+    assert.isTrue(hasConfirmFlag(["--other", "--confirm"]));
+    assert.isFalse(hasConfirmFlag(["--confirmed"]));
+  });
+});
+
 describe("demoSpecs", () => {
   const specs = demoSpecs(new Date("2025-01-01T00:00:00.000Z"));
 
@@ -265,5 +282,23 @@ describe("demoSpecs", () => {
       if (spec.peerId === null) continue;
       assert.match(spec.peerId, /^[1-9A-HJ-NP-Za-km-z]{10,128}$/);
     }
+  });
+
+  it("gives every provider a positive capacity and price for the ranker", () => {
+    for (const spec of specs) {
+      assert.isAbove(spec.totalStorageGb, 0, spec.nodeId);
+      assert.isAtLeast(spec.usedStorageGb, 0, spec.nodeId);
+      assert.isAtMost(spec.usedStorageGb, spec.totalStorageGb, spec.nodeId);
+      assert.isAbove(spec.pricePerGbPerEpoch, 0, spec.nodeId);
+    }
+  });
+
+  it("varies capacity and price so the ranking has something to order", () => {
+    assert.isAbove(new Set(specs.map((s) => s.pricePerGbPerEpoch)).size, 1);
+    assert.isAbove(new Set(specs.map((s) => s.totalStorageGb)).size, 1);
+  });
+
+  it("includes at least one provider too small for a 500 GB deal", () => {
+    assert.isTrue(specs.some((s) => s.totalStorageGb - s.usedStorageGb < 500));
   });
 });

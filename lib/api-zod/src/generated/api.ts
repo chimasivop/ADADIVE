@@ -79,6 +79,62 @@ export const CreateProviderResponse = zod.object({
 
 
 /**
+ * Advisory only. Returns the top providers for a deal the customer is describing, as a deterministic ranking (a score over provider status data, with a hard capacity/region/price-fit filter) plus a plain-language explanation per candidate. The Meta model only writes the explanation for the already-ranked candidates and never reorders them or adds a provider. It never selects a provider, signs, releases funds or changes a deal - the customer still picks the provider and signs. Only provider status data is sent to the model: never file contents, wallet keys, secrets or customer wallet addresses. Providers with insufficient evidence (sufficientEvidence: false) are labelled "Not enough evidence" and are never the best choice. available is false when the advisor is not configured; the deterministic ranking is still returned.
+ * @summary Recommend providers for a deal (read-only AI advisory)
+ */
+export const getProviderRecommendationsQueryStorageGbExclusiveMin = 0;
+
+
+
+
+export const GetProviderRecommendationsQueryParams = zod.object({
+  "storageGb": zod.coerce.number().gt(getProviderRecommendationsQueryStorageGbExclusiveMin).describe('The deal\'s storage size in GB.'),
+  "durationEpochs": zod.coerce.number().min(1).describe('The deal\'s duration in epochs.'),
+  "region": zod.coerce.string().optional().describe('Preferred region; omit for any region.'),
+  "refresh": zod.enum(['0', '1', 'true', 'false', 'yes']).optional().describe('Set to 1\/true\/yes to bypass a fresh cached result.')
+})
+
+export const GetProviderRecommendationsResponse = zod.object({
+  "available": zod.boolean(),
+  "disclaimer": zod.string(),
+  "query": zod.object({
+  "storageGb": zod.number(),
+  "durationEpochs": zod.number(),
+  "region": zod.string().nullable()
+}),
+  "candidates": zod.array(zod.object({
+  "rank": zod.number(),
+  "providerId": zod.number(),
+  "name": zod.string(),
+  "region": zod.string(),
+  "score": zod.number().describe('0-100 deterministic score. Higher is better.'),
+  "reliabilityScore": zod.number().describe('The evidence-derived part of the score (0-90), before price fit.'),
+  "riskLevel": zod.enum(['low', 'medium', 'high', 'unknown']).describe('Always \"unknown\" whenever sufficientEvidence is false.'),
+  "sufficientEvidence": zod.boolean().describe('False for the \"no node, no assignments\" case; never ranked best.'),
+  "label": zod.string().describe('The badge label; \"Not enough evidence\" when sufficientEvidence is false.'),
+  "availableGb": zod.number(),
+  "pricePerGbPerEpoch": zod.number(),
+  "estimatedCostSol": zod.number(),
+  "reasons": zod.array(zod.string()),
+  "uncertain": zod.array(zod.string()),
+  "explanationSource": zod.enum(['ai', 'deterministic'])
+})),
+  "bestProviderId": zod.number().nullable().describe('The top candidate\'s provider id, or null when nothing is recommended.'),
+  "allInsufficientEvidence": zod.boolean().describe('True when every returned candidate lacks sufficient evidence.'),
+  "consideredCount": zod.number(),
+  "filteredOut": zod.number(),
+  "cached": zod.boolean(),
+  "explanationSource": zod.enum(['ai', 'deterministic']),
+  "aiUnavailableReason": zod.string().nullable().describe('Why the explanations are deterministic, or null when they are from the model.'),
+  "demoLimitReached": zod.boolean(),
+  "note": zod.string().nullable(),
+  "generatedAt": zod.string().nullable(),
+  "model": zod.string().nullable(),
+  "mock": zod.boolean()
+}).describe('Advisory only. The deterministic provider ranking for a described deal, with a plain-language explanation per candidate. The ranking and its order come from the deterministic ranker; the model only writes the explanations and cannot reorder or add candidates. `available` is false when the advisor is not configured (the ranking is still returned). `explanationSource` is \"ai\" when the model wrote the reasons, otherwise \"deterministic\". `demoLimitReached` is true when the daily live-call budget is spent, so the result is cached or deterministic; `note` then explains it.\n')
+
+
+/**
  * @summary Get a storage provider by ID
  */
 export const GetProviderParams = zod.object({
@@ -160,6 +216,7 @@ export const UpdateProviderNodeResponse = zod.object({
   "walletAddress": zod.string().nullish().describe('Wallet that registered and owns this provider; null for rows predating the wallet flow'),
   "createdAt": zod.coerce.date()
 })
+
 
 /**
  * Advisory only. Returns the reliability advisor's structured assessment derived from provider status data. Never signs, releases funds or changes a deal. `available` is false when the advisor is not configured.

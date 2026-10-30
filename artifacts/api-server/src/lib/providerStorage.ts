@@ -88,6 +88,26 @@ export interface ProviderReliabilitySnapshot {
   assignments: AssignmentView[];
 }
 
+/**
+ * A provider row plus the three columns the *recommendation* ranker needs and
+ * the reliability evidence deliberately does not carry.
+ *
+ * Capacity and price are deal-fit inputs, not reliability signals, so they live
+ * here rather than in `ReliabilityEvidence` — the advisory evidence stays
+ * exactly as it was, and the recommendation reads these alongside it.
+ */
+export interface RecommendationProviderRecord extends ReliabilityProviderRecord {
+  totalStorageGb: number;
+  usedStorageGb: number;
+  pricePerGbPerEpoch: number;
+}
+
+/** A candidate provider and its assignments, for the recommendation ranker. */
+export interface RecommendationCandidateSnapshot {
+  provider: RecommendationProviderRecord;
+  assignments: AssignmentView[];
+}
+
 export interface NewProviderInput {
   name: string;
   nodeId: string;
@@ -118,6 +138,19 @@ export interface ProviderStorageStore {
   getProviderReliabilitySnapshot(
     providerId: number
   ): Promise<ProviderReliabilitySnapshot | null>;
+
+  /**
+   * Every *active* provider with enough capacity to serve `minStorageGb`, each
+   * with its assignments, for the recommendation ranker.
+   *
+   * Read-only, and the capacity pre-filter is an optimisation only: the ranker
+   * re-checks capacity, region and price itself, so a store that returns more
+   * than asked (or the in-memory test store, which returns everything) is still
+   * correct.
+   */
+  listRecommendationCandidates(
+    minStorageGb: number
+  ): Promise<RecommendationCandidateSnapshot[]>;
 
   /** The deal with this id, to check a confirm's CID matches the assignment. */
   findDealById(id: number): Promise<DealRecord | null>;

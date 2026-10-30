@@ -85,3 +85,68 @@ export function unknownAssessment(reason: string): Assessment {
       "automated assessment was inconclusive.",
   };
 }
+
+// ── Recommendation explanations ─────────────────────────────────────────────
+//
+// A second, deliberately narrower contract. The deterministic ranker has already
+// chosen and ordered the candidates (see `ranking.ts`); the model is asked only
+// to rewrite the prose for each of them, keyed by position. There is no field
+// for a provider id, a score or an order, so the model has nowhere to express
+// "use this one instead" — that is the structural half of "the model may not
+// rank".
+
+export const candidateExplanationSchema = z.object({
+  /** The 0-based position of the candidate in the list the model was sent. */
+  index: z.number().int().nonnegative(),
+  reasons: z.array(z.string()),
+  uncertain: z.array(z.string()),
+});
+
+export const recommendationExplanationSchema = z.object({
+  candidates: z.array(candidateExplanationSchema),
+});
+
+export type RecommendationExplanation = z.infer<typeof recommendationExplanationSchema>;
+export type CandidateExplanation = z.infer<typeof candidateExplanationSchema>;
+
+/**
+ * The JSON Schema given to the model for a recommendation request.
+ *
+ * `additionalProperties: false` and a full `required` list mean the model cannot
+ * omit a field or invent one (e.g. a `providerId` or a `score`). It satisfies the
+ * Meta Model API's strict subset for the same reason the assessment schema does.
+ */
+export const RECOMMENDATION_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    candidates: {
+      type: "array",
+      description: "One entry per candidate you were sent, keyed by its index.",
+      items: {
+        type: "object",
+        properties: {
+          index: {
+            type: "integer",
+            minimum: 0,
+            description: "The 0-based index of the candidate in the list you were sent.",
+          },
+          reasons: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Plain-language reasons this candidate is a good or poor fit, each tied to the facts given.",
+          },
+          uncertain: {
+            type: "array",
+            items: { type: "string" },
+            description: "What the facts do not settle, if anything.",
+          },
+        },
+        required: ["index", "reasons", "uncertain"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["candidates"],
+  additionalProperties: false,
+} as const;
