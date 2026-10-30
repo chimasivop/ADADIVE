@@ -78,6 +78,21 @@ export interface Provider {
   activeDeals?: number | null;
   /** @nullable */
   totalSolEarned?: number | null;
+  /**
+     * libp2p peer id of the provider's storage node; null when the provider has no node and deals stay on the centralized Pinata path
+     * @nullable
+     */
+  peerId?: string | null;
+  /**
+     * Last heartbeat the provider-agent reported for this node; null until the agent runs for the first time
+     * @nullable
+     */
+  lastHeartbeatAt?: string | null;
+  /**
+     * Wallet that registered and owns this provider; null for rows predating the wallet flow
+     * @nullable
+     */
+  walletAddress?: string | null;
   createdAt: string;
 }
 
@@ -87,6 +102,19 @@ export interface ProviderInput {
   totalStorageGb: number;
   pricePerGbPerEpoch: number;
   region: string;
+  /**
+     * libp2p peer id of the provider's storage node; omit or null for the centralized Pinata path
+     * @nullable
+     */
+  peerId?: string | null;
+}
+
+export interface ProviderNodeInput {
+  /**
+     * libp2p peer id of the provider's storage node; null clears it and returns the provider to the centralized Pinata path
+     * @nullable
+     */
+  peerId: string | null;
 }
 
 export type DealStatus = typeof DealStatus[keyof typeof DealStatus];

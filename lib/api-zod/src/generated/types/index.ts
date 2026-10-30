@@ -34,6 +34,7 @@ export * from './networkStats';
 export * from './pricePoint';
 export * from './provider';
 export * from './providerInput';
+export * from './providerNodeInput';
 export * from './providerStatus';
 export * from './regionStat';
 export * from './waitlistEntry';

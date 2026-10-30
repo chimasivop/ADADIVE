@@ -4,7 +4,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import logoUrl from "@assets/seedream-4.0_Hexagonal_gold_emblem_on_deep_black_background_bl_1780317486678.jpg";
 import {
   LayoutDashboard, Server, Database, Pin, Users,
-  Wallet, LogOut, Loader2, Sun, Moon,
+  Wallet, LogOut, Loader2, Sun, Moon, Sparkles,
 } from "lucide-react";
 import {
   Sidebar,
@@ -124,6 +124,52 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* ── Provider onboarding: a separate, standalone page, so it is its own
+             group rather than an entry in the EXPLORER list above. ── */}
+        <SidebarGroup>
+          <SidebarGroupLabel
+            style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: "9px",
+              letterSpacing: "0.25em",
+              color: dim,
+              paddingLeft: "20px",
+              marginBottom: "6px",
+              opacity: 0.7,
+            }}
+          >
+            EARN
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: "11px",
+                    letterSpacing: "0.18em",
+                    color: dim,
+                    background: "transparent",
+                    border: "1px solid transparent",
+                    borderRadius: "2px",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  <Link
+                    href="/become-a-provider"
+                    className="flex items-center gap-3 px-3 py-2"
+                    style={{ color: "inherit" }}
+                  >
+                    <Sparkles className="size-3.5" style={{ color: dim }} />
+                    <span>BECOME A PROVIDER</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -120,6 +120,42 @@ paths:
                 items:
                   $ref: "#/components/schemas/Deal"
 
+  /providers/{id}/node:
+    patch:
+      operationId: updateProviderNode
+      tags: [providers]
+      summary: Link, change, or clear the provider's storage node
+      description: >
+        Sets the libp2p peer id of the provider's own IPFS (Kubo) node, after
+        registration. `peerId: null` clears it, returning the provider to the
+        centralized Pinata path. Only the wallet that owns the provider row may
+        call this.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderNodeInput"
+      responses:
+        "200":
+          description: Updated provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "400":
+          description: Malformed peer id
+        "403":
+          description: The authenticated wallet does not own this provider
+        "404":
+          description: Not found
+
   /deals:
     get:
       operationId: listDeals
@@ -529,6 +565,16 @@ components:
           type: ["integer", "null"]
         totalSolEarned:
           type: ["number", "null"]
+        peerId:
+          type: ["string", "null"]
+          description: libp2p peer id of the provider's storage node; null when the provider has no node and deals stay on the centralized Pinata path
+        lastHeartbeatAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Last heartbeat the provider-agent reported for this node; null until the agent runs for the first time
+        walletAddress:
+          type: ["string", "null"]
+          description: Wallet that registered and owns this provider; null for rows predating the wallet flow
         createdAt:
           type: string
           format: date-time
@@ -547,6 +593,17 @@ components:
           type: number
         region:
           type: string
+        peerId:
+          type: ["string", "null"]
+          description: libp2p peer id of the provider's storage node; omit or null for the centralized Pinata path
+
+    ProviderNodeInput:
+      type: object
+      required: [peerId]
+      properties:
+        peerId:
+          type: ["string", "null"]
+          description: libp2p peer id of the provider's storage node; null clears it and returns the provider to the centralized Pinata path
 
     Deal:
       type: object

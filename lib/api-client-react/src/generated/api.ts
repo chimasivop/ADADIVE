@@ -39,6 +39,7 @@ import type {
   NetworkStats,
   Provider,
   ProviderInput,
+  ProviderNodeInput,
   WaitlistEntry,
   WaitlistInput
 } from './api.schemas';
@@ -455,6 +456,78 @@ export function useGetProviderDeals<TData = Awaited<ReturnType<typeof getProvide
 
 
 
+
+export const getUpdateProviderNodeUrl = (id: number,) => {
+
+
+
+
+  return `/api/providers/${id}/node`
+}
+
+/**
+ * Sets the libp2p peer id of the provider's own IPFS (Kubo) node, after registration. `peerId: null` clears it, returning the provider to the centralized Pinata path. Only the wallet that owns the provider row may call this.
+ * @summary Link, change, or clear the provider's storage node
+ */
+export const updateProviderNode = async (id: number,
+    providerNodeInput: ProviderNodeInput, options?: RequestInit): Promise<Provider> => {
+
+  return customFetch<Provider>(getUpdateProviderNodeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(providerNodeInput)
+  }
+);}
+
+
+
+
+export const getUpdateProviderNodeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderNode>>, TError,{id: number;data: BodyType<ProviderNodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProviderNode>>, TError,{id: number;data: BodyType<ProviderNodeInput>}, TContext> => {
+
+const mutationKey = ['updateProviderNode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProviderNode>>, {id: number;data: BodyType<ProviderNodeInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateProviderNode(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProviderNodeMutationResult = NonNullable<Awaited<ReturnType<typeof updateProviderNode>>>
+    export type UpdateProviderNodeMutationBody = BodyType<ProviderNodeInput>
+    export type UpdateProviderNodeMutationError = ErrorType<void>
+
+    /**
+ * @summary Link, change, or clear the provider's storage node
+ */
+export const useUpdateProviderNode = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderNode>>, TError,{id: number;data: BodyType<ProviderNodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProviderNode>>,
+        TError,
+        {id: number;data: BodyType<ProviderNodeInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateProviderNodeMutationOptions(options));
+    }
 
 export const getListDealsUrl = (params?: ListDealsParams,) => {
   const normalizedParams = new URLSearchParams();
