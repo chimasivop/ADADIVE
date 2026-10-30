@@ -1,4 +1,4 @@
-# ADADIVE — agent notes
+# ADADIVE — Agent notes
 
 ## Wallet connect (Solana)
 
@@ -484,3 +484,44 @@ the same address.
 `public/adadive-agent.mjs` is the built agent, served as the page's download.
 `pnpm --filter @workspace/provider-agent run sync:frontend-bundle` regenerates
 it — run that after changing the agent, or the download silently drifts.
+
+## Railway/Railpack: root `railpack.json` forces the Node provider
+
+The repo root has a `Cargo.toml` (the Anchor workspace) and a
+`rust-toolchain.toml`, and Railpack detects Rust **before** Node
+(`core/providers/provider.go`). Without an override the builder picks Rust and
+skips pnpm entirely, so `api-server`, `oracle-backend` and `cardano-storage`
+never install or build. The root `railpack.json` sets `"provider": "node"`:
+`config.Provider` from that file wins over auto-detection, so the Node provider
+always runs. Keep it at the repo root — it is the only thing standing between
+the Rust toolchain files and a broken deploy.
+
+Per-service build/start commands do **not** belong in this file. Commands in
+`railpack.json` are not merged into the provider-generated build plan (only
+steps/overrides are), and a `deploy.startCommand` in the file outranks the
+per-service value Railway injects. Since one file serves all three services,
+putting a command here would pin every service to the same one. Instead set the
+build and start command in each Railway service's settings (Railway passes them
+to Railpack as `--build-cmd`/`--start-cmd`, i.e. `RAILPACK_BUILD_CMD`/
+`RAILPACK_START_CMD`), targeting the workspace package:
+
+    build:  pnpm --filter @workspace/<service> run build
+    start:  pnpm --filter @workspace/<service> run start
+
+All three `artifacts/*` services expose both `build` and `start`, and each
+builds from a clean `pnpm install` at the root (verified: api-server →
+`dist/index.mjs`, oracle-backend → `dist/index.mjs` + copied `migrations/`,
+cardano-storage → `dist/public`). Leave the default start command in service
+settings for a static site only if you set `RAILPACK_SPA_OUTPUT_DIR`; here each
+service has a real `start` script, which also suppresses Railpack's Caddy/SPA
+mode.
+
+`exclude` in `railpack.json` **replaces** the provider's default excludes rather
+than extending them, so listing it means re-listing `node_modules` or the build
+context balloons. It is set to `["node_modules", "rust-toolchain.toml"]` for a
+second reason: Railpack treats `rust-toolchain.toml` as an idiomatic mise
+version file, copies it into the `packages:mise` step and enables the `rust`
+tool, so `mise install` would pull the whole Rust toolchain (~hundreds of MB)
+into every Node build. Excluding the file keeps `mise install` to node + pnpm.
+Verify with `railpack prepare . --show-plan`: it must print `Using provider Node
+from config` and `install mise packages: node, pnpm`.
