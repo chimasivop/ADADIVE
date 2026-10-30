@@ -78,6 +78,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/Provider"
 
+  /providers/recommend:
+    get:
+      operationId: getProviderRecommendations
+      tags: [providers]
+      summary: Recommend providers for a deal (read-only AI advisory)
+      description: >
+        Advisory only. Returns the top providers for a deal the customer is
+        describing, as a deterministic ranking (a score over provider status
+        data, with a hard capacity/region/price-fit filter) plus a
+        plain-language explanation per candidate. The Meta model only writes the
+        explanation for the already-ranked candidates and never reorders them or
+        adds a provider. It never selects a provider, signs, releases funds or
+        changes a deal - the customer still picks the provider and signs. Only
+        provider status data is sent to the model: never file contents, wallet
+        keys, secrets or customer wallet addresses. Providers with insufficient
+        evidence (sufficientEvidence: false) are labelled "Not enough evidence"
+        and are never the best choice. available is false when the advisor is not
+        configured; the deterministic ranking is still returned.
+      parameters:
+        - in: query
+          name: storageGb
+          schema:
+            type: number
+            exclusiveMinimum: 0
+          required: true
+          description: The deal's storage size in GB.
+        - in: query
+          name: durationEpochs
+          schema:
+            type: integer
+            minimum: 1
+          required: true
+          description: The deal's duration in epochs.
+        - in: query
+          name: region
+          schema:
+            type: string
+          required: false
+          description: Preferred region; omit for any region.
+        - in: query
+          name: refresh
+          schema:
+            type: string
+            enum: ["0", "1", "true", "false", "yes"]
+          required: false
+          description: Set to 1/true/yes to bypass a fresh cached result.
+      responses:
+        "200":
+          description: Recommendation result (always present; may be deterministic only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderRecommendation"
+        "400":
+          description: Missing or malformed query parameters
+
   /providers/{id}:
     get:
       operationId: getProvider
@@ -697,6 +753,116 @@ components:
             type: string
         recommended_action:
           type: string
+
+    ProviderRecommendation:
+      type: object
+      required: [available, disclaimer, query, candidates, bestProviderId, allInsufficientEvidence, consideredCount, filteredOut, cached, explanationSource, aiUnavailableReason, demoLimitReached, note, generatedAt, model, mock]
+      description: >
+        Advisory only. The deterministic provider ranking for a described deal,
+        with a plain-language explanation per candidate. The ranking and its
+        order come from the deterministic ranker; the model only writes the
+        explanations and cannot reorder or add candidates. `available` is false
+        when the advisor is not configured (the ranking is still returned).
+        `explanationSource` is "ai" when the model wrote the reasons, otherwise
+        "deterministic". `demoLimitReached` is true when the daily live-call
+        budget is spent, so the result is cached or deterministic; `note` then
+        explains it.
+      properties:
+        available:
+          type: boolean
+        disclaimer:
+          type: string
+        query:
+          $ref: "#/components/schemas/RecommendationQuery"
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecommendedProvider"
+        bestProviderId:
+          type: ["integer", "null"]
+          description: The top candidate's provider id, or null when nothing is recommended.
+        allInsufficientEvidence:
+          type: boolean
+          description: True when every returned candidate lacks sufficient evidence.
+        consideredCount:
+          type: integer
+        filteredOut:
+          type: integer
+        cached:
+          type: boolean
+        explanationSource:
+          type: string
+          enum: [ai, deterministic]
+        aiUnavailableReason:
+          type: ["string", "null"]
+          description: Why the explanations are deterministic, or null when they are from the model.
+        demoLimitReached:
+          type: boolean
+        note:
+          type: ["string", "null"]
+        generatedAt:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        mock:
+          type: boolean
+
+    RecommendationQuery:
+      type: object
+      required: [storageGb, durationEpochs, region]
+      properties:
+        storageGb:
+          type: number
+        durationEpochs:
+          type: integer
+        region:
+          type: ["string", "null"]
+
+    RecommendedProvider:
+      type: object
+      required: [rank, providerId, name, region, score, reliabilityScore, riskLevel, sufficientEvidence, label, availableGb, pricePerGbPerEpoch, estimatedCostSol, reasons, uncertain, explanationSource]
+      properties:
+        rank:
+          type: integer
+        providerId:
+          type: integer
+        name:
+          type: string
+        region:
+          type: string
+        score:
+          type: number
+          description: 0-100 deterministic score. Higher is better.
+        reliabilityScore:
+          type: number
+          description: The evidence-derived part of the score (0-90), before price fit.
+        riskLevel:
+          type: string
+          enum: [low, medium, high, unknown]
+          description: Always "unknown" whenever sufficientEvidence is false.
+        sufficientEvidence:
+          type: boolean
+          description: False for the "no node, no assignments" case; never ranked best.
+        label:
+          type: string
+          description: The badge label; "Not enough evidence" when sufficientEvidence is false.
+        availableGb:
+          type: number
+        pricePerGbPerEpoch:
+          type: number
+        estimatedCostSol:
+          type: number
+        reasons:
+          type: array
+          items:
+            type: string
+        uncertain:
+          type: array
+          items:
+            type: string
+        explanationSource:
+          type: string
+          enum: [ai, deterministic]
 
     Deal:
       type: object

@@ -27,6 +27,7 @@ import healthy from "./fixtures/healthy.json";
 import flaky from "./fixtures/flaky.json";
 import noNode from "./fixtures/no-node.json";
 import invalid from "./fixtures/invalid.json";
+import recommendation from "./fixtures/recommendation.json";
 
 /** The recorded responses, keyed by scenario. */
 export const FIXTURES: Record<string, unknown> = {
@@ -34,6 +35,7 @@ export const FIXTURES: Record<string, unknown> = {
   flaky,
   "no-node": noNode,
   invalid,
+  recommendation,
 };
 
 /**

@@ -1,10 +1,15 @@
 /**
- * Seed six demo providers for the reliability advisor:
+ * Seed six demo providers for the reliability advisor and the provider
+ * recommendation:
  * three healthy, two flaky, one new.
  *
  * Run:
  *   DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/adadive \
- *     pnpm --filter @workspace/scripts run seed:demo-providers
+ *     pnpm --filter @workspace/scripts run seed:demo-providers -- --confirm
+ *
+ * The `--confirm` flag is required. Without it the script prints what it would
+ * do and exits without opening a connection, so a copy-pasted command cannot
+ * write rows by accident.
  *
  * ## Safety
  *
@@ -29,16 +34,22 @@
  * Demo rows are identified by a `demo-` prefix on `node_id` (and the matching
  * wallet). Re-running the script deletes the previous demo rows first — the
  * `deal_assignments` and `deals` rows cascade from `providers` — so the script
- * converges on the same six providers rather than piling up duplicates.
+ * converges on the same six providers rather than piling up duplicates. Only
+ * rows whose `node_id` starts with `demo-` are ever deleted or written, so a
+ * real provider is never touched.
  *
  * ## What each provider looks like
  *
  *   - healthy: a registered node with a fresh heartbeat, confirmed assignments,
- *     no at-risk flag, zero streak.
+ *     no at-risk flag, zero streak, ample capacity.
  *   - flaky:   a registered node with a stale heartbeat and assignments the
  *     oracle has flagged at-risk with a full consecutive-negative streak.
  *   - new:     no registered node, no heartbeat, no assignments — so the advisor
  *     has nothing to judge and should answer `unknown`.
+ *
+ * Capacity and price vary across the six so the recommendation ranking has
+ * something to order (a provider that cannot fit a deal is filtered out, and a
+ * cheaper one scores higher on price fit).
  */
 
 import pg from "pg";
@@ -214,6 +225,12 @@ interface DemoSpec {
   region: string;
   reputationScore: number;
   uptimePercent: number;
+  /** Total storage the provider advertises, in GB. */
+  totalStorageGb: number;
+  /** Storage already committed, in GB. */
+  usedStorageGb: number;
+  /** Price in SOL per GB per epoch. */
+  pricePerGbPerEpoch: number;
   peerId: string | null;
   /** Heartbeat age in ms, or `null` for "never reported". */
   heartbeatAgeMs: number | null;
@@ -240,6 +257,9 @@ export function demoSpecs(now: Date): DemoSpec[] {
       region: "eu-west",
       reputationScore: 100,
       uptimePercent: 99.95,
+      totalStorageGb: 2000,
+      usedStorageGb: 200,
+      pricePerGbPerEpoch: 0.0011,
       peerId: PEER.healthy1,
       heartbeatAgeMs: 30_000,
       assignments: [healthyAssignment, healthyAssignment],
@@ -251,6 +271,9 @@ export function demoSpecs(now: Date): DemoSpec[] {
       region: "us-east",
       reputationScore: 98,
       uptimePercent: 99.8,
+      totalStorageGb: 1500,
+      usedStorageGb: 100,
+      pricePerGbPerEpoch: 0.0016,
       peerId: PEER.healthy2,
       heartbeatAgeMs: 45_000,
       assignments: [healthyAssignment],
@@ -262,6 +285,11 @@ export function demoSpecs(now: Date): DemoSpec[] {
       region: "ap-south",
       reputationScore: 96,
       uptimePercent: 99.5,
+      // Deliberately small: a large deal filters this one out, which is the
+      // capacity filter the recommendation demonstrates.
+      totalStorageGb: 120,
+      usedStorageGb: 20,
+      pricePerGbPerEpoch: 0.0013,
       peerId: PEER.healthy3,
       heartbeatAgeMs: 20_000,
       assignments: [healthyAssignment],
@@ -273,6 +301,9 @@ export function demoSpecs(now: Date): DemoSpec[] {
       region: "eu-central",
       reputationScore: 62,
       uptimePercent: 87.2,
+      totalStorageGb: 1000,
+      usedStorageGb: 0,
+      pricePerGbPerEpoch: 0.0009,
       peerId: PEER.flaky1,
       heartbeatAgeMs: 30 * MINUTE,
       assignments: [
@@ -293,6 +324,9 @@ export function demoSpecs(now: Date): DemoSpec[] {
       region: "us-west",
       reputationScore: 70,
       uptimePercent: 90.1,
+      totalStorageGb: 1000,
+      usedStorageGb: 0,
+      pricePerGbPerEpoch: 0.0012,
       peerId: PEER.flaky2,
       heartbeatAgeMs: 12 * MINUTE,
       assignments: [
@@ -313,6 +347,9 @@ export function demoSpecs(now: Date): DemoSpec[] {
       region: "us-east",
       reputationScore: 100,
       uptimePercent: 100,
+      totalStorageGb: 1000,
+      usedStorageGb: 0,
+      pricePerGbPerEpoch: 0.001,
       // No node, no heartbeat, no assignments: nothing to judge.
       peerId: null,
       heartbeatAgeMs: null,
@@ -357,8 +394,9 @@ export async function seed(
       .values({
         name: spec.name,
         nodeId: spec.nodeId,
-        totalStorageGb: 500,
-        pricePerGbPerEpoch: 0.0013,
+        totalStorageGb: spec.totalStorageGb,
+        usedStorageGb: spec.usedStorageGb,
+        pricePerGbPerEpoch: spec.pricePerGbPerEpoch,
         region: spec.region,
         status: "active",
         reputationScore: spec.reputationScore,
@@ -370,7 +408,7 @@ export async function seed(
       .returning({ id: providersTable.id });
     result.providers += 1;
 
-    for (const [i, assignment] of spec.assignments.entries()) {
+    for (const assignment of spec.assignments) {
       const [deal] = await db
         .insert(dealsTable)
         .values({
@@ -403,14 +441,33 @@ export async function seed(
         confirmedAt: assignment.status === "confirmed" ? new Date(now.getTime() - 2 * MINUTE) : null,
       });
       result.assignments += 1;
-      void i;
     }
   }
 
   return result;
 }
 
+/** True when the CLI was passed `--confirm` (the explicit write consent). */
+export function hasConfirmFlag(argv: readonly string[]): boolean {
+  return argv.includes("--confirm");
+}
+
 async function main(): Promise<number> {
+  // The explicit consent gate, checked before anything else. Without `--confirm`
+  // nothing is written and no connection is opened, so a copy-pasted command
+  // cannot seed by accident.
+  if (!hasConfirmFlag(process.argv.slice(2))) {
+    const specs = demoSpecs(new Date());
+    process.stdout.write(
+      "dry run: no --confirm flag, so nothing was written.\n" +
+        `would seed ${specs.length} demo providers (3 healthy, 2 flaky, 1 new):\n` +
+        specs.map((s) => `  - ${s.nodeId}  ${s.name}`).join("\n") +
+        "\n\nre-run with --confirm to write them:\n" +
+        "  pnpm --filter @workspace/scripts run seed:demo-providers -- --confirm\n"
+    );
+    return 0;
+  }
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     process.stderr.write(
@@ -441,7 +498,9 @@ async function main(): Promise<number> {
       `seeded ${result.providers} demo providers ` +
         `(${result.deals} deals, ${result.assignments} assignments)\n` +
         `  3 healthy, 2 flaky, 1 new — run the advisor with:\n` +
-        `    PROVIDER_ID=<id> META_MOCK=1 pnpm --filter @workspace/reliability-agent assess\n`
+        `    PROVIDER_ID=<id> META_MOCK=1 pnpm --filter @workspace/reliability-agent assess\n` +
+        `  and the recommendation with:\n` +
+        `    curl "http://127.0.0.1:3000/api/providers/recommend?storageGb=100&durationEpochs=10"\n`
     );
     return 0;
   } finally {

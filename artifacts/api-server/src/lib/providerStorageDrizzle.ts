@@ -5,7 +5,7 @@
  * so the routes and their tests stay free of a database dependency.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import {
   db,
   providersTable,
@@ -20,6 +20,7 @@ import type {
   ProviderRecord,
   ProviderReliabilitySnapshot,
   ProviderStorageStore,
+  RecommendationCandidateSnapshot,
 } from "./providerStorage";
 
 const providerColumns = {
@@ -169,6 +170,71 @@ export const drizzleProviderStorageStore: ProviderStorageStore = {
       .where(eq(dealAssignmentsTable.providerId, providerId));
 
     return { provider, assignments: rows };
+  },
+
+  async listRecommendationCandidates(
+    minStorageGb: number
+  ): Promise<RecommendationCandidateSnapshot[]> {
+    // Two queries rather than one join: a provider with *no* assignments is a
+    // legitimate candidate (the "new provider" case), and an inner join would
+    // drop it. The capacity pre-filter is an optimisation — the ranker re-checks
+    // capacity, region and price itself.
+    const providers = await db
+      .select({
+        id: providersTable.id,
+        name: providersTable.name,
+        status: providersTable.status,
+        region: providersTable.region,
+        reputationScore: providersTable.reputationScore,
+        uptimePercent: providersTable.uptimePercent,
+        peerId: providersTable.peerId,
+        lastHeartbeatAt: providersTable.lastHeartbeatAt,
+        totalStorageGb: providersTable.totalStorageGb,
+        usedStorageGb: providersTable.usedStorageGb,
+        pricePerGbPerEpoch: providersTable.pricePerGbPerEpoch,
+      })
+      .from(providersTable)
+      .where(
+        and(
+          eq(providersTable.status, "active"),
+          gte(
+            sql`${providersTable.totalStorageGb} - ${providersTable.usedStorageGb}`,
+            minStorageGb
+          )
+        )
+      );
+    if (providers.length === 0) return [];
+
+    const rows = await db
+      .select({
+        assignment: assignmentColumns,
+        deal: dealColumns,
+        provider: providerColumns,
+      })
+      .from(dealAssignmentsTable)
+      .innerJoin(dealsTable, eq(dealAssignmentsTable.dealId, dealsTable.id))
+      .innerJoin(
+        providersTable,
+        eq(dealAssignmentsTable.providerId, providersTable.id)
+      )
+      .where(
+        inArray(
+          dealAssignmentsTable.providerId,
+          providers.map((p) => p.id)
+        )
+      );
+
+    const byProvider = new Map<number, AssignmentView[]>();
+    for (const row of rows) {
+      const list = byProvider.get(row.assignment.providerId) ?? [];
+      list.push(row);
+      byProvider.set(row.assignment.providerId, list);
+    }
+
+    return providers.map((provider) => ({
+      provider,
+      assignments: byProvider.get(provider.id) ?? [],
+    }));
   },
 
   async findDealById(id: number): Promise<DealRecord | null> {

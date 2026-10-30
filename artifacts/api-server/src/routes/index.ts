@@ -9,6 +9,7 @@ import authRouter from "./auth";
 import seedRouter from "./seed";
 import { createProviderStorageRouter } from "./provider";
 import { createAdvisoryRouter } from "./advisory";
+import { createRecommendationRouter } from "./recommend";
 import { drizzleProviderStorageStore } from "../lib/providerStorageDrizzle";
 import { authMiddleware } from "../middlewares/authMiddleware";
 import { logger } from "../lib/logger";
@@ -16,6 +17,8 @@ import {
   ADVISORY_DISCLAIMER,
   assessFromFixture,
   createAdvisoryServiceFromEnv,
+  createRecommendationServiceFromEnv,
+  RECOMMENDATION_DISCLAIMER,
 } from "@workspace/reliability-agent";
 import { createDailyBudgetFromEnv, createRateLimitFromEnv } from "../lib/advisoryBudget";
 
@@ -64,8 +67,32 @@ router.use(
   })
 );
 
+// The recommendation advisor: the same Meta client and the same daily budget as
+// the advisory surface, but a separate service because it explains a list the
+// deterministic ranker has already ordered. `available` is false when no key is
+// set and mock mode is off — the route then returns the deterministic ranking
+// with an "AI explanation unavailable" note rather than erroring.
+const recommendation = createRecommendationServiceFromEnv(process.env);
+if (!recommendation.available) {
+  logger.info(
+    { reason: recommendation.reason },
+    "recommendation advisor is not configured; the route will return the deterministic ranking"
+  );
+}
+
 router.use(healthRouter);
 router.use(storageRouter);
+// Mounted *before* `providersRouter` so `/providers/recommend` is matched
+// before `/providers/:id` (which would otherwise read "recommend" as an id).
+router.use(
+  createRecommendationRouter({
+    store: drizzleProviderStorageStore,
+    advisor: recommendation.available ? recommendation.service : null,
+    disclaimer: RECOMMENDATION_DISCLAIMER,
+    budget: recommendation.available && !recommendation.mock ? advisoryBudget : null,
+    rateLimit: createRateLimitFromEnv(process.env),
+  })
+);
 router.use(providersRouter);
 router.use(dealsRouter);
 router.use(statsRouter);

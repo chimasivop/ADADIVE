@@ -16,6 +16,7 @@ import type {
   ProviderRecord,
   ProviderReliabilitySnapshot,
   ProviderStorageStore,
+  RecommendationCandidateSnapshot,
 } from "../../src/lib/providerStorage";
 
 /**
@@ -29,6 +30,9 @@ interface SeededReliability {
   region: string;
   reputationScore: number | null;
   uptimePercent: number | null;
+  totalStorageGb: number;
+  usedStorageGb: number;
+  pricePerGbPerEpoch: number;
 }
 
 export class InMemoryProviderStorage implements ProviderStorageStore {
@@ -59,6 +63,9 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
         region: "us-east",
         reputationScore: 100,
         uptimePercent: 99.9,
+        totalStorageGb: 1000,
+        usedStorageGb: 0,
+        pricePerGbPerEpoch: 0.001,
       });
     }
     return provider;
@@ -72,6 +79,9 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
       region: "us-east",
       reputationScore: 100,
       uptimePercent: 99.9,
+      totalStorageGb: 1000,
+      usedStorageGb: 0,
+      pricePerGbPerEpoch: 0.001,
     };
     this.reliability.set(providerId, { ...current, ...row });
   }
@@ -185,6 +195,51 @@ export class InMemoryProviderStorage implements ProviderStorageStore {
   async findDealById(id: number): Promise<DealRecord | null> {
     return this.deals.find((d) => d.id === id) ?? null;
   }
+
+  /**
+   * Every provider with its assignments, for the recommendation ranker.
+   *
+   * Unlike the Drizzle store this does not pre-filter by capacity or status —
+   * the ranker does both, and a test store that returns everything keeps the
+   * ranking the thing under test.
+   */
+  async listRecommendationCandidates(
+    _minStorageGb: number
+  ): Promise<RecommendationCandidateSnapshot[]> {
+    return this.providers.map((provider) => {
+      const meta = this.reliability.get(provider.id) ?? {
+        name: `Provider ${provider.id}`,
+        status: "active",
+        region: "us-east",
+        reputationScore: null,
+        uptimePercent: null,
+        totalStorageGb: 0,
+        usedStorageGb: 0,
+        pricePerGbPerEpoch: 0,
+      };
+      const assignments = this.assignments
+        .filter((a) => a.providerId === provider.id)
+        .map((a) => this.view(a))
+        .filter((v): v is AssignmentView => v !== null);
+      return {
+        provider: {
+          id: provider.id,
+          name: meta.name,
+          status: meta.status,
+          region: meta.region,
+          reputationScore: meta.reputationScore,
+          uptimePercent: meta.uptimePercent,
+          peerId: provider.peerId,
+          lastHeartbeatAt: provider.lastHeartbeatAt,
+          totalStorageGb: meta.totalStorageGb,
+          usedStorageGb: meta.usedStorageGb,
+          pricePerGbPerEpoch: meta.pricePerGbPerEpoch,
+        },
+        assignments,
+      };
+    });
+  }
+
   async findAssignmentById(id: number): Promise<AssignmentRecord | null> {
     return this.assignments.find((a) => a.id === id) ?? null;
   }
