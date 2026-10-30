@@ -17,12 +17,15 @@
 #   * The oracle backend's entry guard (`isMainModule`) does not match under
 #     `tsx` in some environments, so `run dev` can exit 0 without doing
 #     anything. This runs the esbuild bundle instead, where the guard matches.
-#   * The validator starts with an *unfunded* payer, so the deploy needs an
-#     airdrop first.
-#   * The program id is fixed (`declare_id!`); deploying it needs the matching
-#     keypair. A copy is kept at `keys/adadive_escrow-keypair.json` and restored
-#     into `target/deploy/` on demand, so a fresh checkout does not depend on
-#     the ADADIVE-solana prototype still existing.
+#   * The validator starts with an *unfunded* payer, so the airdrop below is
+#     needed before the role keypairs can be funded.
+#   * The program id is fixed (`declare_id!`), but the program keypair is
+#     gitignored, so a fresh checkout does not have it — and `solana program
+#     deploy` cannot place a program at an address whose keypair it lacks.
+#     The program is loaded into the validator's genesis at the declared address
+#     with `--bpf-program` instead (see scripts/devnet-setup.sh), which needs no
+#     keypair at all. If a keypair does exist under `keys/` it is restored, but
+#     it is not required.
 #
 # Secrets are read from the environment, or from a `.env` file at the repo root
 # if one exists (gitignored). `PINATA_JWT` is required for anything that pins.
@@ -50,13 +53,36 @@ ORACLE_DB="${ORACLE_DB:-adadive_oracle}"
 API_DB="${API_DB:-adadive}"
 
 RPC="${SOLANA_RPC_URL:-http://127.0.0.1:8899}"
+# Must match `declare_id!` in programs/adadive_escrow/src/lib.rs and
+# Anchor.toml. The program is loaded at this address, so a drift here would put
+# the program somewhere the clients do not look for it.
+PROGRAM_ID="${PROGRAM_ID:-7oK8tkw3H8HYqfb23wm2Jss82hSmVffhUDS2R5GE4NdS}"
 ORACLE_PORT="${ORACLE_PORT:-5001}"
 API_PORT="${API_PORT:-5000}"
 FRONTEND_PORT="${PORT:-12000}"
 
 # The preview host the frontend is reached through. Override for a different
-# forwarded host.
+# forwarded host. When unset, derive it from the runtime's own environment
+# (`RUNTIME_URL` plus the `WORKER_N` ports), because the browser sends an
+# `Origin` for the forwarded host and the api-server rejects an origin it was
+# not told about — a proxied request is not same-origin from its point of view,
+# so an unlisted preview origin fails the CORS check with an HTML 500.
 PREVIEW_HOSTS="${PREVIEW_HOSTS:-}"
+if [[ -z "$PREVIEW_HOSTS" && -n "${RUNTIME_URL:-}" ]]; then
+  runtime_host="${RUNTIME_URL#*://}"
+  runtime_host="${runtime_host%/}"
+  preview_list=()
+  for n in 1 2 3 4; do
+    port_var="WORKER_$n"
+    if [[ -n "${!port_var:-}" ]]; then
+      preview_list+=("https://work-$n-$runtime_host")
+    fi
+  done
+  if [[ ${#preview_list[@]} -gt 0 ]]; then
+    PREVIEW_HOSTS="$(IFS=,; echo "${preview_list[*]}")"
+    echo "==> Derived preview hosts from RUNTIME_URL: $PREVIEW_HOSTS"
+  fi
+fi
 ALLOWED_ORIGIN="${ALLOWED_ORIGIN:-http://localhost:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT}${PREVIEW_HOSTS:+,$PREVIEW_HOSTS}}"
 
 # Local credentials for the development-only admin surface. Not secrets, not
@@ -137,26 +163,19 @@ ensure_pg_running() {
   pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1
 }
 
-# The program id is fixed by `declare_id!`, so the deploy needs the matching
-# keypair. Keep a copy under `$ROOT/keys/` (gitignored) so a fresh environment
-# does not depend on the ADADIVE-solana prototype still existing.
+# The program id is fixed by `declare_id!`. A matching keypair under `keys/` is
+# *optional*: the validator loads the program at the declared address from the
+# built `.so` (see `devnet-setup.sh`), so the keypair is only needed if it is
+# present and its address agrees. Restore it when available, and never fail the
+# run when it is absent.
 seed_program_keypair() {
   local dest="$ROOT/target/deploy/adadive_escrow-keypair.json"
   local seed="$ROOT/keys/adadive_escrow-keypair.json"
   [[ -f "$dest" ]] && return 0
+  [[ -f "$seed" ]] || return 0
   mkdir -p "$(dirname "$dest")"
-  if [[ -f "$seed" ]]; then
-    cp "$seed" "$dest"
-    echo "    restored program keypair from keys/"
-    return 0
-  fi
-  cat >&2 <<'MSG'
-    target/deploy/adadive_escrow-keypair.json is missing, and there is no copy
-    under keys/. The program id is fixed by `declare_id!` in
-    programs/adadive_escrow/src/lib.rs, so deployment requires the matching
-    keypair. Obtain it from the project maintainer and place it at either path.
-MSG
-  exit 1
+  cp "$seed" "$dest"
+  echo "    restored program keypair from keys/"
 }
 
 # `devnet-setup.ts` writes freshly generated role keypairs on every run. They
@@ -270,21 +289,19 @@ cmd_up() {
   fi
 
   log "Local validator and program deploy"
-  # The deploy needs a funded payer, and a fresh validator starts every account
-  # at zero — so `devnet-setup.sh` fails on a first cold run. Start the
-  # validator, fund the payer, then run it again; the script is idempotent
-  # (it skips the deploy when the program is already there, and skips
-  # `PlatformConfig` initialisation when it already exists).
+  # `devnet-setup.sh` starts the validator with the program already in its
+  # genesis, so it needs no payer for the deploy itself. The airdrop below is
+  # for the role keypairs that `setup:localnet` funds afterwards.
   if [[ ! -f "$HOME/.config/solana/id.json" ]]; then
     solana-keygen new --no-bip39-passphrase -s -o "$HOME/.config/solana/id.json" >/dev/null
   fi
-  bash "$ROOT/scripts/devnet-setup.sh" || true
+  PROGRAM_ID="$PROGRAM_ID" bash "$ROOT/scripts/devnet-setup.sh" || true
   if solana cluster-version --url "$RPC" >/dev/null 2>&1; then
     if [[ "$(solana balance --url "$RPC" 2>/dev/null | awk '{print $1}')" == "0" ]]; then
       echo "    airdropping 100 SOL to $(solana address)"
       solana airdrop 100 --url "$RPC" >/dev/null
     fi
-    bash "$ROOT/scripts/devnet-setup.sh"   # funded: deploy + PlatformConfig + keys
+    PROGRAM_ID="$PROGRAM_ID" bash "$ROOT/scripts/devnet-setup.sh"   # funded: PlatformConfig + keys
   else
     echo "validator not reachable at $RPC; see $ROOT/.anchor/validator.log" >&2
     exit 1

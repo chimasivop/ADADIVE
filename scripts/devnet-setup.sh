@@ -17,10 +17,15 @@ cd "$ROOT"
 LEDGER="$ROOT/.anchor/test-ledger"
 PIDFILE="$ROOT/.anchor/validator.pid"
 RPC="${SOLANA_RPC_URL:-http://127.0.0.1:8899}"
+# The program address is fixed by `declare_id!`; keep this in step with
+# `programs/adadive_escrow/src/lib.rs` and `Anchor.toml`.
+PROGRAM_ID="${PROGRAM_ID:-7oK8tkw3H8HYqfb23wm2Jss82hSmVffhUDS2R5GE4NdS}"
+SO="$ROOT/target/deploy/adadive_escrow.so"
 
 # The program is built from `programs/adadive_escrow` into `target/deploy` by
-# `cargo build-sbf`; both the deploy below and `Anchor.toml` assume that path.
-if [[ ! -f "$ROOT/target/deploy/adadive_escrow.so" ]]; then
+# `cargo build-sbf`; both the genesis load below and `Anchor.toml` assume that
+# path.
+if [[ ! -f "$SO" ]]; then
   echo "target/deploy/adadive_escrow.so is missing — run 'cargo build-sbf' first" >&2
   exit 1
 fi
@@ -33,8 +38,16 @@ else
   # `--clone-feature-set` matters: the program is built with a current SBF
   # toolchain, and a genesis feature set from an older release refuses to load
   # it with "sbpf_version required by the executable ... not enabled".
+  #
+  # `--bpf-program` places the program at `PROGRAM_ID` in the validator's
+  # genesis. This replaces `solana program deploy`, which would need the
+  # program's *keypair* — gitignored, and absent on a fresh checkout. Loading it
+  # by address needs no keypair and lands it at exactly the id `declare_id!`
+  # fixes, which is what the clients derive PDAs against. `--reset` wipes any
+  # existing ledger so the genesis program is (re)loaded on every start.
   solana-test-validator --reset --ledger "$LEDGER" --rpc-port 8899 \
     --clone-feature-set --url https://api.devnet.solana.com \
+    --bpf-program "$PROGRAM_ID" "$SO" \
     > "$ROOT/.anchor/validator.log" 2>&1 &
   echo $! > "$PIDFILE"
 
@@ -53,12 +66,14 @@ if [[ ! -f "$HOME/.config/solana/id.json" ]]; then
   solana-keygen new --no-bip39-passphrase -s -o "$HOME/.config/solana/id.json"
 fi
 
-echo "Deploying program..."
-solana program deploy \
-  --url "$RPC" \
-  --keypair "$HOME/.config/solana/id.json" \
-  --program-id "$ROOT/target/deploy/adadive_escrow-keypair.json" \
-  "$ROOT/target/deploy/adadive_escrow.so"
+# Confirm the program actually made it into genesis; a missing program would
+# otherwise surface later as an opaque "account does not exist" on the first
+# escrow call.
+if solana program show --url "$RPC" "$PROGRAM_ID" >/dev/null 2>&1; then
+  echo "Program $PROGRAM_ID is loaded on $RPC"
+else
+  echo "warning: program $PROGRAM_ID is not present on $RPC" >&2
+fi
 
 echo "Initialising config and funding keypairs..."
 SOLANA_RPC_URL="$RPC" \

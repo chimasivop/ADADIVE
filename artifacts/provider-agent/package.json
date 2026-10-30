@@ -9,7 +9,8 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "dev": "tsx ./src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "ts-mocha -p tsconfig.test.json -t 30000 'tests/*.test.ts'"
+    "test": "ts-mocha -p tsconfig.test.json -t 30000 'tests/*.test.ts'",
+    "sync:frontend-bundle": "node ./build.mjs && cp ./dist/index.mjs ../../artifacts/cardano-storage/public/adadive-agent.mjs"
   },
   "dependencies": {
     "@noble/curves": "^1.9.7",
