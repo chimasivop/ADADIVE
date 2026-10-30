@@ -525,3 +525,82 @@ tool, so `mise install` would pull the whole Rust toolchain (~hundreds of MB)
 into every Node build. Excluding the file keeps `mise install` to node + pnpm.
 Verify with `railpack prepare . --show-plan`: it must print `Using provider Node
 from config` and `install mise packages: node, pnpm`.
+
+## Provider Reliability Agent (hackathon, advisory only)
+
+A read-only advisor in `artifacts/reliability-agent` that turns provider status
+evidence into a structured risk assessment via the Meta Model API (Muse Spark).
+It **only advises** — no signing, no fund release, no deal mutation. The escrow
+program, fee logic and auth are untouched. See `HACKATHON.md` for the run
+instructions and the baseline tag.
+
+**Meta Model API facts** (read from the official docs at
+<https://dev.meta.ai/docs>, not guessed — verified against `/docs/overview`,
+`/docs/quickstart`, `/docs/structured-output`, `/docs/models`): base URL
+`https://api.meta.ai/v1`; auth `Authorization: Bearer <key>` (docs env var
+`MODEL_API_KEY`; this app reads `META_API_KEY`); endpoint
+`POST /v1/chat/completions` (OpenAI-compatible; `/v1/responses` is the other
+surface and uses `text.format`, *not* `response_format`, for structured output);
+default model `muse-spark-1.3`. If the docs ever cannot be read, stop that part
+rather than guessing.
+
+**Read-only evidence endpoints.** `GET /provider/reliability` (wallet session,
+same `requireWalletOrOidcAuth` as the other provider routes) and
+`GET /internal/provider-reliability/:id` (the shared `INTERNAL_API_TOKEN`, `503`
+when unset). Both call one builder, so the shape cannot drift. The evidence is
+status data only — heartbeat age/staleness, verification streak, at-risk flag,
+active assignments, summary — and carries no wallet address, file contents or
+keys. There is deliberately no heartbeat *history*: the schema stores only the
+latest timestamp, so the evidence exposes the latest plus its derived age, and
+the prompt tells the model not to claim a pattern the data does not show.
+
+**Fail-safe is the contract.** `assessProvider` is total: no client, a transport
+error, non-JSON output, or output that fails Zod validation all return
+`risk_level: "unknown"` with an explicit reason — never a throw. An inconclusive
+result is a legitimate answer, not a failure, so the CLI exits `0` for `unknown`.
+The JSON Schema sent as `response_format` is hand-written (so the bytes the model
+is constrained by are reviewable) and a test asserts it matches the Zod schema.
+
+**Mock mode.** `META_MOCK=1` needs no key and makes no network call: it replays
+recorded responses from `src/fixtures/*.json` through the *same*
+`extractAssistantContent` and Zod path a live call uses. So mock mode is not a
+shortcut — the `invalid` fixture really does fail over to `unknown`. Outside mock
+mode the config refuses to start without `META_API_KEY`.
+
+**Privacy boundary.** The wire payload is assembled in exactly one place,
+`src/prompt.ts`; its only user-role content is `JSON.stringify(evidence)`. Keep
+it that way — that is what makes "only provider status data is sent" checkable
+rather than a claim.
+
+**Seed guard.** `scripts/seed-demo-providers.ts` writes rows, so it refuses
+`NODE_ENV=production` (no override) and any non-local database host. A host the
+repo docs name as production (`PRODUCTION_HOSTS`: the Supabase pooler/direct
+hosts from `artifacts/api-server/E2E_STATUS.md`, the Railway production
+api-server, `adadive.xyz`) is refused with **no** override. A deliberately
+disposable *remote* demo database needs a two-part confirmation —
+`DEMO_SEED_ALLOW_REMOTE=1` **and** `DEMO_SEED_CONFIRM_HOST` equal to the exact
+database host (the host echo stops a copy-pasted command being redirected by
+editing only the connection string). `ALLOW_DEMO_SEED=1` remains the blunt
+escape hatch for a local-but-not-loopback dev database; neither override unlocks
+a production host. It imports `@workspace/db` *type-only* and dynamically at
+call time, because `@workspace/db` requires `DATABASE_URL` at module load; a
+static import would make the guard tests need a database.
+
+**Hosted devnet demo.** `DEPLOY.md` stands up a *separate* Railway project (own
+Postgres, two logical databases, fresh demo-only oracle/authority keys, Solana
+devnet). `VITE_DEVNET_DEMO=1` on the frontend build shows a "Devnet demo"
+banner (`components/DevnetDemoBanner.tsx` via `lib/demo.ts`); it changes no
+behaviour. `META_API_KEY` is server-only — never a `VITE_*` value.
+
+**Advisory cost controls.** The public `GET /providers/:id/advisory` route is
+bounded three ways: the `AdvisoryService` cache TTL, a per-IP
+`express-rate-limit` (`ADVISORY_RATE_LIMIT_MAX` / `ADVISORY_RATE_LIMIT_WINDOW_MS`,
+default 30/min), and a global daily cap on *live* model calls
+(`ADVISORY_DAILY_CALL_CAP`, default 200 per UTC day). The daily cap is the
+backstop the per-IP limit cannot be (an attacker multiplies IPs). When it is
+spent the route does **not** fail: it serves a fresh cache entry, else the
+fixture fallback (`assessFromFixture`), else an `unknown` assessment, and sets
+`demoLimitReached: true` with `DEMO_LIMIT_NOTE`. Only a *live* call consumes
+budget — a mock advisor and the inconclusive short-circuit spend nothing, so a
+no-key demo keeps working past the cap. Both env readers fall back to the safe
+default on an unparseable/non-positive value rather than removing the limit.

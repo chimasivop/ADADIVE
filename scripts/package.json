@@ -3,8 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "ts-mocha -p tsconfig.test.json -t 30000 'tests/*.test.ts'",
+    "seed:demo-providers": "tsx ./seed-demo-providers.ts"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "pg": "^8.20.0"
+  },
   "devDependencies": {
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.1.0",
     "@types/node": "catalog:",
-    "tsx": "catalog:"
+    "@types/pg": "^8.20.0",
+    "chai": "^4.5.0",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.0.0",
+    "tsx": "catalog:",
+    "typescript": "~5.9.3"
   }
 }

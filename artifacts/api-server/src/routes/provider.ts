@@ -34,7 +34,14 @@ import {
   peerIdMatches,
   type ProviderStorageStore,
   type ProviderRecord,
+  type ProviderReliabilitySnapshot,
 } from "../lib/providerStorage";
+import {
+  buildReliabilityEvidence,
+  DEFAULT_CONSECUTIVE_NEGATIVES,
+  DEFAULT_HEARTBEAT_STALE_MS,
+  type ReliabilityEvidence,
+} from "../lib/reliabilityEvidence";
 
 export interface ProviderStorageRouterDeps {
   store: ProviderStorageStore;
@@ -42,6 +49,17 @@ export interface ProviderStorageRouterDeps {
   internalToken?: string | null;
   /** Injectable for tests, so no real logging happens. */
   log?: Pick<typeof defaultLogger, "debug" | "warn" | "error">;
+  /**
+   * The staleness cutoff and consecutive-negative threshold the reliability
+   * evidence reports. Defaults mirror the oracle's (`PROVIDER_HEARTBEAT_STALE_MS`
+   * 3 min, `PROVIDER_VERIFICATION_CONSECUTIVE_NEGATIVES` 3); injectable so the
+   * evidence route can be tested against a fixed clock.
+   */
+  reliability?: {
+    heartbeatStaleMs?: number;
+    consecutiveNegatives?: number;
+    now?: () => Date;
+  };
 }
 
 function readBearer(header: string | string[] | undefined): string | null {
@@ -55,6 +73,13 @@ export function createProviderStorageRouter(
   const { store } = deps;
   const log = deps.log ?? defaultLogger;
   const internalToken = deps.internalToken?.trim() || null;
+  const reliabilityOptions = {
+    heartbeatStaleMs:
+      deps.reliability?.heartbeatStaleMs ?? DEFAULT_HEARTBEAT_STALE_MS,
+    consecutiveNegatives:
+      deps.reliability?.consecutiveNegatives ?? DEFAULT_CONSECUTIVE_NEGATIVES,
+    now: deps.reliability?.now,
+  };
 
   const router: IRouter = Router();
 
@@ -74,6 +99,21 @@ export function createProviderStorageRouter(
   const fail = (res: Response, err: unknown): void => {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
+  };
+
+  /**
+   * Read the snapshot for `providerId` and format it as reliability evidence.
+   * Returns `null` when the provider does not exist, so callers can answer 404.
+   * Both the wallet route and the internal route go through here, so the shape
+   * can never drift between them.
+   */
+  const buildEvidence = async (
+    providerId: number
+  ): Promise<ReliabilityEvidence | null> => {
+    const snapshot: ProviderReliabilitySnapshot | null =
+      await store.getProviderReliabilitySnapshot(providerId);
+    if (snapshot === null) return null;
+    return buildReliabilityEvidence(snapshot, reliabilityOptions);
   };
 
   // ── POST /providers ────────────────────────────────────────────────────────
@@ -169,6 +209,32 @@ export function createProviderStorageRouter(
             createdAt: assignment.createdAt.toISOString(),
           })),
         });
+      } catch (err) {
+        fail(res, err);
+      }
+    }
+  );
+
+  // ── GET /provider/reliability ──────────────────────────────────────────────
+  // Read-only reliability evidence for *this* provider. Feeds the standalone
+  // reliability advisor, which turns it into an advisory risk assessment.
+  //
+  // Same auth as the other provider routes (`requireWalletOrOidcAuth`): a
+  // provider reads its own evidence. Read-only — it exposes status data only,
+  // never file contents or keys, and it mutates nothing.
+  router.get(
+    "/provider/reliability",
+    requireWalletOrOidcAuth,
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const provider = await requireProvider(req, res, store);
+        if (provider === null) return;
+        const evidence = await buildEvidence(provider.id);
+        if (evidence === null) {
+          res.status(404).json({ error: "Provider not found" });
+          return;
+        }
+        res.json(evidence);
       } catch (err) {
         fail(res, err);
       }
@@ -328,6 +394,34 @@ export function createProviderStorageRouter(
             lastHeartbeatAt: assignment.lastHeartbeatAt?.toISOString() ?? null,
           })),
         });
+      } catch (err) {
+        fail(res, err);
+      }
+    }
+  );
+
+  // ── GET /internal/provider-reliability/:id ─────────────────────────────────
+  // The same reliability evidence, addressed by provider id, for the reliability
+  // advisor to poll server-side. Gated by the *shared token*, not a wallet
+  // session: the advisor is a service with no wallet identity, exactly like the
+  // oracle's internal feed. Read-only. 503 when no token is configured, so the
+  // channel is closed rather than open.
+  router.get(
+    "/internal/provider-reliability/:id",
+    async (req: Request, res: Response): Promise<void> => {
+      if (!internalAuth(req, res)) return;
+      try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          res.status(400).json({ error: "Invalid provider ID" });
+          return;
+        }
+        const evidence = await buildEvidence(id);
+        if (evidence === null) {
+          res.status(404).json({ error: "Provider not found" });
+          return;
+        }
+        res.json(evidence);
       } catch (err) {
         fail(res, err);
       }
