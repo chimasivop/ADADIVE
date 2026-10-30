@@ -117,6 +117,8 @@ const Logo = ({ size = 36 }: { size?: number }) => (
 export default function Landing() {
   const [, setLocation] = useLocation();
   const goApp   = () => setLocation("/app");
+  const goProviders = () => setLocation("/providers");
+  const goBecomeProvider = () => setLocation("/become-a-provider");
   const whitepaperUrl = `${import.meta.env.BASE_URL}ADADIVE-Whitepaper-v1.0.pdf`;
 
   const [email, setEmail]       = useState("");
@@ -190,7 +192,9 @@ export default function Landing() {
 
         {/* Desktop nav */}
         <div className="a-nav-desktop" style={{ gap:"28px", alignItems:"center" }}>
-          {["Protocol","Providers","Deals"].map(n => <button key={n} className="a-nav-link" onClick={goApp}>{n}</button>)}
+          {["Protocol","Deals"].map(n => <button key={n} className="a-nav-link" onClick={goApp}>{n}</button>)}
+          <button className="a-nav-link" onClick={goProviders}>Providers</button>
+          <button className="a-nav-link" onClick={goBecomeProvider} style={{ color:"#e8c98a" }}>Become a Provider</button>
           <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link">Whitepaper</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ color:"#5865F2" }}>Discord</a>
           <button className="a-btn-primary" style={{ padding:"8px 22px", fontSize:"10px" }} onClick={goApp}>Launch App</button>
@@ -209,7 +213,9 @@ export default function Landing() {
       {/* Mobile menu drawer */}
       {mobileMenuOpen && (
         <div style={{ position:"fixed", top:"60px", left:0, right:0, zIndex:49, background:"rgba(5,7,15,.97)", borderBottom:"1px solid rgba(201,169,110,.12)", padding:"20px 24px", display:"flex", flexDirection:"column", gap:"18px" }}>
-          {["Protocol","Providers","Deals"].map(n => <button key={n} className="a-nav-link" onClick={() => { goApp(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px" }}>{n}</button>)}
+          {["Protocol","Deals"].map(n => <button key={n} className="a-nav-link" onClick={() => { goApp(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px" }}>{n}</button>)}
+          <button className="a-nav-link" onClick={() => { goProviders(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px" }}>Providers</button>
+          <button className="a-nav-link" onClick={() => { goBecomeProvider(); setMobileMenuOpen(false); }} style={{ textAlign:"left", fontSize:"12px", color:"#e8c98a" }}>Become a Provider</button>
           <a href={whitepaperUrl} target="_blank" rel="noopener noreferrer" className="a-nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize:"12px" }}>Whitepaper ↗</a>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-nav-link" style={{ fontSize:"12px", color:"#5865F2" }}>Discord Server ↗</a>
           <button className="a-btn-primary" style={{ padding:"10px 20px", fontSize:"10px", width:"fit-content" }} onClick={() => { goApp(); setMobileMenuOpen(false); }}>Launch App</button>
@@ -434,12 +440,35 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ─── BECOME A PROVIDER BAND ─── */}
+      <section style={{ position:"relative", zIndex:10, padding:"0 clamp(16px,4vw,48px)", maxWidth:"1100px", margin:"0 auto 40px" }}>
+        <div
+          className="a-feature-card"
+          style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:"28px", flexWrap:"wrap", padding:"32px clamp(20px,3vw,36px)" }}
+        >
+          <div style={{ flex:"1 1 380px", minWidth:0 }}>
+            <SectionLabel>Earn with your hardware</SectionLabel>
+            <h3 style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(18px,2.6vw,26px)", color:T.snow, margin:"0 0 12px", letterSpacing:".02em" }}>
+              Run a storage node. Get paid in SOL.
+            </h3>
+            <p style={{ fontStyle:"italic", fontSize:"16px", color:T.smoke, fontWeight:300, lineHeight:1.75, margin:0 }}>
+              Put your spare disk space to work. A small program keeps your machine in sync with the
+              network — no customers to chase, no fees to manage. A guided setup walks you through it.
+            </p>
+          </div>
+          <button className="a-btn-primary" style={{ flexShrink:0 }} onClick={goBecomeProvider}>
+            BECOME A PROVIDER →
+          </button>
+        </div>
+      </section>
+
       {/* ─── CTA BAND ─── */}
       <section style={{ position:"relative", zIndex:10, padding:"80px clamp(16px,4vw,48px)", background:`linear-gradient(135deg,rgba(201,169,110,.06) 0%,rgba(201,169,110,.02) 100%)`, borderTop:"1px solid rgba(201,169,110,.1)", textAlign:"center" }}>
         <h2 style={{ fontFamily:"'Cinzel',serif", fontSize:"clamp(22px,4vw,40px)", color:T.snow, marginBottom:"16px", letterSpacing:".03em" }}>Ready to Store on Solana?</h2>
         <p style={{ fontStyle:"italic", fontSize:"17px", color:T.smoke, marginBottom:"40px", fontWeight:300 }}>Connect your Solana wallet and create your first deal in minutes.</p>
         <div style={{ display:"flex", gap:"16px", justifyContent:"center", flexWrap:"wrap" }}>
           <button className="a-btn-primary" onClick={goApp}>OPEN APP →</button>
+          <button className="a-btn-ghost" onClick={goBecomeProvider}>BECOME A PROVIDER</button>
           <a href="https://discord.gg/ESj96hvhuR" target="_blank" rel="noopener noreferrer" className="a-btn-ghost" style={{ display:"inline-flex", alignItems:"center", gap:"8px", textDecoration:"none" }}>
             <svg width="16" height="12" viewBox="0 0 71 55" fill="none"><path d="M60.1 4.9A58.5 58.5 0 0 0 45.6.7a.2.2 0 0 0-.2.1c-.6 1.1-1.3 2.6-1.8 3.8a54 54 0 0 0-16.2 0A38 38 0 0 0 25.6.8a.2.2 0 0 0-.2-.1A58.4 58.4 0 0 0 10.9 4.9a.2.2 0 0 0-.1.1C1.6 18.2-.9 31.1.3 43.8v.1a58.9 58.9 0 0 0 17.9 9.1.2.2 0 0 0 .2-.1c1.4-1.9 2.6-3.9 3.7-6a.2.2 0 0 0-.1-.3 38.8 38.8 0 0 1-5.5-2.6.2.2 0 0 1 0-.4l1.1-.8a.2.2 0 0 1 .2 0c11.5 5.3 24 5.3 35.4 0a.2.2 0 0 1 .2 0l1.1.8a.2.2 0 0 1 0 .4 36 36 0 0 1-5.5 2.6.2.2 0 0 0-.1.3c1.1 2.1 2.3 4.1 3.7 6a.2.2 0 0 0 .2.1 58.7 58.7 0 0 0 17.9-9.1v-.1c1.5-15.4-2.5-28.2-10.6-39.8a.2.2 0 0 0-.1-.1zM23.7 36.2c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2z" fill="#7a8aaa"/></svg>
             JOIN DISCORD

@@ -1,16 +1,22 @@
 import { useState } from "react";
-import { useListProviders, getListProvidersQueryKey } from "@workspace/api-client-react";
+import {
+  useListProviders,
+  getListProvidersQueryKey,
+} from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HardDrive, Search, ArrowRight, Shield, Globe } from "lucide-react";
+import { RegisterProviderDialog } from "@/components/RegisterProviderDialog";
+import { HardDrive, Search, ArrowRight, Shield, Globe, Plus } from "lucide-react";
 
 export default function Providers() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [open, setOpen] = useState(false);
 
   const { data: providers, isLoading } = useListProviders(
     { status: statusFilter as "active" | "inactive" | "all" },
@@ -26,29 +32,45 @@ export default function Providers() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* ── Heading ── */}
-      <div className="flex flex-col gap-1.5 pb-2" style={{ borderBottom: "1px solid hsl(var(--primary)/0.15)" }}>
-        <h1
-          style={{
-            fontFamily: "'Cinzel', serif",
-            fontSize: "clamp(18px, 3vw, 26px)",
-            letterSpacing: "0.25em",
-            fontWeight: 700,
-            color: "hsl(var(--primary))",
-          }}
+      <div
+        className="flex items-end justify-between gap-4 pb-2"
+        style={{ borderBottom: "1px solid hsl(var(--primary)/0.15)" }}
+      >
+        <div className="flex flex-col gap-1.5">
+          <h1
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: "clamp(18px, 3vw, 26px)",
+              letterSpacing: "0.25em",
+              fontWeight: 700,
+              color: "hsl(var(--primary))",
+            }}
+          >
+            STORAGE PROVIDERS
+          </h1>
+          <p
+            style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic",
+              fontSize: "15px",
+              color: "hsl(var(--muted-foreground))",
+            }}
+          >
+            {isLoading ? "Loading..." : `${filtered?.length ?? 0} providers on the network`}
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="font-mono gap-2 shrink-0"
+          data-testid="register-provider-open"
         >
-          STORAGE PROVIDERS
-        </h1>
-        <p
-          style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontStyle: "italic",
-            fontSize: "15px",
-            color: "hsl(var(--muted-foreground))",
-          }}
-        >
-          {isLoading ? "Loading..." : `${filtered?.length ?? 0} providers on the network`}
-        </p>
+          <Plus className="size-4" /> REGISTER PROVIDER
+        </Button>
       </div>
+
+      {/* ── Register provider dialog (shared with the onboarding page) ── */}
+      <RegisterProviderDialog open={open} onOpenChange={setOpen} />
 
       {/* ── Filters ── */}
       <div className="flex gap-3">

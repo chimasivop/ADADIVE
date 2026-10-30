@@ -38,6 +38,9 @@ export const ListProvidersResponseItem = zod.object({
   "uptimePercent": zod.number().nullish(),
   "activeDeals": zod.number().nullish(),
   "totalSolEarned": zod.number().nullish(),
+  "peerId": zod.string().nullish().describe('libp2p peer id of the provider\'s storage node; null when the provider has no node and deals stay on the centralized Pinata path'),
+  "lastHeartbeatAt": zod.coerce.date().nullish().describe('Last heartbeat the provider-agent reported for this node; null until the agent runs for the first time'),
+  "walletAddress": zod.string().nullish().describe('Wallet that registered and owns this provider; null for rows predating the wallet flow'),
   "createdAt": zod.coerce.date()
 })
 export const ListProvidersResponse = zod.array(ListProvidersResponseItem)
@@ -51,7 +54,8 @@ export const CreateProviderBody = zod.object({
   "nodeId": zod.string(),
   "totalStorageGb": zod.number(),
   "pricePerGbPerEpoch": zod.number(),
-  "region": zod.string()
+  "region": zod.string(),
+  "peerId": zod.string().nullish().describe('libp2p peer id of the provider\'s storage node; omit or null for the centralized Pinata path')
 })
 
 export const CreateProviderResponse = zod.object({
@@ -67,6 +71,9 @@ export const CreateProviderResponse = zod.object({
   "uptimePercent": zod.number().nullish(),
   "activeDeals": zod.number().nullish(),
   "totalSolEarned": zod.number().nullish(),
+  "peerId": zod.string().nullish().describe('libp2p peer id of the provider\'s storage node; null when the provider has no node and deals stay on the centralized Pinata path'),
+  "lastHeartbeatAt": zod.coerce.date().nullish().describe('Last heartbeat the provider-agent reported for this node; null until the agent runs for the first time'),
+  "walletAddress": zod.string().nullish().describe('Wallet that registered and owns this provider; null for rows predating the wallet flow'),
   "createdAt": zod.coerce.date()
 })
 
@@ -91,6 +98,9 @@ export const GetProviderResponse = zod.object({
   "uptimePercent": zod.number().nullish(),
   "activeDeals": zod.number().nullish(),
   "totalSolEarned": zod.number().nullish(),
+  "peerId": zod.string().nullish().describe('libp2p peer id of the provider\'s storage node; null when the provider has no node and deals stay on the centralized Pinata path'),
+  "lastHeartbeatAt": zod.coerce.date().nullish().describe('Last heartbeat the provider-agent reported for this node; null until the agent runs for the first time'),
+  "walletAddress": zod.string().nullish().describe('Wallet that registered and owns this provider; null for rows predating the wallet flow'),
   "createdAt": zod.coerce.date()
 })
 
@@ -118,6 +128,38 @@ export const GetProviderDealsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const GetProviderDealsResponse = zod.array(GetProviderDealsResponseItem)
+
+
+/**
+ * Sets the libp2p peer id of the provider's own IPFS (Kubo) node, after registration. `peerId: null` clears it, returning the provider to the centralized Pinata path. Only the wallet that owns the provider row may call this.
+ * @summary Link, change, or clear the provider's storage node
+ */
+export const UpdateProviderNodeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateProviderNodeBody = zod.object({
+  "peerId": zod.string().nullable().describe('libp2p peer id of the provider\'s storage node; null clears it and returns the provider to the centralized Pinata path')
+})
+
+export const UpdateProviderNodeResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "nodeId": zod.string().describe('Solana node identifier'),
+  "totalStorageGb": zod.number(),
+  "usedStorageGb": zod.number(),
+  "pricePerGbPerEpoch": zod.number().describe('Price in SOL lamports per GB per epoch'),
+  "reputationScore": zod.number().describe('0-100 reputation score'),
+  "status": zod.enum(['active', 'inactive']),
+  "region": zod.string(),
+  "uptimePercent": zod.number().nullish(),
+  "activeDeals": zod.number().nullish(),
+  "totalSolEarned": zod.number().nullish(),
+  "peerId": zod.string().nullish().describe('libp2p peer id of the provider\'s storage node; null when the provider has no node and deals stay on the centralized Pinata path'),
+  "lastHeartbeatAt": zod.coerce.date().nullish().describe('Last heartbeat the provider-agent reported for this node; null until the agent runs for the first time'),
+  "walletAddress": zod.string().nullish().describe('Wallet that registered and owns this provider; null for rows predating the wallet flow'),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**

@@ -26,5 +26,20 @@ export interface Provider {
   activeDeals?: number | null;
   /** @nullable */
   totalSolEarned?: number | null;
+  /**
+     * libp2p peer id of the provider's storage node; null when the provider has no node and deals stay on the centralized Pinata path
+     * @nullable
+     */
+  peerId?: string | null;
+  /**
+     * Last heartbeat the provider-agent reported for this node; null until the agent runs for the first time
+     * @nullable
+     */
+  lastHeartbeatAt?: Date | null;
+  /**
+     * Wallet that registered and owns this provider; null for rows predating the wallet flow
+     * @nullable
+     */
+  walletAddress?: string | null;
   createdAt: Date;
 }

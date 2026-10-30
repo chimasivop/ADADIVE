@@ -98,6 +98,42 @@ api-server takes a comma-separated list:
 `content-type: application/json` and an `access-control-allow-origin` echoing
 that origin — not an HTML `500`.
 
+`dev-up.sh` now derives `PREVIEW_HOSTS` itself from `RUNTIME_URL` and the
+`WORKER_N` ports when it is unset, so the forwarded origin is allowlisted
+without being passed in. Two things still bite:
+
+- **`dev-up.sh restart` is the only way to pick up a changed origin.** A plain
+  `dev-up.sh up` leaves an already-running api-server alone ("api-server already
+  running") and the old `ALLOWED_ORIGIN` with it. Confirm with
+  `tr '\0' '\n' < /proc/$(cat .dev-run/api-server.pid)/environ | grep ALLOWED_ORIGIN`.
+- The proxy is why this is needed at all: Vite forwards the browser's
+  `Origin: https://work-N-<host>` through to the api-server, which sees a
+  cross-origin request even though the browser thinks it is same-origin.
+
+## `pnpm test` needs a test database the dev stack does not create
+
+`pnpm test` runs the oracle-backend's DB-backed suites, which connect to
+`TEST_DATABASE_URL`, defaulting to
+`postgres://postgres@127.0.0.1:5433/adadive_oracle_test` — a port `dev-up.sh`
+does not start (it brings up one cluster on 5432). Against a bare dev stack the
+suite fails with `connect ECONNREFUSED 127.0.0.1:5433` and then a cascade of
+`Cannot read properties of undefined (reading 'close')` from the `after each`
+hooks. Point it at the running cluster instead:
+
+    psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE DATABASE adadive_oracle_test"
+    TEST_DATABASE_URL="postgres://postgres:postgres@127.0.0.1:5432/adadive_oracle_test" pnpm test
+
+`dev-up.sh` creates `adadive_oracle` and `adadive` but not the test database, so
+this is a one-time step per container reset.
+
+## Provider `node_id` is UNIQUE
+
+`providers.node_id` carries a unique constraint, so a browser E2E that registers
+a provider with a fixed `nodeId` passes once and then fails on the second run
+with an opaque `HTTP 500` from `POST /api/providers` (the drizzle error wrapper
+hides the constraint violation). Give each run its own suffix, and delete the
+row (or the database) between runs.
+
 ## Resource-level ownership on api-server deal mutations
 
 `requireWalletOrOidcAuth` proves *identity*, not ownership. Gating a handler with
@@ -413,6 +449,41 @@ on-chain proof. It submits raw `initialize` instructions rather than going
 through the client builder, so a pass means the *program* enforced the boundary,
 not that the client refused early. It needs the same local validator +
 `PlatformConfig` as `test:e2e`, and is excluded from `pnpm test`.
+
+## Provider onboarding page (`/become-a-provider`)
+
+A standalone, shell-less page for a non-technical provider, so it can be shared
+before anyone has an account. `BecomeAProvider.tsx`; no sidebar or app chrome.
+
+Two traps in the instructions it gives, both found by actually running them:
+
+- **`assertDistinctOrigins` compares *origins*, not paths.** The agent refuses to
+  start when two of its three endpoints share one, because it signs in to the
+  oracle and pins through Kubo and would otherwise misroute one. A preview that
+  fronts the oracle and the api-server behind a single Vite origin (`/backend` +
+  `/api`) is therefore *not* something an agent can point at: `/backend` and
+  `/api` differ as paths but share an origin, so `--once` dies with a config
+  error before doing anything. The page reads its endpoints from
+  `VITE_PROVIDER_ORACLE_URL` / `VITE_PROVIDER_API_URL` (falling back to its own
+  origin) and, when they collide, replaces the run commands with a "not ready
+  yet" notice instead of handing over a command that cannot run. Setting those
+  vars to two genuinely separate origins restores the commands — verify with the
+  rendered `ORACLE_BASE_URL=` line, not by reading the source.
+- **A fake Kubo must return a *valid* libp2p peer id.** `client.id()` validates
+  that the advertised `PublicKey` hashes to the advertised `ID`, so a made-up
+  string fails with `could not read the node's peer id: Incorrect length` and the
+  heartbeat is never sent. Derive a real one: ed25519 keypair, protobuf
+  `08 01 12 20 <pubkey>`, identity multihash prefix `00 24`, base58. Also spawn
+  the agent asynchronously — `execFileSync` blocks the event loop, so an in-process
+  fake node can never answer it and the run deadlocks instead of failing.
+
+The key-conversion one-liner on the page is verified: an 88-char base58 Phantom
+export becomes a 64-byte JSON keypair that `Keypair.fromSecretKey` loads back to
+the same address.
+
+`public/adadive-agent.mjs` is the built agent, served as the page's download.
+`pnpm --filter @workspace/provider-agent run sync:frontend-bundle` regenerates
+it — run that after changing the agent, or the download silently drifts.
 
 ## Railway/Railpack: root `railpack.json` forces the Node provider
 

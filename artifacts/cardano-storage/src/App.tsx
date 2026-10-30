@@ -20,6 +20,7 @@ import DealDetail from "@/pages/DealDetail";
 import NewDeal from "@/pages/NewDeal";
 import PinFiles from "@/pages/PinFiles";
 import WaitlistAdmin from "@/pages/WaitlistAdmin";
+import BecomeAProvider from "@/pages/BecomeAProvider";
 import { setBaseUrl } from "@workspace/api-client-react";
 
 // Configure API base URL from environment variable
@@ -53,6 +54,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/"      component={Landing}   />
+      {/* Standalone onboarding page: no app shell, so it can be linked and
+          shared before anyone has an account. */}
+      <Route path="/become-a-provider" component={BecomeAProvider} />
       {/* All other routes go through the app shell */}
       <Route component={AppRouter} />
     </Switch>

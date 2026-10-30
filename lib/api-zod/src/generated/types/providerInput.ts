@@ -12,4 +12,9 @@ export interface ProviderInput {
   totalStorageGb: number;
   pricePerGbPerEpoch: number;
   region: string;
+  /**
+     * libp2p peer id of the provider's storage node; omit or null for the centralized Pinata path
+     * @nullable
+     */
+  peerId?: string | null;
 }
