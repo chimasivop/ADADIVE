@@ -429,6 +429,12 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.0(react@19.1.0)
+      '@types/chai':
+        specifier: ^4.3.0
+        version: 4.3.20
+      '@types/mocha':
+        specifier: ^9.1.0
+        version: 9.1.1
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.4
@@ -447,6 +453,9 @@ importers:
       '@workspace/replit-auth-web':
         specifier: workspace:*
         version: link:../../lib/replit-auth-web
+      chai:
+        specifier: ^4.5.0
+        version: 4.5.0
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -504,6 +513,9 @@ importers:
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.1
+      ts-mocha:
+        specifier: ^10.0.0
+        version: 10.1.0(mocha@10.8.2)
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0

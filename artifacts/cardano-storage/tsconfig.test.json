@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    // Standalone rather than extending the base: the base sets
+    // `moduleResolution: bundler` + `customConditions`, which ts-node's
+    // CommonJS `require()` cannot use. Mirrors the other packages' test configs
+    // (solana-escrow, api-server).
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["es2022", "dom"],
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["mocha", "node"],
+    // `moduleResolution: node` does not read `package.json` `exports`, so the
+    // shared library's subpath is mapped explicitly — the same reason as the
+    // api-server's test config. `@/` is the app's own alias.
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@workspace/solana-escrow": ["../../lib/solana-escrow/src/index.ts"]
+    }
+  },
+  // Only the tests. The app's `src` uses `import.meta`, which CommonJS rejects,
+  // and ts-node compiles the imported source on demand anyway (ts-mocha does not
+  // pass `--files`), so listing `src` here would only add unrelated errors.
+  "include": ["tests/**/*.ts"]
+}
