@@ -33,6 +33,9 @@ catalogs:
     '@solana/wallet-adapter-solflare':
       specifier: ^0.6.34
       version: 0.6.34
+    '@solana/wallet-standard-util':
+      specifier: ^1.1.4
+      version: 1.1.4
     '@solana/web3.js':
       specifier: ^1.99.0
       version: 1.99.0
@@ -733,6 +736,9 @@ importers:
       '@noble/curves':
         specifier: ^1.9.7
         version: 1.9.7
+      '@solana/wallet-standard-util':
+        specifier: 'catalog:'
+        version: 1.1.4
       '@types/chai':
         specifier: ^4.3.0
         version: 4.3.20

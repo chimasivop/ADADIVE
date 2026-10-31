@@ -19,6 +19,7 @@ catalog:
   '@solana/wallet-adapter-react-ui': ^0.9.40
   '@solana/wallet-adapter-phantom': ^0.9.30
   '@solana/wallet-adapter-solflare': ^0.6.34
+  '@solana/wallet-standard-util': ^1.1.4
   buffer: ^6.0.3
   '@replit/vite-plugin-cartographer': ^0.5.1
   '@replit/vite-plugin-dev-banner': ^0.1.1

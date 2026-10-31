@@ -32,6 +32,7 @@ import {
   type TestContext,
 } from "./helpers/setup";
 import { encodeBase58 } from "../src/security/base58";
+import { buildChallengeMessage } from "../src/auth/challengeMessage";
 import { AuthService } from "../src/auth/authService";
 import { SessionSecret } from "../src/auth/sessionSecret";
 import { parseSessionSecret, issueSessionToken, verifySessionToken } from "../src/auth/sessionToken";
@@ -186,6 +187,44 @@ describe("wallet-signature authentication", () => {
         verify.body.token
       );
       expect(deal.status).to.equal(201);
+    });
+
+    it("still verifies a challenge issued before the nonce switch (base64url nonce)", async () => {
+      // Compatibility across the deploy: a challenge is stored and compared as
+      // its whole message, so changing how *new* nonces are generated must not
+      // invalidate one already in the table. This inserts a row exactly as the
+      // old `generateNonce` would have produced it (base64url, with a `-`/`_`)
+      // and signs the stored message bytes.
+      const keypair = Keypair.generate();
+      const wallet = keypair.publicKey.toBase58();
+      const legacyNonce = "Ug66xS6-lIqUvsxQD9iaTE8rG0eYzqhBhjiAwNcV2pA";
+      const issuedAt = new Date();
+      const expiresAt = new Date(issuedAt.getTime() + 5 * 60 * 1000);
+      const message = buildChallengeMessage({
+        domain: h.auth.config.domain,
+        uri: h.auth.config.uri,
+        wallet,
+        nonce: legacyNonce,
+        issuedAt,
+        expiresAt,
+        chainId: h.auth.config.chainId,
+      });
+      await h.ctx.pool.query(
+        `INSERT INTO auth_challenges (wallet, nonce, message, domain, expires_at)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [wallet, legacyNonce, message, h.auth.config.domain, expiresAt]
+      );
+
+      const signature = signMessageBytes(keypair, Buffer.from(message, "utf8"));
+      const verify = await postJson(`${h.baseUrl}/auth/verify`, {
+        wallet,
+        nonce: legacyNonce,
+        signature,
+      });
+
+      expect(verify.status).to.equal(200);
+      expect(verify.body.token).to.be.a("string");
+      expect(verify.body.wallet).to.equal(wallet);
     });
 
     it("issues a token whose subject is the signing wallet, not a claimed one", async () => {

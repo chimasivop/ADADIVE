@@ -84,10 +84,17 @@ export const DEFAULT_STATEMENT =
  *
  * Random rather than a counter: a predictable nonce lets an attacker precompute
  * a message, and a nonce that repeats (across a restart, say) would let two
- * challenges share a message. Base64url keeps it URL- and JSON-safe.
+ * challenges share a message.
+ *
+ * Hex, not base64url: the SIWS grammar defines `message-nonce` as
+ * `8*( ALPHA / DIGIT )`, and base64url emits `-` and `_` in roughly three of
+ * every four 32-byte draws. Those characters are valid in the message *text*
+ * but out of grammar, so a strict wallet parser (Phantom) can reject an
+ * otherwise well-formed challenge. Hex is `[0-9a-f]` — always alphanumeric —
+ * and still carries the full 256 bits.
  */
 export function generateNonce(): string {
-  return randomBytes(32).toString("base64url");
+  return randomBytes(32).toString("hex");
 }
 
 /**

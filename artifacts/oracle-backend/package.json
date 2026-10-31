@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@noble/curves": "^1.9.7",
+    "@solana/wallet-standard-util": "catalog:",
     "@types/chai": "^4.3.0",
     "@types/express": "^4.17.21",
     "@types/mocha": "^9.1.0",
