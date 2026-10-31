@@ -15,11 +15,15 @@ import { assert } from "chai";
 import {
   assertSeedable,
   databaseHost,
+  demoRowFilter,
   demoSpecs,
+  hasCleanFlag,
   hasConfirmFlag,
   isLocalDatabaseUrl,
   isProductionHost,
+  parseAllowHost,
   PRODUCTION_HOSTS,
+  resolveCommand,
   SeedGuardError,
 } from "../seed-demo-providers";
 
@@ -201,6 +205,200 @@ describe("hasConfirmFlag", () => {
     assert.isTrue(hasConfirmFlag(["--confirm"]));
     assert.isTrue(hasConfirmFlag(["--other", "--confirm"]));
     assert.isFalse(hasConfirmFlag(["--confirmed"]));
+  });
+});
+
+describe("hasCleanFlag", () => {
+  it("is false with no arguments", () => {
+    assert.isFalse(hasCleanFlag([]));
+  });
+
+  it("is true only for the exact --clean flag", () => {
+    assert.isTrue(hasCleanFlag(["--clean"]));
+    assert.isTrue(hasCleanFlag(["--confirm", "--clean"]));
+    assert.isFalse(hasCleanFlag(["--cleaner"]));
+  });
+});
+
+describe("parseAllowHost", () => {
+  it("is null when the flag is absent", () => {
+    assert.isNull(parseAllowHost([]));
+    assert.isNull(parseAllowHost(["--confirm", "--clean"]));
+  });
+
+  it("is null for an empty value", () => {
+    assert.isNull(parseAllowHost(["--allow-host="]));
+    assert.isNull(parseAllowHost(["--allow-host=   "]));
+  });
+
+  it("is null for the bare flag without a value", () => {
+    // Only the `--allow-host=<host>` form carries a host.
+    assert.isNull(parseAllowHost(["--allow-host"]));
+  });
+
+  it("reads the host from the --allow-host=<host> form", () => {
+    assert.equal(parseAllowHost(["--allow-host=db.example.com"]), "db.example.com");
+    assert.equal(
+      parseAllowHost(["--confirm", "--allow-host=db.example.com", "--clean"]),
+      "db.example.com"
+    );
+  });
+});
+
+describe("assertSeedable — --allow-host", () => {
+  it("unlocks a remote host only when it matches exactly", () => {
+    assert.doesNotThrow(() => assertSeedable({}, REMOTE, REMOTE_HOST));
+  });
+
+  it("refuses when --allow-host does not match the host", () => {
+    assert.throws(
+      () => assertSeedable({}, REMOTE, "other.host"),
+      /non-local database/
+    );
+  });
+
+  it("matches the host exactly, not as a suffix", () => {
+    assert.throws(
+      () => assertSeedable({}, RAILWAY_DEMO, "proxy.rlwy.net"),
+      /non-local database/
+    );
+  });
+
+  it("cannot unlock a PRODUCTION_HOSTS entry", () => {
+    for (const prodHost of PRODUCTION_HOSTS) {
+      assert.throws(
+        () => assertSeedable({}, `postgres://u:p@${prodHost}:5432/postgres`, prodHost),
+        /production host/,
+        prodHost
+      );
+    }
+  });
+
+  it("cannot unlock a production host via a subdomain", () => {
+    assert.throws(
+      () =>
+        assertSeedable(
+          {},
+          "postgres://u:p@api.adadive.xyz:5432/postgres",
+          "api.adadive.xyz"
+        ),
+      /production host/
+    );
+  });
+
+  it("cannot unlock a production host even with the env override too", () => {
+    assert.throws(
+      () =>
+        assertSeedable(
+          {
+            DEMO_SEED_ALLOW_REMOTE: "1",
+            DEMO_SEED_CONFIRM_HOST: "aws-0-eu-west-1.pooler.supabase.com",
+          },
+          PROD_SUPABASE,
+          "aws-0-eu-west-1.pooler.supabase.com"
+        ),
+      /production host/
+    );
+  });
+
+  it("does not bypass NODE_ENV=production", () => {
+    assert.throws(
+      () => assertSeedable({ NODE_ENV: "production" }, REMOTE, REMOTE_HOST),
+      /NODE_ENV=production/
+    );
+  });
+
+  it("does not gate a local database (no flag needed)", () => {
+    assert.doesNotThrow(() => assertSeedable({}, LOCAL, null));
+    assert.doesNotThrow(() => assertSeedable({}, LOCALHOST, null));
+  });
+});
+
+describe("resolveCommand", () => {
+  it("defaults to a seeding dry run with no flags", () => {
+    assert.deepEqual(resolveCommand([]), {
+      action: "seed",
+      confirmed: false,
+      allowHost: null,
+      dryRun: true,
+    });
+  });
+
+  it("is a seeding dry run without --confirm", () => {
+    const command = resolveCommand(["--allow-host=db.example.com"]);
+    assert.equal(command.action, "seed");
+    assert.isFalse(command.confirmed);
+    assert.isTrue(command.dryRun);
+    assert.equal(command.allowHost, "db.example.com");
+  });
+
+  it("seeds for real only with --confirm", () => {
+    const command = resolveCommand(["--confirm"]);
+    assert.equal(command.action, "seed");
+    assert.isTrue(command.confirmed);
+    assert.isFalse(command.dryRun);
+  });
+
+  it("is a cleaning dry run for --clean without --confirm", () => {
+    const command = resolveCommand(["--clean"]);
+    assert.equal(command.action, "clean");
+    assert.isFalse(command.confirmed);
+    assert.isTrue(command.dryRun);
+  });
+
+  it("cleans for real with --clean --confirm", () => {
+    const command = resolveCommand(["--clean", "--confirm"]);
+    assert.equal(command.action, "clean");
+    assert.isTrue(command.confirmed);
+    assert.isFalse(command.dryRun);
+  });
+});
+
+/**
+ * The `demo-` predicate that `--clean` deletes with.
+ *
+ * The delete is `node_id LIKE 'demo-%'`, which SQL evaluates as an anchored
+ * prefix match (no `_` or `%` before the literal). The compiled statement is
+ * asserted directly, then the same pattern is applied to a sample set that
+ * includes a real-looking provider to show it survives.
+ */
+describe("demoRowFilter (the --clean delete predicate)", () => {
+  /** SQL LIKE for a pattern of the form `literal%` — exactly what is compiled. */
+  function likeMatches(value: string, pattern: string): boolean {
+    if (!pattern.endsWith("%")) return value === pattern;
+    const prefix = pattern.slice(0, -1);
+    return value.startsWith(prefix);
+  }
+
+  it("compiles to node_id LIKE 'demo-%'", async () => {
+    const { providersTable } = await import("@workspace/db/schema");
+    const { PgDialect } = await import("drizzle-orm/pg-core");
+    const compiled = new PgDialect().sqlToQuery(demoRowFilter(providersTable.nodeId));
+    assert.equal(compiled.sql, '"providers"."node_id" like $1');
+    assert.deepEqual(compiled.params, ["demo-%"]);
+    assert.equal(providersTable.nodeId.name, "node_id");
+  });
+
+  it("matches every demo node id the seeder writes", () => {
+    for (const spec of demoSpecs(new Date("2025-01-01T00:00:00.000Z"))) {
+      assert.isTrue(likeMatches(spec.nodeId, "demo-%"), spec.nodeId);
+    }
+  });
+
+  it("never matches a non-demo provider, which therefore survives", () => {
+    const rows = [
+      "demo-healthy-1",
+      "demo-flaky-2",
+      "pool1abc123", // a real provider
+      "provider-alpha",
+      "dem", // almost the prefix
+      "x-demo-1", // demo- not at the start
+      "demo", // prefix without the dash
+    ];
+    const matched = rows.filter((nodeId) => likeMatches(nodeId, "demo-%"));
+    assert.deepEqual(matched, ["demo-healthy-1", "demo-flaky-2"]);
+    assert.notInclude(matched, "pool1abc123");
+    assert.notInclude(matched, "provider-alpha");
   });
 });
 

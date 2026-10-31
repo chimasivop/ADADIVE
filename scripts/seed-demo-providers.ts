@@ -29,6 +29,20 @@
  * `ALLOW_DEMO_SEED=1` remains as the blunt escape hatch for a local-but-not-
  * loopback dev database; neither override unlocks a production host.
  *
+ * `--allow-host=<host>` is the CLI equivalent of the host echo: it unlocks one
+ * remote host, and only when it equals the parsed host exactly. It is checked
+ * *after* the production-host check, so it can never unlock a `PRODUCTION_HOSTS`
+ * entry.
+ *
+ * ## Cleaning up
+ *
+ * `--clean` deletes the demo rows and nothing else (the same `node_id LIKE
+ * 'demo-%'` filter the seeder uses). It takes the same guards as seeding:
+ * `--confirm` to actually delete, and `--allow-host` (or the env override) for a
+ * remote host. Without `--confirm` it is a dry run: it opens a connection only to
+ * count the demo rows that *would* be deleted, prints that count, and deletes
+ * nothing.
+ *
  * ## Idempotence
  *
  * Demo rows are identified by a `demo-` prefix on `node_id` (and the matching
@@ -53,6 +67,10 @@
  */
 
 import pg from "pg";
+// Pure library, no database at load: `like` builds the `demo-%` predicate the
+// seeder and the cleanup share, and `SQL` is its type. (Unlike `@workspace/db`,
+// importing this does not require DATABASE_URL.)
+import { like, type SQL } from "drizzle-orm";
 // Type-only: erased at compile time, so importing this module does not load
 // `@workspace/db` (which requires DATABASE_URL at load). The real import is
 // dynamic, inside `seed()`, so the exported guards and specs stay pure and can
@@ -161,9 +179,19 @@ function flagEnabled(raw: string | undefined): boolean {
  *   3. A local host is allowed.
  *   4. A remote host needs EITHER the two-part demo override
  *      (`DEMO_SEED_ALLOW_REMOTE=1` AND `DEMO_SEED_CONFIRM_HOST` equal to the
- *      database host) OR the blunt `ALLOW_DEMO_SEED=1` escape hatch.
+ *      database host), the CLI host echo `allowHost` (the `--allow-host=<host>`
+ *      flag, equal to the database host), OR the blunt `ALLOW_DEMO_SEED=1`
+ *      escape hatch.
+ *
+ * The `allowHost` check sits *after* the production check on purpose: a
+ * `--allow-host` naming a `PRODUCTION_HOSTS` entry is still refused, so the flag
+ * can never unlock a documented production database.
  */
-export function assertSeedable(env: NodeJS.ProcessEnv, databaseUrl: string): void {
+export function assertSeedable(
+  env: NodeJS.ProcessEnv,
+  databaseUrl: string,
+  allowHost: string | null = null
+): void {
   if (env.NODE_ENV === "production") {
     throw new SeedGuardError(
       "refusing to seed demo providers with NODE_ENV=production; this script " +
@@ -181,6 +209,9 @@ export function assertSeedable(env: NodeJS.ProcessEnv, databaseUrl: string): voi
   }
 
   if (isLocalDatabaseUrl(databaseUrl)) return;
+
+  // The CLI host echo. Exact match only, and only after the production check.
+  if (allowHost !== null && host !== null && allowHost === host) return;
 
   const confirmHost = (env.DEMO_SEED_CONFIRM_HOST ?? "").trim();
   if (flagEnabled(env.DEMO_SEED_ALLOW_REMOTE)) {
@@ -358,13 +389,30 @@ export function demoSpecs(now: Date): DemoSpec[] {
   ];
 }
 
+/**
+ * The predicate that identifies the seeder's own rows: `node_id LIKE 'demo-%'`.
+ * Takes the `node_id` column and is exported so a test can prove it matches only
+ * `demo-` rows — never a real provider — without a database.
+ */
+export function demoRowFilter(nodeId: unknown): SQL {
+  return like(nodeId as never, `${DEMO_PREFIX}%`);
+}
+
 /** Delete prior demo rows (cascades to deals and assignments). */
 async function clearDemoRows(db: SeedDatabase): Promise<void> {
   const { providersTable } = await import("@workspace/db");
-  const { like } = await import("drizzle-orm");
-  await db
-    .delete(providersTable)
-    .where(like(providersTable.nodeId, `${DEMO_PREFIX}%`));
+  await db.delete(providersTable).where(demoRowFilter(providersTable.nodeId));
+}
+
+/** How many demo rows exist right now (for the `--clean` dry run). */
+async function countDemoRows(db: SeedDatabase): Promise<number> {
+  const { providersTable } = await import("@workspace/db");
+  const { count } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ value: count() })
+    .from(providersTable)
+    .where(demoRowFilter(providersTable.nodeId));
+  return row?.value ?? 0;
 }
 
 export interface SeedResult {
@@ -452,11 +500,118 @@ export function hasConfirmFlag(argv: readonly string[]): boolean {
   return argv.includes("--confirm");
 }
 
+/** True when the CLI was passed `--clean` (delete demo rows, do not seed). */
+export function hasCleanFlag(argv: readonly string[]): boolean {
+  return argv.includes("--clean");
+}
+
+/**
+ * The host from `--allow-host=<host>`, or `null` when the flag is absent or
+ * empty. The value is taken verbatim (after trimming); the guard compares it to
+ * the parsed host exactly, so a partial or suffixed value does not match.
+ */
+export function parseAllowHost(argv: readonly string[]): string | null {
+  const prefix = "--allow-host=";
+  const hit = argv.find((arg) => arg.startsWith(prefix));
+  if (hit === undefined) return null;
+  const value = hit.slice(prefix.length).trim();
+  return value.length > 0 ? value : null;
+}
+
+/**
+ * The action the CLI was asked to take, resolved purely from argv so it can be
+ * asserted without a database. `dryRun` is `true` whenever `--confirm` is
+ * absent: seeding then prints the plan and writes nothing, and `--clean` counts
+ * the demo rows and deletes nothing.
+ */
+export interface SeedCommand {
+  action: "seed" | "clean";
+  /** `--confirm`: the explicit consent to write/delete. */
+  confirmed: boolean;
+  /** The `--allow-host=<host>` value, or `null`. */
+  allowHost: string | null;
+  /** True when the command will not write (i.e. `--confirm` was not passed). */
+  dryRun: boolean;
+}
+
+export function resolveCommand(argv: readonly string[]): SeedCommand {
+  const confirmed = hasConfirmFlag(argv);
+  return {
+    action: hasCleanFlag(argv) ? "clean" : "seed",
+    confirmed,
+    allowHost: parseAllowHost(argv),
+    dryRun: !confirmed,
+  };
+}
+
+/**
+ * Connect, run `run`, and always close the pool. The single place a pool is
+ * opened, so `--clean` and the seed share the connect/close lifecycle.
+ */
+async function withDatabase<T>(
+  databaseUrl: string,
+  run: (db: SeedDatabase) => Promise<T>
+): Promise<T> {
+  const pool = new Pool({ connectionString: databaseUrl });
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  // Pass the schema so `db` is typed against the real tables; without it the
+  // insert/select helpers have no table types to infer from.
+  const db = drizzle(pool, { schema: await import("@workspace/db") });
+  try {
+    return await run(db);
+  } finally {
+    await pool.end();
+  }
+}
+
+/** `--clean`: delete the demo rows and nothing else. */
+async function runClean(databaseUrl: string, confirmed: boolean): Promise<number> {
+  return withDatabase(databaseUrl, async (db) => {
+    if (!confirmed) {
+      const existing = await countDemoRows(db);
+      process.stdout.write(
+        "dry run: no --confirm flag, so nothing was deleted.\n" +
+          `demo providers currently in the database: ${existing}\n` +
+          `would delete ${existing} provider row(s) where node_id LIKE 'demo-%' ` +
+          "(their deals and assignments cascade).\n" +
+          "\nre-run with --confirm to delete them:\n" +
+          "  pnpm --filter @workspace/scripts run seed:demo-providers -- --clean --confirm\n"
+      );
+      return 0;
+    }
+    const existing = await countDemoRows(db);
+    await clearDemoRows(db);
+    process.stdout.write(
+      `deleted ${existing} demo provider row(s) where node_id LIKE 'demo-%' ` +
+        "(their deals and assignments cascaded).\n"
+    );
+    return 0;
+  });
+}
+
+/** The default action: seed the six demo providers. */
+async function runSeed(databaseUrl: string): Promise<number> {
+  const result = await withDatabase(databaseUrl, (db) => seed(db));
+  process.stdout.write(
+    `seeded ${result.providers} demo providers ` +
+      `(${result.deals} deals, ${result.assignments} assignments)\n` +
+      `  3 healthy, 2 flaky, 1 new — run the advisor with:\n` +
+      `    PROVIDER_ID=<id> META_MOCK=1 pnpm --filter @workspace/reliability-agent assess\n` +
+      `  and the recommendation with:\n` +
+      `    curl "http://127.0.0.1:3000/api/providers/recommend?storageGb=100&durationEpochs=10"\n`
+  );
+  return 0;
+}
+
 async function main(): Promise<number> {
-  // The explicit consent gate, checked before anything else. Without `--confirm`
-  // nothing is written and no connection is opened, so a copy-pasted command
-  // cannot seed by accident.
-  if (!hasConfirmFlag(process.argv.slice(2))) {
+  const argv = process.argv.slice(2);
+  const command = resolveCommand(argv);
+  const { action, confirmed, allowHost } = command;
+
+  // Both actions write, so both need the explicit consent gate. Without
+  // `--confirm` no write happens: seeding prints the plan and opens nothing;
+  // `--clean` opens a read-only connection only to count the demo rows.
+  if (!confirmed && action === "seed") {
     const specs = demoSpecs(new Date());
     process.stdout.write(
       "dry run: no --confirm flag, so nothing was written.\n" +
@@ -478,34 +633,16 @@ async function main(): Promise<number> {
   }
 
   try {
-    assertSeedable(process.env, databaseUrl);
+    assertSeedable(process.env, databaseUrl, allowHost);
   } catch (err) {
     if (err instanceof SeedGuardError) {
-      process.stderr.write(`refusing to seed: ${err.message}\n`);
+      process.stderr.write(`refusing to ${action}: ${err.message}\n`);
       return 1;
     }
     throw err;
   }
 
-  const pool = new Pool({ connectionString: databaseUrl });
-  const { drizzle } = await import("drizzle-orm/node-postgres");
-  // Pass the schema so `db` is typed against the real tables; without it the
-  // insert/select helpers have no table types to infer from.
-  const db = drizzle(pool, { schema: await import("@workspace/db") });
-  try {
-    const result = await seed(db);
-    process.stdout.write(
-      `seeded ${result.providers} demo providers ` +
-        `(${result.deals} deals, ${result.assignments} assignments)\n` +
-        `  3 healthy, 2 flaky, 1 new — run the advisor with:\n` +
-        `    PROVIDER_ID=<id> META_MOCK=1 pnpm --filter @workspace/reliability-agent assess\n` +
-        `  and the recommendation with:\n` +
-        `    curl "http://127.0.0.1:3000/api/providers/recommend?storageGb=100&durationEpochs=10"\n`
-    );
-    return 0;
-  } finally {
-    await pool.end();
-  }
+  return action === "clean" ? runClean(databaseUrl, confirmed) : runSeed(databaseUrl);
 }
 
 // Only run when invoked directly, so the exported helpers can be imported by a
