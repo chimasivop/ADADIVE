@@ -29,7 +29,7 @@ export default function DealDetail() {
   const { address } = useWallet();
   const { connection } = useConnection();
   const signableWallet = useSignableWallet();
-  const { api, ensureSession } = useBackendSession();
+  const { api, ensureSession, waking } = useBackendSession();
   const queryClient = useQueryClient();
 
   const { data: deal, isLoading } = useGetDeal(dealId, {
@@ -240,6 +240,7 @@ export default function DealDetail() {
                 ensureSession={ensureSession}
                 connection={connection}
                 signer={signableWallet}
+                waking={waking}
               />
             </CardContent>
           </Card>

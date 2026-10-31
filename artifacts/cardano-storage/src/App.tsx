@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from "@solana/wallet-adapter-react";
@@ -10,6 +10,7 @@ import { Shell } from "@/components/layout/Shell";
 import { DevnetDemoBanner } from "@/components/DevnetDemoBanner";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { handleAdapterError } from "@/lib/walletConnect";
 import { RPC_ENDPOINT } from "@/lib/chain";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
@@ -73,10 +74,20 @@ function App() {
     []
   );
 
+  // Supplying `onError` replaces the library's default handler, which opens
+  // `adapter.url` in a new tab on a `WalletNotReadyError`. The connect path
+  // already guards readiness, so this is the backstop for any other adapter
+  // error; it logs and never opens a window.
+  const onWalletError = useCallback(
+    (error: Error, adapter: { name?: string } | null | undefined) =>
+      handleAdapterError(error, adapter),
+    []
+  );
+
   return (
     <ThemeProvider>
       <ConnectionProvider endpoint={RPC_ENDPOINT}>
-        <SolanaWalletProvider wallets={wallets} autoConnect={false}>
+        <SolanaWalletProvider wallets={wallets} autoConnect={false} onError={onWalletError}>
           <QueryClientProvider client={queryClient}>
             <WalletProvider>
               <TooltipProvider>

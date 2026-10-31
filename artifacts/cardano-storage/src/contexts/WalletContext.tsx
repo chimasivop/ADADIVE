@@ -10,11 +10,11 @@ import {
 import {
   useConnection,
   useWallet as useAdapterWallet,
-  type Wallet as WalletAdapter,
 } from "@solana/wallet-adapter-react";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { BALANCE_POLL_MS } from "@/lib/chain";
 import { useBackendSession } from "@/hooks/useBackendSession";
+import { connectWallet, pickWallet } from "@/lib/walletConnect";
 
 /**
  * Wallet state for the app.
@@ -54,27 +54,6 @@ interface WalletContextValue extends WalletState {
 const WalletContext = createContext<WalletContextValue | null>(null);
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
-
-/**
- * Pick the adapter to connect with.
- *
- * Preference order matches what the app tells the user it supports
- * (Phantom, then Solflare); anything else the adapter registry knows is accepted
- * as a fallback so a user with a different wallet is not locked out. This is the
- * Solana equivalent of the old code's hard preference for `window.cardano.eternl`.
- */
-function pickWallet(wallets: WalletAdapter[]): WalletAdapter | null {
-  const ready = wallets.filter((w) => w.readyState === "Installed");
-  const pool = ready.length > 0 ? ready : wallets;
-  const preferred = ["Phantom", "Solflare"];
-  for (const name of preferred) {
-    const match = pool.find((w) =>
-      w.adapter.name.toLowerCase().includes(name.toLowerCase())
-    );
-    if (match) return match;
-  }
-  return pool[0] ?? null;
-}
 
 /**
  * Shorten a base58 key for display.
@@ -154,23 +133,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const connect = useCallback(async () => {
     setError(null);
-    const wallet = pickWallet(wallets);
-    if (!wallet) {
-      setError(
-        "No Solana wallet found. Please install the Phantom or Solflare browser extension."
-      );
-      return;
-    }
-    try {
-      await wallet.adapter.connect();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(
-        /reject|denied|declin/i.test(message)
-          ? "Wallet access denied. Please approve the connection request."
-          : `Failed to connect wallet: ${message}`
-      );
-    }
+    // `connectWallet` checks `readyState` before calling `adapter.connect()`.
+    // Without that guard a `NotDetected` adapter throws a `WalletNotReadyError`
+    // with an empty message — which rendered as a bare "Failed to connect
+    // wallet:" — and the wallet library's default handler opened the extension's
+    // download page in a new tab. See `lib/walletConnect.ts`.
+    const outcome = await connectWallet(wallets);
+    if (!outcome.ok) setError(outcome.error ?? null);
   }, [wallets]);
 
   const disconnect = useCallback(() => {

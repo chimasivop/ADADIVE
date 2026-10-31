@@ -35,6 +35,7 @@ import {
   type SignableWallet,
 } from "@workspace/solana-escrow";
 import { refundEscrow, requestBackendSettle } from "@/lib/escrowService";
+import { WAKING_MESSAGE } from "@/lib/fetchWithTimeout";
 
 const POLL_MS = 5000;
 
@@ -58,6 +59,11 @@ interface DealStatusCardProps {
   connection: Connection;
   /** The connected wallet as a signer, for the on-chain refund. */
   signer: SignableWallet | null;
+  /**
+   * True while a sign-in is waiting on a cold backend, so the card can explain
+   * the delay instead of showing a bare "WORKING…".
+   */
+  waking?: boolean;
 }
 
 export function DealStatusCard({
@@ -67,6 +73,7 @@ export function DealStatusCard({
   ensureSession,
   connection,
   signer,
+  waking = false,
 }: DealStatusCardProps) {
   const [state, setState] = useState<BackendDealState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -260,6 +267,7 @@ export function DealStatusCard({
       ) : null}
 
       {notice && <div style={{ fontSize: "9px", color: "#00d4ff", marginTop: "8px" }}>{notice}</div>}
+      {waking && <div style={{ fontSize: "9px", color: "#00d4ff", marginTop: "8px" }}>{WAKING_MESSAGE}</div>}
       {error && <div style={{ fontSize: "9px", color: "#e05c5c", marginTop: "8px" }}>{error}</div>}
 
       {isProvider && (

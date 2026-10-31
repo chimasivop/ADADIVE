@@ -31,11 +31,16 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   BackendApi,
-  BackendError,
   encodeBase58,
   type SessionState,
 } from "@workspace/solana-escrow";
 import { BACKEND_ENDPOINT } from "@/lib/backend/endpoint";
+import {
+  SIGN_IN_TIMEOUT_MS,
+  WAKING_NOTICE_MS,
+  fetchWithTimeout,
+} from "@/lib/fetchWithTimeout";
+import { signInErrorMessage } from "@/lib/signInError";
 import { useMessageSigner } from "./useBackendAdapters";
 
 export type SessionStatus = "signed_out" | "authenticating" | "authenticated" | "error";
@@ -46,6 +51,11 @@ export interface BackendSession {
   status: SessionStatus;
   /** The backend's message when sign-in failed; distinct from a deal error. */
   error: string | null;
+  /**
+   * True while sign-in is still waiting after `WAKING_NOTICE_MS`, so the UI can
+   * explain a cold-start wait instead of showing an unexplained spinner.
+   */
+  waking: boolean;
   /**
    * Sign in if there is no usable session, then return the token.
    *
@@ -59,7 +69,15 @@ export interface BackendSession {
 
 export function useBackendSession(options: { api?: BackendApi } = {}): BackendSession {
   const api = useMemo(
-    () => options.api ?? new BackendApi({ baseUrl: BACKEND_ENDPOINT }),
+    () =>
+      options.api ??
+      // The default transport aborts after `SIGN_IN_TIMEOUT_MS`. The oracle's
+      // free host sleeps when idle, so the first sign-in after a nap can take up
+      // to a minute; without this the fetch would hang with no feedback.
+      new BackendApi({
+        baseUrl: BACKEND_ENDPOINT,
+        fetchImpl: fetchWithTimeout(SIGN_IN_TIMEOUT_MS),
+      }),
     [options.api]
   );
   const signer = useMessageSigner();
@@ -67,6 +85,7 @@ export function useBackendSession(options: { api?: BackendApi } = {}): BackendSe
   const [session, setSession] = useState<SessionState | null>(null);
   const [status, setStatus] = useState<SessionStatus>("signed_out");
   const [error, setError] = useState<string | null>(null);
+  const [waking, setWaking] = useState(false);
 
   // A ref, not state: `ensureSession` is called from event handlers and needs
   // the *current* session synchronously. Reading it from state would race the
@@ -85,6 +104,10 @@ export function useBackendSession(options: { api?: BackendApi } = {}): BackendSe
 
     setStatus("authenticating");
     setError(null);
+    // Show the cold-start notice only if the first request is still pending after
+    // `WAKING_NOTICE_MS`; a fast sign-in never flashes it.
+    setWaking(false);
+    const wakeTimer = setTimeout(() => setWaking(true), WAKING_NOTICE_MS);
     try {
       const challenge = await api.requestChallenge(wallet);
       // Exactly what the wallet is asked to sign, and exactly what the backend
@@ -108,13 +131,12 @@ export function useBackendSession(options: { api?: BackendApi } = {}): BackendSe
       setStatus("authenticated");
       return next.token;
     } catch (err) {
-      const message =
-        err instanceof BackendError
-          ? `sign-in failed: ${err.message}`
-          : String((err as Error).message ?? err);
-      setError(message);
+      setError(signInErrorMessage(err));
       setStatus("error");
       throw err;
+    } finally {
+      clearTimeout(wakeTimer);
+      setWaking(false);
     }
   }, [api, signer]);
 
@@ -137,7 +159,8 @@ export function useBackendSession(options: { api?: BackendApi } = {}): BackendSe
     setSession(null);
     setStatus("signed_out");
     setError(null);
+    setWaking(false);
   }, []);
 
-  return { api, session, status, error, ensureSession, signOut };
+  return { api, session, status, error, waking, ensureSession, signOut };
 }

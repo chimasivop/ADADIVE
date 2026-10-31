@@ -6,6 +6,7 @@ import { useWallet } from "@/contexts/WalletContext";
 import { useSignableWallet } from "@/hooks/useBackendAdapters";
 import { useBackendSession } from "@/hooks/useBackendSession";
 import { API_ENDPOINT } from "@/lib/backend/endpoint";
+import { WAKING_MESSAGE } from "@/lib/fetchWithTimeout";
 import { explorerTxUrl, NETWORK_LABEL } from "@/lib/chain";
 import { initializeEscrow, solToLamports } from "@/lib/escrowService";
 import { DealStatusCard } from "@/components/DealStatusCard";
@@ -90,7 +91,7 @@ export default function PinFiles() {
   const { connected: walletConnected, connecting, connect, disconnect, address, displayAddress, solBalance } = useWallet();
   const { connection }                      = useConnection();
   const signableWallet                      = useSignableWallet();
-  const { ensureSession, api }              = useBackendSession();
+  const { ensureSession, api, waking }    = useBackendSession();
   const [files, setFiles]                   = useState<QueuedFile[]>([]);
   const [dragging, setDragging]             = useState(false);
   const [layer, setLayer]                   = useState("ipfs");
@@ -377,6 +378,12 @@ export default function PinFiles() {
           {pinError && (
             <div style={{ maxWidth: "520px", margin: "0 auto 24px", padding: "12px 16px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "4px", textAlign: "left" }}>
               <p style={{ fontFamily: g.mono, fontSize: "10px", color: "#e05c5c", letterSpacing: "0.08em" }}>{pinError}</p>
+            </div>
+          )}
+
+          {waking && (
+            <div style={{ maxWidth: "520px", margin: "0 auto 24px", padding: "12px 16px", background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.22)", borderRadius: "4px", textAlign: "left" }}>
+              <p style={{ fontFamily: g.mono, fontSize: "10px", color: g.accentBlue, letterSpacing: "0.08em" }}>{WAKING_MESSAGE}</p>
             </div>
           )}
 
